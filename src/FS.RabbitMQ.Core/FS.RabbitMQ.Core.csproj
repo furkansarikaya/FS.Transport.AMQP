@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+        <!-- Package Information -->
+        <PackageId>FS.RabbitMQ.Core</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>furkannsarikaya</Authors>
+        <Company>furkannsarikaya</Company>
+        <Description>A comprehensive, enterprise-grade RabbitMQ client library for .NET with advanced connection management, resilience patterns, event-driven architecture support, and extensive observability features.</Description>
+        <Summary>Enterprise RabbitMQ client library with connection pooling, retry policies, event-driven patterns, and comprehensive error handling for .NET applications.</Summary>
+        <PackageTags>rabbitmq;messaging;amqp;event-driven;microservices;resilience;connection-pooling;enterprise</PackageTags>
+        <PackageProjectUrl>https://github.com/furkansarikaya/FS.RabbitMQ</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/furkansarikaya/FS.RabbitMQ</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <PackageReleaseNotes>Initial release with core abstractions, connection management, and messaging patterns.</PackageReleaseNotes>
+        <Copyright>Copyright (c) 2025 furkannsarikaya</Copyright>
+
+        <!-- Documentation -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Polly" Version="8.6.1" />
+        <PackageReference Include="System.Threading.Channels" Version="9.0.0"/>
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <Folder Include="Configuration\"/>
+        <Folder Include="DependencyInjection\"/>
+        <Folder Include="Factories\"/>
+    </ItemGroup>
+
+</Project>
