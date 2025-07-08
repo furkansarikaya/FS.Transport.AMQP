@@ -1,4 +1,3 @@
-using System.Security.Cryptography.X509Certificates;
 using FS.RabbitMQ.Core.Abstractions;
 
 namespace FS.RabbitMQ.Core.Configuration;
@@ -261,8 +260,8 @@ public sealed class ClientCertificateConfiguration
     /// </remarks>
     public static ClientCertificateConfiguration CreateFromStore(
         string thumbprint,
-        StoreLocation storeLocation = StoreLocation.LocalMachine,
-        StoreName storeName = StoreName.My)
+        StoreLocation storeLocation = Configuration.StoreLocation.LocalMachine,
+        StoreName storeName = Configuration.StoreName.My)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(thumbprint);
 

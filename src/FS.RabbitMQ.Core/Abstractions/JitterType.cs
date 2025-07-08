@@ -6,6 +6,11 @@ namespace FS.RabbitMQ.Core.Abstractions;
 public enum JitterType
 {
     /// <summary>
+    /// No jitter applied.
+    /// </summary>
+    None,
+    
+    /// <summary>
     /// Full jitter randomly selects a delay between 0 and the calculated delay multiplied by jitter amount.
     /// Provides maximum randomization but may result in very short delays.
     /// </summary>
