@@ -73,8 +73,7 @@ public static class ConfigurationExtensions
         string sectionName = "RabbitMQ")
     {
         return services.AddOptions<RabbitMQConfiguration>()
-            .Bind(configuration.GetSection(sectionName))
-            .ValidateDataAnnotations()
+            .Configure(config => configuration.GetSection(sectionName).Bind(config))
             .Validate(config =>
             {
                 try

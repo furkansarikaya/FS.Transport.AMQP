@@ -1,5 +1,4 @@
-using FS.Transport.AMQP.Configuration;
-using FS.Transport.AMQP.RetryPolicies;
+using FS.Transport.AMQP.Core;
 using FS.Transport.AMQP.ErrorHandling;
 
 namespace FS.Transport.AMQP.Producer;
@@ -157,7 +156,7 @@ public class ProducerSettings
     /// <summary>
     /// Compression algorithm to use
     /// </summary>
-    public string CompressionAlgorithm { get; set; } = "gzip";
+    public CompressionAlgorithm CompressionAlgorithm { get; set; } = CompressionAlgorithm.GZip;
     
     /// <summary>
     /// Enable message deduplication

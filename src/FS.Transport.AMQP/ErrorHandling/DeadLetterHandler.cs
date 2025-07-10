@@ -183,7 +183,7 @@ public class DeadLetterHandler : IDeadLetterHandler
         properties.MessageId = context.MessageId ?? Guid.NewGuid().ToString();
         properties.CorrelationId = context.CorrelationId;
         properties.Timestamp = new AmqpTimestamp(((DateTimeOffset)context.ErrorTimestamp).ToUnixTimeSeconds());
-        properties.ContentType = Constants.ContentTypes.Json;
+                    properties.ContentType = FS.Transport.AMQP.Core.Constants.ContentTypes.Json;
         properties.DeliveryMode = 2; // Persistent
         
         // Add headers with error information
@@ -198,10 +198,10 @@ public class DeadLetterHandler : IDeadLetterHandler
         }
         
         // Add dead letter specific headers
-        properties.Headers[Constants.Headers.DeathReason] = TruncateErrorMessage(context.Exception.Message);
-        properties.Headers[Constants.Headers.RetryCount] = context.AttemptCount;
-        properties.Headers[Constants.Headers.OriginalExchange] = context.ExchangeName ?? "";
-        properties.Headers[Constants.Headers.OriginalRoutingKey] = context.RoutingKey ?? "";
+                    properties.Headers[FS.Transport.AMQP.Core.Constants.Headers.DeathReason] = TruncateErrorMessage(context.Exception.Message);
+            properties.Headers[FS.Transport.AMQP.Core.Constants.Headers.RetryCount] = context.AttemptCount;
+            properties.Headers[FS.Transport.AMQP.Core.Constants.Headers.OriginalExchange] = context.ExchangeName ?? "";
+            properties.Headers[FS.Transport.AMQP.Core.Constants.Headers.OriginalRoutingKey] = context.RoutingKey ?? "";
         properties.Headers["x-death-timestamp"] = context.ErrorTimestamp.ToString("O");
         properties.Headers["x-exception-type"] = context.Exception.GetType().Name;
         

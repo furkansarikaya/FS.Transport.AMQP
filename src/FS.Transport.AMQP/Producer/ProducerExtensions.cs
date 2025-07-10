@@ -1,8 +1,4 @@
-using FS.Transport.AMQP.Configuration;
-using FS.Transport.AMQP.Producer;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace FS.Transport.AMQP.Producer;
 

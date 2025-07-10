@@ -1,7 +1,3 @@
-using FS.Transport.AMQP.Configuration;
-using FS.Transport.AMQP.RetryPolicies;
-using FS.Transport.AMQP.ErrorHandling;
-using FS.Transport.AMQP.Serialization;
 using FS.Transport.AMQP.Events;
 
 namespace FS.Transport.AMQP.Producer;
@@ -76,7 +72,7 @@ public interface IMessageProducer : IDisposable
     /// <param name="context">Event context with routing information</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Publish result containing confirmation details</returns>
-    Task<PublishResult> PublishEventAsync<T>(T @event, EventContext context, CancellationToken cancellationToken = default) where T : class, IEvent;
+    Task<PublishResult> PublishEventAsync<T>(T @event, EventPublishContext context, CancellationToken cancellationToken = default) where T : class, IEvent;
     
     /// <summary>
     /// Publishes multiple messages in a batch for better performance

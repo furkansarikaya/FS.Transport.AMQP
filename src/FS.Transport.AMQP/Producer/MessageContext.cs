@@ -1,4 +1,3 @@
-using FS.Transport.AMQP.Configuration;
 using RabbitMQ.Client;
 
 namespace FS.Transport.AMQP.Producer;
@@ -212,7 +211,7 @@ public class MessageContext
 /// <summary>
 /// Event context information for event publishing
 /// </summary>
-public class EventContext : MessageContext
+public class EventPublishContext : MessageContext
 {
     /// <summary>
     /// Event type name
@@ -256,9 +255,9 @@ public class EventContext : MessageContext
     /// <param name="aggregateType">Aggregate type</param>
     /// <param name="eventType">Event type</param>
     /// <returns>New event context</returns>
-    public static EventContext CreateDomainEvent(string aggregateId, string aggregateType, string eventType)
+    public static EventPublishContext CreateDomainEvent(string aggregateId, string aggregateType, string eventType)
     {
-        return new EventContext
+        return new EventPublishContext
         {
             Exchange = "domain.events",
             RoutingKey = $"{aggregateType}.{eventType}",
@@ -276,9 +275,9 @@ public class EventContext : MessageContext
     /// <param name="eventType">Event type</param>
     /// <param name="routingKey">Routing key</param>
     /// <returns>New event context</returns>
-    public static EventContext CreateIntegrationEvent(string eventType, string routingKey)
+    public static EventPublishContext CreateIntegrationEvent(string eventType, string routingKey)
     {
-        return new EventContext
+        return new EventPublishContext
         {
             Exchange = "integration.events",
             RoutingKey = routingKey,

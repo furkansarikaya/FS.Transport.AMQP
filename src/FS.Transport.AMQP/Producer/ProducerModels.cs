@@ -1,7 +1,3 @@
-using FS.Transport.AMQP.Events;
-using FS.Transport.AMQP.ErrorHandling;
-using RabbitMQ.Client;
-
 namespace FS.Transport.AMQP.Producer;
 
 /// <summary>

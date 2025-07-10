@@ -183,7 +183,7 @@ public class RabbitMQClient : IRabbitMQClient
 
     private void OnConnectionLost(object? sender, ConnectionEventArgs e)
     {
-        _logger.LogWarning("Connection lost to RabbitMQ: {Reason}", e.Reason);
+        _logger.LogWarning("Connection lost to RabbitMQ: {Message}", e.Message);
         if (Status == ClientStatus.Ready)
         {
             Status = ClientStatus.Disconnected;

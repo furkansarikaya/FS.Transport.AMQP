@@ -10,13 +10,13 @@ public class FluentDomainEventApi<T> where T : class, IDomainEvent
 {
     private readonly IMessageProducer _producer;
     private readonly T _domainEvent;
-    private readonly EventContext _context;
+    private readonly EventPublishContext _context;
 
     internal FluentDomainEventApi(IMessageProducer producer, T domainEvent)
     {
         _producer = producer ?? throw new ArgumentNullException(nameof(producer));
         _domainEvent = domainEvent ?? throw new ArgumentNullException(nameof(domainEvent));
-        _context = EventContext.CreateDomainEvent(
+        _context = EventPublishContext.CreateDomainEvent(
             domainEvent.AggregateId, 
             domainEvent.AggregateType, 
             domainEvent.EventType);
@@ -116,13 +116,13 @@ public class FluentIntegrationEventApi<T> where T : class, IIntegrationEvent
 {
     private readonly IMessageProducer _producer;
     private readonly T _integrationEvent;
-    private readonly EventContext _context;
+    private readonly EventPublishContext _context;
 
     internal FluentIntegrationEventApi(IMessageProducer producer, T integrationEvent)
     {
         _producer = producer ?? throw new ArgumentNullException(nameof(producer));
         _integrationEvent = integrationEvent ?? throw new ArgumentNullException(nameof(integrationEvent));
-        _context = EventContext.CreateIntegrationEvent(
+        _context = EventPublishContext.CreateIntegrationEvent(
             integrationEvent.EventType, 
             integrationEvent.RoutingKey);
     }

@@ -22,7 +22,7 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         // Register configuration
-        services.Configure<RabbitMQConfiguration>(configuration.GetSection("RabbitMQ"));
+        services.Configure<RabbitMQConfiguration>(config => configuration.GetSection("RabbitMQ").Bind(config));
 
         // Register core services
         return services.AddRabbitMQCore();

@@ -1,10 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -12,7 +6,6 @@ using FS.Transport.AMQP.Configuration;
 using FS.Transport.AMQP.Connection;
 using FS.Transport.AMQP.ErrorHandling;
 using FS.Transport.AMQP.RetryPolicies;
-using FS.Transport.AMQP.Core.Exceptions;
 using FS.Transport.AMQP.Events;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -248,7 +241,7 @@ public class MessageProducer : IMessageProducer, IDisposable
         return await PublishAsync(@event, eventsExchange, eventType.ToLowerInvariant(), cancellationToken);
     }
     
-    public async Task<PublishResult> PublishEventAsync<T>(T @event, EventContext context, CancellationToken cancellationToken = default) where T : class, IEvent
+    public async Task<PublishResult> PublishEventAsync<T>(T @event, EventPublishContext context, CancellationToken cancellationToken = default) where T : class, IEvent
     {
         return await PublishAsync(@event, context.Exchange, context.RoutingKey, cancellationToken);
     }

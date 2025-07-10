@@ -26,6 +26,24 @@ public class RetryPolicySettings
     public int MaxDelayMs { get; set; } = 30000;
     
     /// <summary>
+    /// Initial delay between retries as TimeSpan
+    /// </summary>
+    public TimeSpan InitialDelay
+    {
+        get => TimeSpan.FromMilliseconds(InitialDelayMs);
+        set => InitialDelayMs = (int)value.TotalMilliseconds;
+    }
+    
+    /// <summary>
+    /// Maximum delay between retries as TimeSpan
+    /// </summary>
+    public TimeSpan MaxDelay
+    {
+        get => TimeSpan.FromMilliseconds(MaxDelayMs);
+        set => MaxDelayMs = (int)value.TotalMilliseconds;
+    }
+    
+    /// <summary>
     /// Exponential backoff multiplier (for exponential policy)
     /// </summary>
     public double BackoffMultiplier { get; set; } = 2.0;
