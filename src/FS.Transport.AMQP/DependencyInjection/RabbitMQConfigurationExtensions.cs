@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Hosting;
-using System.ComponentModel.DataAnnotations;
 
 namespace FS.Transport.AMQP.DependencyInjection;
 

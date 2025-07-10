@@ -1,5 +1,4 @@
 using FS.Transport.AMQP.Events;
-using System.Collections.Concurrent;
 
 namespace FS.Transport.AMQP.EventStore;
 

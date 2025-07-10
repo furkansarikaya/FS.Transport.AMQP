@@ -1,21 +1,8 @@
 using FS.Transport.AMQP.Configuration;
-using FS.Transport.AMQP.Connection;
-using FS.Transport.AMQP.Consumer;
-using FS.Transport.AMQP.Core;
-using FS.Transport.AMQP.ErrorHandling;
-using FS.Transport.AMQP.EventBus;
-using FS.Transport.AMQP.EventStore;
-using FS.Transport.AMQP.Exchange;
-using FS.Transport.AMQP.Monitoring;
 using FS.Transport.AMQP.Producer;
-using FS.Transport.AMQP.Queue;
-using FS.Transport.AMQP.RetryPolicies;
 using FS.Transport.AMQP.Saga;
-using FS.Transport.AMQP.Serialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 
 namespace FS.Transport.AMQP.DependencyInjection;
 

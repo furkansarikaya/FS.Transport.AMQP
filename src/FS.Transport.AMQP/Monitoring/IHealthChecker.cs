@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace FS.Transport.AMQP.Monitoring;
 
 /// <summary>

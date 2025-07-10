@@ -1,13 +1,6 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using FS.Transport.AMQP.Connection;
-using FS.Transport.AMQP.Producer;
-using FS.Transport.AMQP.Consumer;
 using Microsoft.Extensions.Logging;
 
 namespace FS.Transport.AMQP.Monitoring;

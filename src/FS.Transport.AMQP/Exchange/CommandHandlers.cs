@@ -1,5 +1,4 @@
 using FS.Mediator.Features.RequestHandling.Core;
-using FS.Transport.AMQP.Exchange;
 using FS.Transport.AMQP.Configuration;
 using Microsoft.Extensions.Logging;
 

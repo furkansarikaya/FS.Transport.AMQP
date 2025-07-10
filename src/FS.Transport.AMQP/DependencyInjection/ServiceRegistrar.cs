@@ -16,8 +16,6 @@ using FS.Transport.AMQP.Saga;
 using FS.Transport.AMQP.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 namespace FS.Transport.AMQP.DependencyInjection;

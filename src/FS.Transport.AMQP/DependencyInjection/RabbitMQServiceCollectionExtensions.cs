@@ -1,5 +1,4 @@
 using FS.Transport.AMQP.Configuration;
-using FS.Transport.AMQP.Core.Extensions;
 using FS.Transport.AMQP.Saga;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

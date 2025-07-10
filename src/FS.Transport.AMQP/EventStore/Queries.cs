@@ -1,5 +1,4 @@
 using FS.Mediator.Features.RequestHandling.Core;
-using FS.Transport.AMQP.Events;
 
 namespace FS.Transport.AMQP.EventStore;
 

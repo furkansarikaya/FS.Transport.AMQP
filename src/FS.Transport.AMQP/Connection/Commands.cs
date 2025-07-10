@@ -1,6 +1,5 @@
 using FS.Mediator.Features.RequestHandling.Core;
 using FS.Transport.AMQP.Configuration;
-using RabbitMQ.Client;
 
 namespace FS.Transport.AMQP.Connection;
 

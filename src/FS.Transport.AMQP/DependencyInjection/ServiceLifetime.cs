@@ -13,7 +13,6 @@ using FS.Transport.AMQP.Serialization;
 using FS.Transport.AMQP.ErrorHandling;
 using FS.Transport.AMQP.RetryPolicies;
 using FS.Transport.AMQP.Core;
-using FS.Mediator;
 using FS.Mediator.Features.NotificationHandling.Core;
 using FS.Mediator.Features.RequestHandling.Core;
 
