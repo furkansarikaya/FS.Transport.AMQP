@@ -388,6 +388,101 @@ public class ScheduleResult
     public string? ErrorMessage => Error?.Message;
 }
 
+/// <summary>
+/// Options for batch publish operations
+/// </summary>
+public class BatchPublishOptions
+{
+    /// <summary>
+    /// Whether to wait for all confirmations in the batch
+    /// </summary>
+    public bool WaitForAllConfirmations { get; set; } = true;
+    
+    /// <summary>
+    /// Maximum time to wait for batch confirmation
+    /// </summary>
+    public TimeSpan BatchTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    
+    /// <summary>
+    /// Whether to fail the entire batch if one message fails
+    /// </summary>
+    public bool FailOnAnyError { get; set; } = false;
+    
+    /// <summary>
+    /// Whether to stop processing batch on first error
+    /// </summary>
+    public bool StopOnFirstError { get; set; } = false;
+    
+    /// <summary>
+    /// Maximum number of concurrent publish operations
+    /// </summary>
+    public int MaxConcurrency { get; set; } = Environment.ProcessorCount;
+    
+    /// <summary>
+    /// Whether to use transaction for the batch
+    /// </summary>
+    public bool UseTransaction { get; set; } = false;
+    
+    /// <summary>
+    /// Retry policy for failed messages in batch
+    /// </summary>
+    public string? RetryPolicy { get; set; }
+    
+    /// <summary>
+    /// Maximum retries for failed messages
+    /// </summary>
+    public int MaxRetries { get; set; } = 3;
+    
+    /// <summary>
+    /// Whether to preserve message order in batch
+    /// </summary>
+    public bool PreserveOrder { get; set; } = false;
+    
+    /// <summary>
+    /// Creates default batch publish options
+    /// </summary>
+    /// <returns>Default batch publish options</returns>
+    public static BatchPublishOptions CreateDefault()
+    {
+        return new BatchPublishOptions();
+    }
+    
+    /// <summary>
+    /// Creates batch publish options for high throughput
+    /// </summary>
+    /// <returns>High throughput batch publish options</returns>
+    public static BatchPublishOptions CreateHighThroughput()
+    {
+        return new BatchPublishOptions
+        {
+            WaitForAllConfirmations = false,
+            FailOnAnyError = false,
+            StopOnFirstError = false,
+            MaxConcurrency = Environment.ProcessorCount * 2,
+            UseTransaction = false,
+            PreserveOrder = false
+        };
+    }
+    
+    /// <summary>
+    /// Creates batch publish options for reliability
+    /// </summary>
+    /// <returns>Reliable batch publish options</returns>
+    public static BatchPublishOptions CreateReliable()
+    {
+        return new BatchPublishOptions
+        {
+            WaitForAllConfirmations = true,
+            FailOnAnyError = true,
+            StopOnFirstError = false,
+            MaxConcurrency = Environment.ProcessorCount,
+            UseTransaction = true,
+            MaxRetries = 5,
+            PreserveOrder = true
+        };
+    }
+}
+
 // Event Arguments for Producer Events
 /// <summary>
 /// Event arguments for message published event
