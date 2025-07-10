@@ -762,4 +762,4 @@ public class MessageProducer : IMessageProducer, IDisposable
             _disposed = true;
         }
     }
-} 
+}
