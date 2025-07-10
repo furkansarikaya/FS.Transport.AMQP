@@ -21,6 +21,11 @@ public enum ErrorHandlingStrategy
     DeadLetter,
     
     /// <summary>
+    /// Retry first, then send to dead letter if all retries fail
+    /// </summary>
+    RetryThenDeadLetter,
+    
+    /// <summary>
     /// Requeue the message for later processing
     /// </summary>
     Requeue,
