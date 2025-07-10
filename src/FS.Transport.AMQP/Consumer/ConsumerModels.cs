@@ -188,6 +188,190 @@ public class ConsumerStatistics
 }
 
 /// <summary>
+/// Throughput metrics for consumer performance
+/// </summary>
+public class ThroughputMetrics
+{
+    /// <summary>
+    /// Messages per second
+    /// </summary>
+    public double MessagesPerSecond { get; set; }
+    
+    /// <summary>
+    /// Peak messages per second
+    /// </summary>
+    public double PeakMessagesPerSecond { get; set; }
+    
+    /// <summary>
+    /// Bytes per second
+    /// </summary>
+    public double BytesPerSecond { get; set; }
+    
+    /// <summary>
+    /// Peak bytes per second
+    /// </summary>
+    public double PeakBytesPerSecond { get; set; }
+    
+    /// <summary>
+    /// Total messages processed
+    /// </summary>
+    public long TotalMessages { get; set; }
+    
+    /// <summary>
+    /// Total bytes processed
+    /// </summary>
+    public long TotalBytes { get; set; }
+}
+
+/// <summary>
+/// Latency metrics for consumer performance
+/// </summary>
+public class LatencyMetrics
+{
+    /// <summary>
+    /// Average latency in milliseconds
+    /// </summary>
+    public double AverageLatency { get; set; }
+    
+    /// <summary>
+    /// Minimum latency in milliseconds
+    /// </summary>
+    public double MinLatency { get; set; }
+    
+    /// <summary>
+    /// Maximum latency in milliseconds
+    /// </summary>
+    public double MaxLatency { get; set; }
+    
+    /// <summary>
+    /// 50th percentile latency in milliseconds
+    /// </summary>
+    public double P50Latency { get; set; }
+    
+    /// <summary>
+    /// 95th percentile latency in milliseconds
+    /// </summary>
+    public double P95Latency { get; set; }
+    
+    /// <summary>
+    /// 99th percentile latency in milliseconds
+    /// </summary>
+    public double P99Latency { get; set; }
+    
+    /// <summary>
+    /// 99.9th percentile latency in milliseconds
+    /// </summary>
+    public double P999Latency { get; set; }
+}
+
+/// <summary>
+/// Error metrics for consumer performance
+/// </summary>
+public class ErrorMetrics
+{
+    /// <summary>
+    /// Total error count
+    /// </summary>
+    public long TotalErrors { get; set; }
+    
+    /// <summary>
+    /// Error rate (errors per second)
+    /// </summary>
+    public double ErrorRate { get; set; }
+    
+    /// <summary>
+    /// Error percentage (0-100)
+    /// </summary>
+    public double ErrorPercentage { get; set; }
+    
+    /// <summary>
+    /// Connection errors
+    /// </summary>
+    public long ConnectionErrors { get; set; }
+    
+    /// <summary>
+    /// Serialization errors
+    /// </summary>
+    public long SerializationErrors { get; set; }
+    
+    /// <summary>
+    /// Processing errors
+    /// </summary>
+    public long ProcessingErrors { get; set; }
+    
+    /// <summary>
+    /// Timeout errors
+    /// </summary>
+    public long TimeoutErrors { get; set; }
+    
+    /// <summary>
+    /// Last error message
+    /// </summary>
+    public string? LastErrorMessage { get; set; }
+    
+    /// <summary>
+    /// Last error timestamp
+    /// </summary>
+    public DateTimeOffset? LastErrorTime { get; set; }
+}
+
+/// <summary>
+/// Resource usage metrics for consumer performance
+/// </summary>
+public class ResourceUsageMetrics
+{
+    /// <summary>
+    /// CPU usage percentage (0-100)
+    /// </summary>
+    public double CpuUsage { get; set; }
+    
+    /// <summary>
+    /// Memory usage in bytes
+    /// </summary>
+    public long MemoryUsage { get; set; }
+    
+    /// <summary>
+    /// Memory usage percentage (0-100)
+    /// </summary>
+    public double MemoryPercentage { get; set; }
+    
+    /// <summary>
+    /// Network bytes received
+    /// </summary>
+    public long NetworkBytesReceived { get; set; }
+    
+    /// <summary>
+    /// Network bytes sent
+    /// </summary>
+    public long NetworkBytesSent { get; set; }
+    
+    /// <summary>
+    /// Active connections count
+    /// </summary>
+    public int ActiveConnections { get; set; }
+    
+    /// <summary>
+    /// Active channels count
+    /// </summary>
+    public int ActiveChannels { get; set; }
+    
+    /// <summary>
+    /// Thread count
+    /// </summary>
+    public int ThreadCount { get; set; }
+    
+    /// <summary>
+    /// Garbage collection count
+    /// </summary>
+    public long GarbageCollectionCount { get; set; }
+    
+    /// <summary>
+    /// Garbage collection time in milliseconds
+    /// </summary>
+    public double GarbageCollectionTime { get; set; }
+}
+
+/// <summary>
 /// Result of a consumption operation
 /// </summary>
 public class ConsumeResult
