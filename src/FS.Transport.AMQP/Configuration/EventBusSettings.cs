@@ -6,6 +6,31 @@ namespace FS.Transport.AMQP.Configuration;
 public class EventBusSettings
 {
     /// <summary>
+    /// Whether the event bus is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
+    /// Whether event store is enabled
+    /// </summary>
+    public bool EnableEventStore { get; set; } = true;
+    
+    /// <summary>
+    /// Whether domain events are enabled
+    /// </summary>
+    public bool EnableDomainEvents { get; set; } = true;
+    
+    /// <summary>
+    /// Whether integration events are enabled
+    /// </summary>
+    public bool EnableIntegrationEvents { get; set; } = true;
+    
+    /// <summary>
+    /// Default exchange name for events
+    /// </summary>
+    public string DefaultExchange { get; set; } = "events";
+    
+    /// <summary>
     /// Default exchange for domain events
     /// </summary>
     public string DomainEventsExchange { get; set; } = "domain-events";
@@ -60,6 +85,9 @@ public class EventBusSettings
     /// </summary>
     public void Validate()
     {
+        if (string.IsNullOrWhiteSpace(DefaultExchange))
+            throw new ArgumentException("DefaultExchange cannot be null or empty");
+            
         if (string.IsNullOrWhiteSpace(DomainEventsExchange))
             throw new ArgumentException("DomainEventsExchange cannot be null or empty");
             

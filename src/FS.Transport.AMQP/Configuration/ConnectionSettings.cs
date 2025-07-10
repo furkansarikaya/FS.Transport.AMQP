@@ -6,6 +6,11 @@ namespace FS.Transport.AMQP.Configuration;
 public class ConnectionSettings
 {
     /// <summary>
+    /// Full connection string for RabbitMQ (takes precedence over individual settings)
+    /// </summary>
+    public string? ConnectionString { get; set; }
+    
+    /// <summary>
     /// RabbitMQ server hostname or IP address
     /// </summary>
     public string HostName { get; set; } = "localhost";
@@ -36,9 +41,27 @@ public class ConnectionSettings
     public int ConnectionTimeoutMs { get; set; } = 30000; // 30 seconds
     
     /// <summary>
+    /// Connection timeout as TimeSpan
+    /// </summary>
+    public TimeSpan ConnectionTimeout 
+    { 
+        get => TimeSpan.FromMilliseconds(ConnectionTimeoutMs); 
+        set => ConnectionTimeoutMs = (int)value.TotalMilliseconds; 
+    }
+    
+    /// <summary>
     /// Heartbeat interval in seconds (0 to disable)
     /// </summary>
     public ushort HeartbeatInterval { get; set; } = 60;
+    
+    /// <summary>
+    /// Requested heartbeat interval as TimeSpan
+    /// </summary>
+    public TimeSpan RequestedHeartbeat 
+    { 
+        get => TimeSpan.FromSeconds(HeartbeatInterval); 
+        set => HeartbeatInterval = (ushort)value.TotalSeconds; 
+    }
     
     /// <summary>
     /// Whether to use SSL/TLS connection
@@ -96,6 +119,22 @@ public class ConnectionSettings
     /// <exception cref="ArgumentException">Thrown when settings are invalid</exception>
     public void Validate()
     {
+        // If connection string is provided, validate it
+        if (!string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            try
+            {
+                var uri = new Uri(ConnectionString);
+                if (uri.Scheme != "amqp" && uri.Scheme != "amqps")
+                    throw new ArgumentException("Connection string must use amqp:// or amqps:// scheme");
+            }
+            catch (UriFormatException)
+            {
+                throw new ArgumentException("Invalid connection string format");
+            }
+            return; // Don't validate individual settings if connection string is provided
+        }
+        
         if (string.IsNullOrWhiteSpace(HostName))
             throw new ArgumentException("HostName cannot be null or empty");
             
@@ -137,6 +176,7 @@ public class ConnectionSettings
     {
         return new ConnectionSettings
         {
+            ConnectionString = ConnectionString,
             HostName = HostName,
             Port = Port,
             UserName = UserName,
@@ -171,6 +211,12 @@ public class ConnectionSettings
     /// <returns>Connection settings description</returns>
     public override string ToString()
     {
+        if (!string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            var uri = new Uri(ConnectionString);
+            return $"RabbitMQ Connection: {uri.Scheme}://{uri.Host}:{uri.Port}{uri.AbsolutePath}";
+        }
+        
         return $"RabbitMQ Connection: {UserName}@{HostName}:{Port}{VirtualHost} " +
                $"(SSL: {UseSsl}, Heartbeat: {HeartbeatInterval}s, Pool: {MinConnections}-{MaxConnections})";
     }

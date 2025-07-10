@@ -66,11 +66,7 @@ public class SagaOrchestrator : ISagaOrchestrator
         _statistics = new SagaOrchestratorStatistics();
         
         // Validate settings
-        var validationResult = _settings.Validate();
-        if (!validationResult.IsValid)
-        {
-            throw new ArgumentException($"Invalid saga settings: {validationResult.GetErrorMessages()}", nameof(settings));
-        }
+        _settings.Validate();
         
         // Setup timers if enabled
         if (_settings.EnableHealthChecks)

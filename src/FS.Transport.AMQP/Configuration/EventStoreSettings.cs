@@ -6,6 +6,21 @@ namespace FS.Transport.AMQP.Configuration;
 public class EventStoreSettings
 {
     /// <summary>
+    /// Whether the event store is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
+    /// Stream prefix for event store streams
+    /// </summary>
+    public string StreamPrefix { get; set; } = "events";
+    
+    /// <summary>
+    /// Whether to enable snapshots
+    /// </summary>
+    public bool EnableSnapshots { get; set; } = true;
+    
+    /// <summary>
     /// Exchange name for event store
     /// </summary>
     public string Exchange { get; set; } = "event-store";
@@ -55,6 +70,9 @@ public class EventStoreSettings
     /// </summary>
     public void Validate()
     {
+        if (string.IsNullOrWhiteSpace(StreamPrefix))
+            throw new ArgumentException("StreamPrefix cannot be null or empty");
+            
         if (string.IsNullOrWhiteSpace(Exchange))
             throw new ArgumentException("Exchange cannot be null or empty");
             

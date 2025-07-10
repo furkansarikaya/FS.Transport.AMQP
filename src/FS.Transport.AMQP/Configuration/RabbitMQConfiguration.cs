@@ -1,3 +1,6 @@
+using FS.Transport.AMQP.Producer;
+using FS.Transport.AMQP.Saga;
+
 namespace FS.Transport.AMQP.Configuration;
 
 /// <summary>
@@ -9,6 +12,21 @@ public class RabbitMQConfiguration : IRabbitMQConfiguration
     /// Connection settings for RabbitMQ server
     /// </summary>
     public ConnectionSettings Connection { get; set; } = new();
+    
+    /// <summary>
+    /// Producer specific settings
+    /// </summary>
+    public ProducerSettings Producer { get; set; } = new();
+    
+    /// <summary>
+    /// Consumer specific settings
+    /// </summary>
+    public ConsumerSettings Consumer { get; set; } = new();
+    
+    /// <summary>
+    /// Serialization settings
+    /// </summary>
+    public SerializerSettings Serialization { get; set; } = new();
     
     /// <summary>
     /// Exchange configurations to be auto-declared
@@ -41,9 +59,19 @@ public class RabbitMQConfiguration : IRabbitMQConfiguration
     public EventStoreSettings EventStore { get; set; } = new();
     
     /// <summary>
+    /// Saga orchestration settings
+    /// </summary>
+    public SagaSettings Saga { get; set; } = new();
+    
+    /// <summary>
     /// Health check settings
     /// </summary>
     public HealthCheckSettings HealthCheck { get; set; } = new();
+    
+    /// <summary>
+    /// Monitoring settings
+    /// </summary>
+    public HealthCheckSettings Monitoring { get; set; } = new();
     
     /// <summary>
     /// Whether to automatically declare configured exchanges on startup
@@ -75,6 +103,9 @@ public class RabbitMQConfiguration : IRabbitMQConfiguration
     public void Validate()
     {
         Connection.Validate();
+        Producer.Validate();
+        Consumer.Validate();
+        Serialization.Validate();
         
         if (OperationTimeoutMs <= 0)
             throw new ArgumentException("OperationTimeoutMs must be greater than 0");
@@ -93,6 +124,8 @@ public class RabbitMQConfiguration : IRabbitMQConfiguration
         ErrorHandling.Validate();
         EventBus.Validate();
         EventStore.Validate();
+        Saga.Validate();
         HealthCheck.Validate();
+        Monitoring.Validate();
     }
 }

@@ -49,6 +49,15 @@ public class RetryPolicySettings
     public double BackoffMultiplier { get; set; } = 2.0;
     
     /// <summary>
+    /// Multiplier for retry delay (alias for BackoffMultiplier)
+    /// </summary>
+    public double Multiplier 
+    { 
+        get => BackoffMultiplier; 
+        set => BackoffMultiplier = value; 
+    }
+    
+    /// <summary>
     /// Jitter factor to add randomness (0.0 to 1.0)
     /// </summary>
     public double JitterFactor { get; set; } = 0.1;

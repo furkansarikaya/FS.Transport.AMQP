@@ -6,6 +6,11 @@ namespace FS.Transport.AMQP.Configuration;
 public class ConsumerSettings
 {
     /// <summary>
+    /// Number of concurrent consumers
+    /// </summary>
+    public int ConcurrentConsumers { get; set; } = Environment.ProcessorCount;
+    
+    /// <summary>
     /// Consumer tag for identification
     /// </summary>
     public string? ConsumerTag { get; set; }
@@ -40,6 +45,9 @@ public class ConsumerSettings
     /// </summary>
     public void Validate()
     {
+        if (ConcurrentConsumers <= 0)
+            throw new ArgumentException("ConcurrentConsumers must be greater than 0");
+            
         if (PrefetchCount == 0)
             throw new ArgumentException("PrefetchCount must be greater than 0");
     }

@@ -8,6 +8,11 @@ namespace FS.Transport.AMQP.Configuration;
 public class SerializerSettings
 {
     /// <summary>
+    /// Default serializer type to use
+    /// </summary>
+    public string DefaultSerializer { get; set; } = "Json";
+    
+    /// <summary>
     /// Serializer type (Json, MessagePack, ProtoBuf, etc.)
     /// </summary>
     public string SerializerType { get; set; } = "Json";
@@ -67,6 +72,9 @@ public class SerializerSettings
         if (!validTypes.Contains(SerializerType))
             throw new ArgumentException($"Serializer type must be one of: {string.Join(", ", validTypes)}");
             
+        if (!validTypes.Contains(DefaultSerializer))
+            throw new ArgumentException($"Default serializer must be one of: {string.Join(", ", validTypes)}");
+            
         if (EnableEncryption && string.IsNullOrWhiteSpace(EncryptionKey))
             throw new ArgumentException("EncryptionKey is required when encryption is enabled", nameof(EncryptionKey));
             
@@ -82,6 +90,7 @@ public class SerializerSettings
     {
         return new SerializerSettings
         {
+            DefaultSerializer = DefaultSerializer,
             SerializerType = SerializerType,
             EnableCompression = EnableCompression,
             CompressionAlgorithm = CompressionAlgorithm,
@@ -103,6 +112,7 @@ public class SerializerSettings
     {
         return new SerializerSettings
         {
+            DefaultSerializer = "Json",
             SerializerType = "Json",
             UseCamelCase = true,
             IgnoreNullValues = true,
@@ -118,6 +128,7 @@ public class SerializerSettings
     {
         return new SerializerSettings
         {
+            DefaultSerializer = "MessagePack",
             SerializerType = "MessagePack",
             EnableCompression = true,
             CompressionAlgorithm = CompressionAlgorithm.LZ4,
@@ -133,6 +144,7 @@ public class SerializerSettings
     {
         return new SerializerSettings
         {
+            DefaultSerializer = "ProtoBuf",
             SerializerType = "ProtoBuf",
             EnableCompression = true,
             CompressionAlgorithm = CompressionAlgorithm.GZip,

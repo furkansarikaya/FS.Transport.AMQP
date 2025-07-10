@@ -6,6 +6,26 @@ namespace FS.Transport.AMQP.Saga;
 public class SagaSettings
 {
     /// <summary>
+    /// Whether saga orchestration is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
+    /// Whether to enable compensation for failed sagas
+    /// </summary>
+    public bool EnableCompensation { get; set; } = true;
+    
+    /// <summary>
+    /// Timeout duration for saga execution
+    /// </summary>
+    public TimeSpan TimeoutDuration { get; set; } = TimeSpan.FromMinutes(30);
+    
+    /// <summary>
+    /// Maximum number of retries for failed steps
+    /// </summary>
+    public int MaxRetries { get; set; } = 3;
+    
+    /// <summary>
     /// Default timeout for saga execution
     /// </summary>
     public TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromMinutes(30);
@@ -181,71 +201,91 @@ public class SagaSettings
     {
         return new SagaSettings
         {
-            DefaultMaxRetries = 5,
-            UseExponentialBackoff = true,
-            AutoCompensateOnCriticalFailure = true,
+            MaxConcurrentSagas = 10,
             AutoPersistState = true,
-            StatePersistenceInterval = TimeSpan.FromSeconds(10),
             EnableStateSnapshots = true,
-            MaxStateSnapshots = 20,
-            EnableCircuitBreaker = true,
-            CircuitBreakerFailureThreshold = 3,
-            EnableHealthChecks = true,
-            HealthCheckInterval = TimeSpan.FromMinutes(1)
+            EnableMetrics = true,
+            EnableEventLogging = true,
+            EnableStateCaching = false,
+            DefaultMaxRetries = 5,
+            DefaultRetryDelay = TimeSpan.FromSeconds(10),
+            UseExponentialBackoff = true,
+            MaxBackoffDelay = TimeSpan.FromMinutes(10)
         };
     }
     
     /// <summary>
-    /// Validates the saga settings
+    /// Creates saga settings optimized for development
     /// </summary>
-    /// <returns>Validation result</returns>
-    public SagaSettingsValidationResult Validate()
+    /// <returns>Development saga settings</returns>
+    public static SagaSettings CreateDevelopment()
     {
-        var result = new SagaSettingsValidationResult();
-        
+        return new SagaSettings
+        {
+            MaxConcurrentSagas = 5,
+            AutoPersistState = false,
+            EnableStateSnapshots = false,
+            EnableMetrics = false,
+            EnableEventLogging = true,
+            EnableStateCaching = false,
+            DefaultMaxRetries = 1,
+            DefaultRetryDelay = TimeSpan.FromSeconds(1),
+            UseExponentialBackoff = false
+        };
+    }
+    
+    /// <summary>
+    /// Validates saga settings
+    /// </summary>
+    public void Validate()
+    {
+        if (TimeoutDuration <= TimeSpan.Zero)
+            throw new ArgumentException("TimeoutDuration must be greater than zero");
+            
+        if (MaxRetries < 0)
+            throw new ArgumentException("MaxRetries cannot be negative");
+            
         if (DefaultTimeout <= TimeSpan.Zero)
-            result.AddError("DefaultTimeout must be greater than zero");
-        
+            throw new ArgumentException("DefaultTimeout must be greater than zero");
+            
         if (DefaultMaxRetries < 0)
-            result.AddError("DefaultMaxRetries cannot be negative");
-        
-        if (DefaultRetryDelay <= TimeSpan.Zero)
-            result.AddError("DefaultRetryDelay must be greater than zero");
-        
+            throw new ArgumentException("DefaultMaxRetries cannot be negative");
+            
+        if (DefaultRetryDelay < TimeSpan.Zero)
+            throw new ArgumentException("DefaultRetryDelay cannot be negative");
+            
         if (MaxBackoffDelay <= TimeSpan.Zero)
-            result.AddError("MaxBackoffDelay must be greater than zero");
-        
+            throw new ArgumentException("MaxBackoffDelay must be greater than zero");
+            
         if (StatePersistenceInterval <= TimeSpan.Zero)
-            result.AddError("StatePersistenceInterval must be greater than zero");
-        
+            throw new ArgumentException("StatePersistenceInterval must be greater than zero");
+            
         if (MaxStateSnapshots < 0)
-            result.AddError("MaxStateSnapshots cannot be negative");
-        
+            throw new ArgumentException("MaxStateSnapshots cannot be negative");
+            
         if (MaxConcurrentSagas <= 0)
-            result.AddError("MaxConcurrentSagas must be greater than zero");
-        
+            throw new ArgumentException("MaxConcurrentSagas must be greater than zero");
+            
         if (StepTimeout <= TimeSpan.Zero)
-            result.AddError("StepTimeout must be greater than zero");
-        
+            throw new ArgumentException("StepTimeout must be greater than zero");
+            
         if (CompensationTimeout <= TimeSpan.Zero)
-            result.AddError("CompensationTimeout must be greater than zero");
-        
+            throw new ArgumentException("CompensationTimeout must be greater than zero");
+            
         if (CircuitBreakerFailureThreshold <= 0)
-            result.AddError("CircuitBreakerFailureThreshold must be greater than zero");
-        
+            throw new ArgumentException("CircuitBreakerFailureThreshold must be greater than zero");
+            
         if (CircuitBreakerRecoveryTimeout <= TimeSpan.Zero)
-            result.AddError("CircuitBreakerRecoveryTimeout must be greater than zero");
-        
+            throw new ArgumentException("CircuitBreakerRecoveryTimeout must be greater than zero");
+            
         if (StateCacheExpiration <= TimeSpan.Zero)
-            result.AddError("StateCacheExpiration must be greater than zero");
-        
+            throw new ArgumentException("StateCacheExpiration must be greater than zero");
+            
         if (MaxStateCacheSize <= 0)
-            result.AddError("MaxStateCacheSize must be greater than zero");
-        
+            throw new ArgumentException("MaxStateCacheSize must be greater than zero");
+            
         if (HealthCheckInterval <= TimeSpan.Zero)
-            result.AddError("HealthCheckInterval must be greater than zero");
-        
-        return result;
+            throw new ArgumentException("HealthCheckInterval must be greater than zero");
     }
 }
 
