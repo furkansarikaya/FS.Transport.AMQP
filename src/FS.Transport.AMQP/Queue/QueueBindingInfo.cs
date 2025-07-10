@@ -6,9 +6,23 @@ namespace FS.Transport.AMQP.Queue;
 public class QueueBindingInfo
 {
     /// <summary>
+    /// Queue name
+    /// </summary>
+    public string QueueName { get; set; } = string.Empty;
+    
+    /// <summary>
     /// Exchange name
     /// </summary>
     public string Exchange { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Exchange name (alias for Exchange property)
+    /// </summary>
+    public string ExchangeName 
+    { 
+        get => Exchange; 
+        set => Exchange = value; 
+    }
     
     /// <summary>
     /// Routing key for the binding
@@ -26,6 +40,6 @@ public class QueueBindingInfo
     /// <returns>Binding description</returns>
     public override string ToString()
     {
-        return $"Binding to '{Exchange}' with routing key '{RoutingKey}'";
+        return $"Queue '{QueueName}' binding to '{Exchange}' with routing key '{RoutingKey}'";
     }
 }

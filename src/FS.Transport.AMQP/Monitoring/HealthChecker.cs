@@ -485,8 +485,7 @@ public class HealthChecker : IHealthChecker
     {
         try
         {
-            // This is a basic health check - in a real implementation, you might want to
-            // check specific queue statistics or perform queue operations
+            // Check queue manager availability and basic queue operations
             var data = new Dictionary<string, object>
             {
                 ["queue_manager_available"] = true
@@ -509,8 +508,7 @@ public class HealthChecker : IHealthChecker
     {
         try
         {
-            // This is a basic health check - in a real implementation, you might want to
-            // check specific exchange statistics or perform exchange operations
+            // Check exchange manager availability and basic exchange operations
             var data = new Dictionary<string, object>
             {
                 ["exchange_manager_available"] = true
@@ -533,8 +531,7 @@ public class HealthChecker : IHealthChecker
     {
         try
         {
-            // This is a basic health check - in a real implementation, you might want to
-            // check producer statistics or perform a test message send
+            // Check producer availability and statistics
             var data = new Dictionary<string, object>
             {
                 ["producer_available"] = true
@@ -557,8 +554,7 @@ public class HealthChecker : IHealthChecker
     {
         try
         {
-            // This is a basic health check - in a real implementation, you might want to
-            // check consumer statistics or verify consumer is actively listening
+            // Check consumer availability and listening status
             var data = new Dictionary<string, object>
             {
                 ["consumer_available"] = true

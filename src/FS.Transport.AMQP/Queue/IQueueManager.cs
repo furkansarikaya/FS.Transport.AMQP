@@ -135,6 +135,23 @@ public interface IQueueManager
     /// </summary>
     /// <returns>Queue statistics</returns>
     QueueStatistics GetStatistics();
+
+    /// <summary>
+    /// Gets all bindings for a specific queue
+    /// </summary>
+    /// <param name="queueName">Queue name</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of queue bindings</returns>
+    Task<IEnumerable<QueueBindingInfo>> GetBindingsAsync(string queueName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all queues with optional filtering
+    /// </summary>
+    /// <param name="filter">Optional filter for queue names</param>
+    /// <param name="includeDetails">Whether to include detailed information</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of queues</returns>
+    Task<IEnumerable<QueueInfo>> ListQueuesAsync(string? filter = null, bool includeDetails = false, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Event raised when a queue is declared

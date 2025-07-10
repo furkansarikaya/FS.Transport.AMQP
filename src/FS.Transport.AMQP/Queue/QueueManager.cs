@@ -677,6 +677,97 @@ public class QueueManager : IQueueManager
         return _statistics.Clone();
     }
 
+    /// <summary>
+    /// Gets all bindings for a specific queue
+    /// </summary>
+    public async Task<IEnumerable<QueueBindingInfo>> GetBindingsAsync(string queueName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(queueName))
+            throw new ArgumentException("Queue name cannot be null or empty", nameof(queueName));
+
+        try
+        {
+            // Check if we have the queue in our declared queues tracking
+            if (_declaredQueues.TryGetValue(queueName, out var declaration))
+            {
+                return declaration.Bindings.Select(b => new QueueBindingInfo
+                {
+                    QueueName = queueName,
+                    ExchangeName = b.Exchange,
+                    RoutingKey = b.RoutingKey,
+                    Arguments = b.Arguments?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                }).ToList();
+            }
+
+            // If not tracked locally, return empty list
+            // Note: In a production environment, you might want to use RabbitMQ Management API
+            // to get actual bindings from the server
+            return new List<QueueBindingInfo>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting bindings for queue {QueueName}: {ErrorMessage}", queueName, ex.Message);
+            return new List<QueueBindingInfo>();
+        }
+    }
+
+    /// <summary>
+    /// Lists all queues with optional filtering
+    /// </summary>
+    public async Task<IEnumerable<QueueInfo>> ListQueuesAsync(string? filter = null, bool includeDetails = false, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var queueInfos = new List<QueueInfo>();
+
+            // Get all locally tracked queues
+            var trackedQueues = _declaredQueues.Keys.ToList();
+
+            if (!string.IsNullOrEmpty(filter))
+            {
+                trackedQueues = trackedQueues.Where(name => name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            foreach (var queueName in trackedQueues)
+            {
+                try
+                {
+                    var queueInfo = await GetInfoAsync(queueName, cancellationToken);
+                    if (queueInfo != null)
+                    {
+                        queueInfos.Add(queueInfo);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not get info for queue {QueueName}", queueName);
+                    
+                    // Still add basic info if we can't get detailed info
+                    if (_declaredQueues.TryGetValue(queueName, out var declaration))
+                    {
+                        queueInfos.Add(new QueueInfo
+                        {
+                            Name = queueName,
+                            Durable = declaration.Durable,
+                            Exclusive = declaration.Exclusive,
+                            AutoDelete = declaration.AutoDelete,
+                            Arguments = declaration.Arguments,
+                            MessageCount = 0,
+                            ConsumerCount = 0
+                        });
+                    }
+                }
+            }
+
+            return queueInfos;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing queues: {ErrorMessage}", ex.Message);
+            return new List<QueueInfo>();
+        }
+    }
+
     private TimeSpan CalculateAverageTime(TimeSpan currentDuration)
     {
         var totalOperations = _statistics.SuccessfulOperations + _statistics.FailedOperations;

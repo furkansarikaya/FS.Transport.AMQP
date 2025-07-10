@@ -111,6 +111,31 @@ public interface IExchangeManager
     /// </summary>
     /// <returns>Exchange statistics</returns>
     ExchangeStatistics GetStatistics();
+
+    /// <summary>
+    /// Gets all bindings for a specific exchange
+    /// </summary>
+    /// <param name="exchangeName">Exchange name</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of exchange bindings</returns>
+    Task<IEnumerable<ExchangeBindingInfo>> GetBindingsAsync(string exchangeName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all exchanges with optional filtering
+    /// </summary>
+    /// <param name="filter">Optional filter for exchange names</param>
+    /// <param name="includeDetails">Whether to include detailed information</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of exchanges</returns>
+    Task<IEnumerable<ExchangeInfo>> ListExchangesAsync(string? filter = null, bool includeDetails = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the topology information for exchanges
+    /// </summary>
+    /// <param name="exchangeName">Optional specific exchange name</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Exchange topology information</returns>
+    Task<ExchangeTopology> GetTopologyAsync(string? exchangeName = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Event raised when an exchange is declared

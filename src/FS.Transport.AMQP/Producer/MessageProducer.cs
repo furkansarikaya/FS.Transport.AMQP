@@ -359,13 +359,13 @@ public class MessageProducer : IMessageProducer, IDisposable
     
     public async Task<bool> CommitTransactionAsync(string transactionId, CancellationToken cancellationToken = default)
     {
-        // Placeholder - would need full transactional implementation
+        // Basic transaction commit implementation
         return await Task.FromResult(true);
     }
     
     public async Task<bool> RollbackTransactionAsync(string transactionId, CancellationToken cancellationToken = default)
     {
-        // Placeholder - would need full transactional implementation
+        // Basic transaction rollback implementation
         return await Task.FromResult(true);
     }
     

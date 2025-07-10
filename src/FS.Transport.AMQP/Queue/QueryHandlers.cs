@@ -176,10 +176,8 @@ public class GetQueueBindingsQueryHandler : IRequestHandler<GetQueueBindingsQuer
     {
         try
         {
-            // Note: QueueManager doesn't have a GetBindings method, so we'll return an empty result
-            // In a real implementation, you'd add this method to IQueueManager
-            var bindings = new List<QueueBindingInfo>();
-            return QueueBindingsResult.CreateSuccess(bindings);
+            var bindings = await _queueManager.GetBindingsAsync(request.Name, cancellationToken);
+            return QueueBindingsResult.CreateSuccess(bindings.ToList());
         }
         catch (Exception ex)
         {
@@ -284,10 +282,9 @@ public class ListQueuesQueryHandler : IRequestHandler<ListQueuesQuery, QueueList
     {
         try
         {
-            // Note: QueueManager doesn't have a ListQueues method, so we'll return an empty result
-            // In a real implementation, you'd add this method to IQueueManager or use RabbitMQ Management API
-            var queues = new List<QueueInfo>();
-            return QueueListResult.CreateSuccess(queues, 0);
+            var queues = await _queueManager.ListQueuesAsync(request.NamePattern, request.IncludeDetails, cancellationToken);
+            var queueList = queues.ToList();
+            return QueueListResult.CreateSuccess(queueList, queueList.Count);
         }
         catch (Exception ex)
         {

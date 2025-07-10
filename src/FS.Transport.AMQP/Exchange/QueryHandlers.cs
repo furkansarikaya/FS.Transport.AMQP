@@ -116,10 +116,8 @@ public class GetExchangeBindingsQueryHandler : IRequestHandler<GetExchangeBindin
     {
         try
         {
-            // Note: ExchangeManager doesn't have a GetBindings method, so we'll return an empty result
-            // In a real implementation, you'd add this method to IExchangeManager
-            var bindings = new List<ExchangeBindingInfo>();
-            return ExchangeBindingsResult.CreateSuccess(bindings);
+            var bindings = await _exchangeManager.GetBindingsAsync(request.Name, cancellationToken);
+            return ExchangeBindingsResult.CreateSuccess(bindings.ToList());
         }
         catch (Exception ex)
         {
@@ -224,10 +222,9 @@ public class ListExchangesQueryHandler : IRequestHandler<ListExchangesQuery, Exc
     {
         try
         {
-            // Note: ExchangeManager doesn't have a ListExchanges method, so we'll return an empty result
-            // In a real implementation, you'd add this method to IExchangeManager or use RabbitMQ Management API
-            var exchanges = new List<ExchangeInfo>();
-            return ExchangeListResult.CreateSuccess(exchanges, 0);
+            var exchanges = await _exchangeManager.ListExchangesAsync(request.NamePattern, request.IncludeDetails, cancellationToken);
+            var exchangeList = exchanges.ToList();
+            return ExchangeListResult.CreateSuccess(exchangeList, exchangeList.Count);
         }
         catch (Exception ex)
         {
@@ -255,20 +252,12 @@ public class GetExchangeTopologyQueryHandler : IRequestHandler<GetExchangeTopolo
     {
         try
         {
-            // Note: ExchangeManager doesn't have a GetTopology method, so we'll return an empty result
-            // In a real implementation, you'd add this method to IExchangeManager
-            var topology = new ExchangeTopology
-            {
-                RootExchange = request.Name,
-                Depth = request.MaxDepth,
-                Timestamp = DateTimeOffset.UtcNow
-            };
-
+            var topology = await _exchangeManager.GetTopologyAsync(request.Name, cancellationToken);
             return ExchangeTopologyResult.CreateSuccess(topology);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get topology for exchange {ExchangeName}", request.Name);
+            _logger.LogError(ex, "Failed to get exchange topology for {ExchangeName}", request.Name);
             return ExchangeTopologyResult.CreateFailure(ex.Message);
         }
     }

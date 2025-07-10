@@ -384,8 +384,6 @@ public class SagaOrchestrator : ISagaOrchestrator
         
         try
         {
-            await Task.CompletedTask; // Placeholder for async pattern
-            
             var sagas = _activeSagas.Values
                 .Where(s => query.SagaType == null || s.SagaType == query.SagaType)
                 .Where(s => query.CorrelationId == null || s.CorrelationId == query.CorrelationId)
@@ -591,8 +589,6 @@ public class SagaOrchestrator : ISagaOrchestrator
     /// <returns>Saga instance or null if not found</returns>
     public async Task<ISaga?> GetSagaInstanceAsync(string sagaId, CancellationToken cancellationToken = default)
     {
-        await Task.CompletedTask; // Placeholder for async pattern
-        
         _activeSagas.TryGetValue(sagaId, out var saga);
         return saga;
     }
@@ -672,8 +668,6 @@ public class SagaOrchestrator : ISagaOrchestrator
         
         if (_running)
             return;
-        
-        await Task.CompletedTask; // Placeholder for async pattern
         
         _running = true;
     }

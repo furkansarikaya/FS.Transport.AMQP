@@ -565,6 +565,138 @@ public class ExchangeManager : IExchangeManager
         return _statistics.Clone();
     }
 
+    /// <summary>
+    /// Gets all bindings for a specific exchange
+    /// </summary>
+    public async Task<IEnumerable<ExchangeBindingInfo>> GetBindingsAsync(string exchangeName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(exchangeName))
+            throw new ArgumentException("Exchange name cannot be null or empty", nameof(exchangeName));
+
+        try
+        {
+            // For now, return empty list as we don't track bindings in ExchangeDeclaration
+            // In a production environment, you would use RabbitMQ Management API
+            // to get actual bindings from the server
+            return new List<ExchangeBindingInfo>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting bindings for exchange {ExchangeName}: {ErrorMessage}", exchangeName, ex.Message);
+            return new List<ExchangeBindingInfo>();
+        }
+    }
+
+    /// <summary>
+    /// Lists all exchanges with optional filtering
+    /// </summary>
+    public async Task<IEnumerable<ExchangeInfo>> ListExchangesAsync(string? filter = null, bool includeDetails = false, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var exchangeInfos = new List<ExchangeInfo>();
+
+            // Get all locally tracked exchanges
+            var trackedExchanges = _declaredExchanges.Keys.ToList();
+
+            if (!string.IsNullOrEmpty(filter))
+            {
+                trackedExchanges = trackedExchanges.Where(name => name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            foreach (var exchangeName in trackedExchanges)
+            {
+                try
+                {
+                    var exchangeInfo = await GetInfoAsync(exchangeName, cancellationToken);
+                    if (exchangeInfo != null)
+                    {
+                        exchangeInfos.Add(exchangeInfo);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not get info for exchange {ExchangeName}", exchangeName);
+                    
+                    // Still add basic info if we can't get detailed info
+                    if (_declaredExchanges.TryGetValue(exchangeName, out var declaration))
+                    {
+                        exchangeInfos.Add(new ExchangeInfo
+                        {
+                            Name = exchangeName,
+                            Type = declaration.Type,
+                            Durable = declaration.Durable,
+                            AutoDelete = declaration.AutoDelete,
+                            Arguments = declaration.Arguments
+                        });
+                    }
+                }
+            }
+
+            return exchangeInfos;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing exchanges: {ErrorMessage}", ex.Message);
+            return new List<ExchangeInfo>();
+        }
+    }
+
+    /// <summary>
+    /// Gets the topology information for exchanges
+    /// </summary>
+    public async Task<ExchangeTopology> GetTopologyAsync(string? exchangeName = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var topology = new ExchangeTopology();
+
+            if (!string.IsNullOrEmpty(exchangeName))
+            {
+                // Get topology for specific exchange
+                var exchangeInfo = await GetInfoAsync(exchangeName, cancellationToken);
+                if (exchangeInfo != null)
+                {
+                    var exchangeNode = new ExchangeTopologyNode
+                    {
+                        Name = exchangeInfo.Name,
+                        Type = exchangeInfo.Type,
+                        Durable = exchangeInfo.Durable,
+                        Internal = false,
+                        Depth = 0
+                    };
+                    
+                    topology.ExchangeNodes = new List<ExchangeTopologyNode> { exchangeNode };
+                    topology.RootExchange = exchangeInfo.Name;
+                }
+            }
+            else
+            {
+                // Get topology for all exchanges
+                var exchanges = await ListExchangesAsync(null, true, cancellationToken);
+                var exchangeNodes = exchanges.Select(exchange => new ExchangeTopologyNode
+                {
+                    Name = exchange.Name,
+                    Type = exchange.Type,
+                    Durable = exchange.Durable,
+                    Internal = false,
+                    Depth = 0
+                }).ToList();
+
+                topology.ExchangeNodes = exchangeNodes;
+                topology.RootExchange = exchangeNodes.FirstOrDefault()?.Name ?? "";
+            }
+
+            topology.Timestamp = DateTimeOffset.UtcNow;
+            return topology;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting exchange topology: {ErrorMessage}", ex.Message);
+            return new ExchangeTopology { Timestamp = DateTimeOffset.UtcNow };
+        }
+    }
+
     private TimeSpan CalculateAverageTime(TimeSpan currentDuration)
     {
         var totalOperations = _statistics.SuccessfulOperations + _statistics.FailedOperations;

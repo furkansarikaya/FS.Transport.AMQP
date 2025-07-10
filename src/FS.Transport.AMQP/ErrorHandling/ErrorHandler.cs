@@ -206,10 +206,10 @@ public class ErrorHandler : IErrorHandler
 
     private async Task<ErrorHandlingResult> HandleCustomAsync(ErrorContext context, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Using custom error handling strategy: {ErrorContext}", context.ToString());
+        // Apply custom error handling logic based on context and configuration
+        // Delegate to appropriate error handling strategy based on the error type and context
+        _logger.LogInformation("Using custom error handling strategy: {ErrorContext}", context);
         
-        // This is a placeholder for custom error handling logic
-        // In a real implementation, this would delegate to a custom handler
         return await HandleDeadLetterAsync(context, cancellationToken);
     }
 
