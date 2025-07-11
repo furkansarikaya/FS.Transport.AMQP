@@ -1,3 +1,5 @@
+using FS.Transport.AMQP.Consumer;
+
 namespace FS.Transport.AMQP.Configuration;
 
 /// <summary>

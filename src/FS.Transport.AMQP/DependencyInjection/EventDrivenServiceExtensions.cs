@@ -44,12 +44,12 @@ public static class EventDrivenServiceExtensions
     /// });
     /// </code>
     /// </example>
-    public static IServiceCollection AddEventBus(this IServiceCollection services, Action<Configuration.EventBusSettings>? configure = null)
+    public static IServiceCollection AddEventBus(this IServiceCollection services, Action<EventBusSettings>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         // Configure event bus settings
-        services.Configure<Configuration.EventBusSettings>(settings =>
+        services.Configure<EventBusSettings>(settings =>
         {
             settings.Enabled = true;
             configure?.Invoke(settings);
@@ -89,7 +89,7 @@ public static class EventDrivenServiceExtensions
     /// });
     /// </code>
     /// </example>
-    public static IServiceCollection AddEventBus(this IServiceCollection services, string connectionString, Action<Configuration.EventBusSettings>? configure = null)
+    public static IServiceCollection AddEventBus(this IServiceCollection services, string connectionString, Action<EventBusSettings>? configure = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
@@ -131,7 +131,7 @@ public static class EventDrivenServiceExtensions
         this IServiceCollection services, 
         string connectionString, 
         string exchangeName, 
-        Action<Configuration.EventBusSettings>? configure = null)
+        Action<EventBusSettings>? configure = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
@@ -170,12 +170,12 @@ public static class EventDrivenServiceExtensions
     /// });
     /// </code>
     /// </example>
-    public static IServiceCollection AddEventStore(this IServiceCollection services, Action<Configuration.EventStoreSettings>? configure = null)
+    public static IServiceCollection AddEventStore(this IServiceCollection services, Action<EventStoreSettings>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         // Configure event store settings
-        services.Configure<Configuration.EventStoreSettings>(settings =>
+        services.Configure<EventStoreSettings>(settings =>
         {
             settings.Enabled = true;
             configure?.Invoke(settings);
@@ -210,7 +210,7 @@ public static class EventDrivenServiceExtensions
     /// });
     /// </code>
     /// </example>
-    public static IServiceCollection AddEventStore(this IServiceCollection services, string connectionString, Action<Configuration.EventStoreSettings>? configure = null)
+    public static IServiceCollection AddEventStore(this IServiceCollection services, string connectionString, Action<EventStoreSettings>? configure = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
@@ -547,7 +547,7 @@ public static class EventDrivenServiceExtensions
         }
 
         // Register saga orchestration if enabled
-        if (config.Saga.Enabled)
+        if (config.EnableSaga)
         {
             services.AddSagaOrchestration(connectionString, saga =>
             {
@@ -668,31 +668,14 @@ public static class EventDrivenServiceExtensions
 }
 
 /// <summary>
-/// Configuration for event-driven architecture
+/// Configuration class for event-driven services
 /// </summary>
-/// <remarks>
-/// This class provides configuration options for event-driven architecture components
-/// including event bus, event store, and saga orchestration settings.
-/// </remarks>
 public class EventDrivenConfiguration
 {
-    /// <summary>
-    /// Event bus configuration
-    /// </summary>
-    public Configuration.EventBusSettings EventBus { get; set; } = new();
-
-    /// <summary>
-    /// Event store configuration
-    /// </summary>
-    public Configuration.EventStoreSettings EventStore { get; set; } = new();
-
-    /// <summary>
-    /// Saga orchestration configuration
-    /// </summary>
+    public EventBusSettings EventBus { get; set; } = new();
+    public EventStoreSettings EventStore { get; set; } = new();
     public SagaSettings Saga { get; set; } = new();
-
-    /// <summary>
-    /// Whether to automatically discover event handlers
-    /// </summary>
+    public bool EnableSaga { get; set; } = false;
     public bool AutoDiscoverHandlers { get; set; } = true;
+    public List<Assembly> HandlerAssemblies { get; set; } = new();
 }

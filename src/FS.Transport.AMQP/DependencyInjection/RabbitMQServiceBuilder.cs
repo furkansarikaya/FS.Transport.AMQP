@@ -1,6 +1,10 @@
 using FS.Transport.AMQP.Configuration;
 using FS.Transport.AMQP.Producer;
+using FS.Transport.AMQP.Consumer;
+using FS.Transport.AMQP.EventBus;
+using FS.Transport.AMQP.EventStore;
 using FS.Transport.AMQP.Saga;
+using FS.Transport.AMQP.Core.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -49,9 +53,14 @@ public sealed class RabbitMQServiceBuilder
     /// <param name="connectionString">The RabbitMQ connection string</param>
     /// <returns>The builder for fluent configuration</returns>
     /// <exception cref="ArgumentException">Thrown when connection string is null or empty</exception>
+    /// <remarks>
+    /// This method parses the connection string and automatically configures the connection settings.
+    /// It supports standard AMQP connection string format with authentication, SSL, and query parameters.
+    /// </remarks>
     /// <example>
     /// <code>
     /// builder.WithConnectionString("amqp://guest:guest@localhost:5672/");
+    /// builder.WithConnectionString("amqps://user:pass@server:5671/vhost?heartbeat=60");
     /// </code>
     /// </example>
     public RabbitMQServiceBuilder WithConnectionString(string connectionString)
@@ -59,7 +68,22 @@ public sealed class RabbitMQServiceBuilder
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
 
+        // Parse connection string and update connection settings
+        var parsedSettings = ConnectionStringBuilder.Parse(connectionString);
+        
+        // Keep the original connection string and apply parsed settings
         _configuration.Connection.ConnectionString = connectionString;
+        _configuration.Connection.HostName = parsedSettings.HostName;
+        _configuration.Connection.Port = parsedSettings.Port;
+        _configuration.Connection.UserName = parsedSettings.UserName;
+        _configuration.Connection.Password = parsedSettings.Password;
+        _configuration.Connection.VirtualHost = parsedSettings.VirtualHost;
+        _configuration.Connection.UseSsl = parsedSettings.UseSsl;
+        _configuration.Connection.HeartbeatInterval = parsedSettings.HeartbeatInterval;
+        _configuration.Connection.ConnectionTimeoutMs = parsedSettings.ConnectionTimeoutMs;
+        _configuration.Connection.RequestedChannelMax = parsedSettings.RequestedChannelMax;
+        _configuration.Connection.RequestedFrameMax = parsedSettings.RequestedFrameMax;
+        
         return this;
     }
 
@@ -183,13 +207,12 @@ public sealed class RabbitMQServiceBuilder
     /// builder.WithConsumer(consumer => 
     /// {
     ///     consumer.PrefetchCount = 10;
-    ///     consumer.AutoAck = false;
-    ///     consumer.ConcurrentConsumers = 1;
-    ///     consumer.RetryOnFailure = true;
+    ///     consumer.MaxConcurrentMessages = 4;
+    ///     consumer.AutoAcknowledge = false;
     /// });
     /// </code>
     /// </example>
-    public RabbitMQServiceBuilder WithConsumer(Action<Configuration.ConsumerSettings> configure)
+    public RabbitMQServiceBuilder WithConsumer(Action<ConsumerSettings> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
         configure(_configuration.Consumer);
@@ -208,15 +231,14 @@ public sealed class RabbitMQServiceBuilder
     /// {
     ///     eventBus.DefaultExchange = "events";
     ///     eventBus.EnableEventStore = true;
-    ///     eventBus.EnableDomainEvents = true;
-    ///     eventBus.EnableIntegrationEvents = true;
     /// });
     /// </code>
     /// </example>
-    public RabbitMQServiceBuilder WithEventBus(Action<Configuration.EventBusSettings> configure)
+    public RabbitMQServiceBuilder WithEventBus(Action<EventBusSettings> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
         configure(_configuration.EventBus);
+        _configuration.EventBus.Enabled = true;
         return this;
     }
 
@@ -245,16 +267,16 @@ public sealed class RabbitMQServiceBuilder
     /// <code>
     /// builder.WithEventStore(eventStore => 
     /// {
-    ///     eventStore.StreamPrefix = "stream-";
-    ///     eventStore.SnapshotFrequency = 100;
+    ///     eventStore.StreamPrefix = "events";
     ///     eventStore.EnableSnapshots = true;
     /// });
     /// </code>
     /// </example>
-    public RabbitMQServiceBuilder WithEventStore(Action<Configuration.EventStoreSettings> configure)
+    public RabbitMQServiceBuilder WithEventStore(Action<EventStoreSettings> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
         configure(_configuration.EventStore);
+        _configuration.EventStore.Enabled = true;
         return this;
     }
 

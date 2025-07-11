@@ -20,6 +20,26 @@ public class EventBusSettings
     public bool Enabled { get; set; } = true;
     
     /// <summary>
+    /// Default exchange name for events
+    /// </summary>
+    public string DefaultExchange { get; set; } = "events";
+    
+    /// <summary>
+    /// Whether to enable event store functionality
+    /// </summary>
+    public bool EnableEventStore { get; set; } = true;
+    
+    /// <summary>
+    /// Whether to enable domain events
+    /// </summary>
+    public bool EnableDomainEvents { get; set; } = true;
+    
+    /// <summary>
+    /// Whether to enable integration events
+    /// </summary>
+    public bool EnableIntegrationEvents { get; set; } = true;
+    
+    /// <summary>
     /// Maximum number of concurrent event processing
     /// </summary>
     public int MaxConcurrentEvents { get; set; } = 10;
@@ -212,6 +232,15 @@ public class EventBusSettings
             return false;
             
         return true;
+    }
+    
+    /// <summary>
+    /// Validates the event bus settings and throws an exception if invalid
+    /// </summary>
+    public void Validate()
+    {
+        if (!IsValid())
+            throw new InvalidOperationException("EventBusSettings validation failed");
     }
     
     /// <summary>

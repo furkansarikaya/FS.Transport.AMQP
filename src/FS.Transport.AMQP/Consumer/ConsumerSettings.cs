@@ -15,6 +15,11 @@ public class ConsumerSettings
     public string Name { get; set; } = "DefaultConsumer";
     
     /// <summary>
+    /// Number of concurrent consumers
+    /// </summary>
+    public int ConcurrentConsumers { get; set; } = Environment.ProcessorCount;
+    
+    /// <summary>
     /// Consumer tag for RabbitMQ identification
     /// </summary>
     public string? ConsumerTag { get; set; }
@@ -234,6 +239,7 @@ public class ConsumerSettings
         return new ConsumerSettings
         {
             Name = Name,
+            ConcurrentConsumers = ConcurrentConsumers,
             ConsumerTag = ConsumerTag,
             AutoAcknowledge = AutoAcknowledge,
             PrefetchCount = PrefetchCount,

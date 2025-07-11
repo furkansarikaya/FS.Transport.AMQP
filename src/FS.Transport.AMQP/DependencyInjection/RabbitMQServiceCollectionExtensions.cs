@@ -1,8 +1,11 @@
 using FS.Transport.AMQP.Configuration;
+using FS.Transport.AMQP.EventBus;
+using FS.Transport.AMQP.EventStore;
 using FS.Transport.AMQP.Saga;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Reflection;
 
 namespace FS.Transport.AMQP.DependencyInjection;

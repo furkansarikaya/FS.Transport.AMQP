@@ -75,9 +75,10 @@ public static class ServiceLifetimeConstants
             { typeof(RabbitMQConfiguration), ServiceLifetime.Singleton },
             { typeof(ConnectionSettings), ServiceLifetime.Singleton },
             { typeof(ProducerSettings), ServiceLifetime.Singleton },
-            { typeof(FS.Transport.AMQP.Configuration.ConsumerSettings), ServiceLifetime.Singleton },
-            { typeof(FS.Transport.AMQP.Configuration.EventBusSettings), ServiceLifetime.Singleton },
-            { typeof(FS.Transport.AMQP.Configuration.EventStoreSettings), ServiceLifetime.Singleton },
+            { typeof(FS.Transport.AMQP.Producer.ProducerSettings), ServiceLifetime.Singleton },
+            { typeof(FS.Transport.AMQP.Consumer.ConsumerSettings), ServiceLifetime.Singleton },
+            { typeof(FS.Transport.AMQP.EventBus.EventBusSettings), ServiceLifetime.Singleton },
+            { typeof(FS.Transport.AMQP.EventStore.EventStoreSettings), ServiceLifetime.Singleton },
             { typeof(SagaSettings), ServiceLifetime.Singleton },
             { typeof(HealthCheckSettings), ServiceLifetime.Singleton },
 

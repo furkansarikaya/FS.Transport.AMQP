@@ -1,3 +1,6 @@
+using FS.Transport.AMQP.EventBus;
+using FS.Transport.AMQP.EventStore;
+
 namespace FS.Transport.AMQP.Configuration;
 
 /// <summary>

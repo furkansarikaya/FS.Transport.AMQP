@@ -1,4 +1,7 @@
 using FS.Transport.AMQP.Producer;
+using FS.Transport.AMQP.Consumer;
+using FS.Transport.AMQP.EventBus;
+using FS.Transport.AMQP.EventStore;
 using FS.Transport.AMQP.Saga;
 
 namespace FS.Transport.AMQP.Configuration;

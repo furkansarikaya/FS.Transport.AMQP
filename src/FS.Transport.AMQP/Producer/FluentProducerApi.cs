@@ -8,9 +8,6 @@ namespace FS.Transport.AMQP.Producer;
 public class FluentProducerApi
 {
     private readonly IMessageProducer _producer;
-    private object? _message;
-    private string? _exchange;
-    private string? _routingKey;
     private readonly MessageContext _context;
     private readonly PublishOptions _options;
 

@@ -1,6 +1,7 @@
 using System.Text;
+using FS.Transport.AMQP.Configuration;
 
-namespace FS.Transport.AMQP.Configuration;
+namespace FS.Transport.AMQP.Core.Extensions;
 
 /// <summary>
 /// Builder for constructing RabbitMQ AMQP connection strings
@@ -143,26 +144,32 @@ public class ConnectionStringBuilder
         // Parse query parameters
         if (!string.IsNullOrEmpty(uri.Query))
         {
-            var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var queryString = uri.Query.TrimStart('?');
+            var pairs = queryString.Split('&', StringSplitOptions.RemoveEmptyEntries);
             
-            if (queryParams["heartbeat"] != null && ushort.TryParse(queryParams["heartbeat"], out var heartbeat))
+            foreach (var pair in pairs)
             {
-                settings.HeartbeatInterval = heartbeat;
-            }
-            
-            if (queryParams["connection_timeout"] != null && int.TryParse(queryParams["connection_timeout"], out var timeout))
-            {
-                settings.ConnectionTimeoutMs = timeout;
-            }
-            
-            if (queryParams["channel_max"] != null && ushort.TryParse(queryParams["channel_max"], out var channelMax))
-            {
-                settings.RequestedChannelMax = channelMax;
-            }
-            
-            if (queryParams["frame_max"] != null && uint.TryParse(queryParams["frame_max"], out var frameMax))
-            {
-                settings.RequestedFrameMax = frameMax;
+                var parts = pair.Split('=', 2);
+                if (parts.Length != 2) continue;
+                
+                var key = Uri.UnescapeDataString(parts[0]);
+                var value = Uri.UnescapeDataString(parts[1]);
+                
+                switch (key.ToLowerInvariant())
+                {
+                    case "heartbeat" when ushort.TryParse(value, out var heartbeat):
+                        settings.HeartbeatInterval = heartbeat;
+                        break;
+                    case "connection_timeout" when int.TryParse(value, out var timeout):
+                        settings.ConnectionTimeoutMs = timeout;
+                        break;
+                    case "channel_max" when ushort.TryParse(value, out var channelMax):
+                        settings.RequestedChannelMax = channelMax;
+                        break;
+                    case "frame_max" when uint.TryParse(value, out var frameMax):
+                        settings.RequestedFrameMax = frameMax;
+                        break;
+                }
             }
         }
 
