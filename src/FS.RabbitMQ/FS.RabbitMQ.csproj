@@ -12,7 +12,7 @@
         <Version>9.0.0</Version>
         <Authors>Furkan Sarıkaya</Authors>
         <Company>Furkan Sarıkaya</Company>
-        <Product>FS.Transport.AMQP</Product>
+        <Product>FS.RabbitMQ</Product>
         <Description>Production-ready RabbitMQ client library with advanced error handling, retry policies, automatic reconnection, and exchange/queue management for .NET 9</Description>
         <PackageTags>rabbitmq;messagequeue;amqp;messaging;microservices;dotnet;csharp</PackageTags>
         <PackageProjectUrl>https://github.com/furkansarikaya/FS.RabbitMQ</PackageProjectUrl>
@@ -22,7 +22,7 @@
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
         <PackageReleaseNotes>Initial release with core functionality</PackageReleaseNotes>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <DocumentationFile>bin\Debug\net9.0\FS.Transport.AMQP.xml</DocumentationFile>
+        <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
         <!-- Enable XML documentation warnings -->
