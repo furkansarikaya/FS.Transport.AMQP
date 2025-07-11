@@ -21,57 +21,106 @@
 
         <!-- Package Identity -->
         <PackageId>FS.RabbitMQ</PackageId>
+        <Title>FS.RabbitMQ - Production-Ready RabbitMQ Client</Title>
         <Authors>Furkan Sarıkaya</Authors>
+        <Owners>Furkan Sarıkaya</Owners>
         <Company>Furkan Sarıkaya</Company>
         <Product>FS.RabbitMQ</Product>
+        <Copyright>Copyright © 2025 Furkan Sarıkaya</Copyright>
+        <AssemblyTitle>FS.RabbitMQ</AssemblyTitle>
+        <AssemblyDescription>Production-ready RabbitMQ client library for .NET 9</AssemblyDescription>
+        <AssemblyCompany>Furkan Sarıkaya</AssemblyCompany>
+        <AssemblyProduct>FS.RabbitMQ</AssemblyProduct>
+        <AssemblyCopyright>Copyright © 2025 Furkan Sarıkaya</AssemblyCopyright>
 
         <!-- Package Description -->
         <Description>Production-ready RabbitMQ client library with advanced error handling, retry policies, automatic reconnection, and exchange/queue management for .NET 9</Description>
-        <PackageTags>rabbitmq;messagequeue;amqp;messaging;microservices;dotnet;csharp</PackageTags>
-        <PackageReleaseNotes>Alpha release for testing - contains core functionality</PackageReleaseNotes>
+        <Summary>High-performance RabbitMQ client with event-driven architecture, event sourcing, saga orchestration, and enterprise-grade reliability features for .NET 9 applications.</Summary>
+        <PackageTags>rabbitmq;messagequeue;amqp;messaging;microservices;dotnet;csharp;event-driven;event-sourcing;saga;producer-consumer;enterprise;high-performance;net9</PackageTags>
+        <PackageReleaseNotes>
+            Alpha Release $(VersionPrefix)-$(VersionSuffix).$(BuildNumber)
+
+            🎯 Core Features:
+            • High-performance producer/consumer with automatic recovery
+            • Event-driven architecture with domain and integration events
+            • Event sourcing with snapshot support
+            • Saga orchestration for distributed transactions
+            • Comprehensive error handling with retry policies and circuit breaker
+            • Dead letter queue management
+            • Health checks and monitoring integration
+
+            🔧 Configuration:
+            • Fluent configuration API
+            • Support for appsettings.json configuration
+            • Environment-specific settings
+            • SSL/TLS support
+
+            ⚡ Performance:
+            • Batch publishing for high throughput
+            • Connection pooling and channel management
+            • Memory-efficient serialization
+            • Async-first API design
+
+            🛡️ Production Ready:
+            • Automatic connection recovery
+            • Publisher confirmations
+            • Transactional publishing
+            • Comprehensive logging and metrics
+
+            📚 Documentation:
+            Complete guides available for producers, consumers, event-driven architecture, and performance tuning.
+
+            ⚠️ Alpha Notice:
+            This is an alpha release for testing and feedback. Not recommended for production use.
+        </PackageReleaseNotes>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
 
         <!-- Repository Information -->
         <PackageProjectUrl>https://github.com/furkansarikaya/FS.RabbitMQ</PackageProjectUrl>
         <RepositoryUrl>https://github.com/furkansarikaya/FS.RabbitMQ</RepositoryUrl>
+        <RepositoryBranch>main</RepositoryBranch>
         <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
 
         <!-- License Configuration -->
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-        
-        <!-- Package Metadata -->
-        <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageIcon>icon.png</PackageIcon>
+
+        <!-- Language and Localization -->
+        <NeutralLanguage>en-US</NeutralLanguage>
+
+        <!-- Package Content -->
+        <ContentTargetFolders>content</ContentTargetFolders>
+        <BuildOutputTargetFolder>lib</BuildOutputTargetFolder>
+        <PackageOutputPath>./nupkg</PackageOutputPath>
 
         <!-- Symbol Configuration -->
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        
-        <!-- Assembly Information -->
-        <AssemblyName>FS.RabbitMQ</AssemblyName>
-        <AssemblyDescription>Production-ready RabbitMQ client library with advanced error handling, retry policies, automatic reconnection, and exchange/queue management for .NET 9</AssemblyDescription>
-        <Copyright>Copyright (c) 2025 Furkan Sarıkaya</Copyright>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>embedded</DebugType>
+        <DebugSymbols>true</DebugSymbols>
 
         <!-- Warning Configuration -->
         <NoWarn>1701;1702</NoWarn>
         <WarningsAsErrors />
+        <WarningsNotAsErrors />
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisLevel>latest</AnalysisLevel>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     </PropertyGroup>
 
-    <!-- Include README in package -->
     <ItemGroup>
-        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    </ItemGroup>
-
-    <!-- Package Icon Configuration -->
-    <ItemGroup>
-        <None Include="icon.png" Pack="true" PackagePath="" />
-    </ItemGroup>
-
-    <!-- Analyzer and Code Quality -->
-    <ItemGroup>
-        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0" PrivateAssets="all" />
-        <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
+        <!-- Content Files -->
+        <Content Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <Content Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+        <Content Include="icon.png" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup>
