@@ -156,7 +156,7 @@ public class ExchangeManager : IExchangeManager
                 
                 try
                 {
-                    channel.ExchangeDeclare(
+                    await channel.ExchangeDeclareAsync(
                         exchange: name,
                         type: type,
                         durable: durable,
@@ -239,7 +239,7 @@ public class ExchangeManager : IExchangeManager
                 
                 try
                 {
-                    channel.ExchangeDelete(name, ifUnused);
+                    await channel.ExchangeDeleteAsync(name, ifUnused);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -335,7 +335,7 @@ public class ExchangeManager : IExchangeManager
                 
                 try
                 {
-                    channel.ExchangeBind(destination, source, routingKey, arguments);
+                    await channel.ExchangeBindAsync(destination, source, routingKey, arguments);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -424,7 +424,7 @@ public class ExchangeManager : IExchangeManager
                 
                 try
                 {
-                    channel.ExchangeUnbind(destination, source, routingKey, arguments);
+                    await channel.ExchangeUnbindAsync(destination, source, routingKey, arguments);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -491,7 +491,7 @@ public class ExchangeManager : IExchangeManager
             try
             {
                 // Try to declare passively - this will throw if exchange doesn't exist
-                channel.ExchangeDeclarePassive(name);
+                await channel.ExchangeDeclarePassiveAsync(name);
                 _connectionManager.ReturnChannel(channel);
                 return true;
             }

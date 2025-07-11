@@ -1,57 +1,95 @@
 namespace FS.RabbitMQ.Connection;
 
 /// <summary>
-/// Event arguments for connection-related events
+/// Event arguments for connection events
 /// </summary>
 public class ConnectionEventArgs : EventArgs
 {
     /// <summary>
-    /// Description of the connection event
+    /// Gets the message describing the event
     /// </summary>
     public string Message { get; }
-    
+
     /// <summary>
-    /// Exception associated with the event (if any)
+    /// Gets the exception associated with the event (if any)
     /// </summary>
     public Exception? Exception { get; }
-    
-    /// <summary>
-    /// Timestamp when the event occurred
-    /// </summary>
-    public DateTime Timestamp { get; }
-    
-    /// <summary>
-    /// Additional context information
-    /// </summary>
-    public IDictionary<string, object> Context { get; }
 
+    /// <summary>
+    /// Gets when the event occurred
+    /// </summary>
+    public DateTimeOffset Timestamp { get; }
+
+    /// <summary>
+    /// Gets additional event data
+    /// </summary>
+    public Dictionary<string, object?> Data { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the ConnectionEventArgs class
+    /// </summary>
+    /// <param name="message">Message describing the event</param>
+    /// <param name="exception">Exception associated with the event</param>
     public ConnectionEventArgs(string message, Exception? exception = null)
     {
         Message = message ?? throw new ArgumentNullException(nameof(message));
         Exception = exception;
-        Timestamp = DateTime.UtcNow;
-        Context = new Dictionary<string, object>();
+        Timestamp = DateTimeOffset.UtcNow;
+        Data = new Dictionary<string, object?>();
     }
 
     /// <summary>
-    /// Adds context information to the event
+    /// Initializes a new instance of the ConnectionEventArgs class with additional data
     /// </summary>
-    /// <param name="key">Context key</param>
-    /// <param name="value">Context value</param>
-    /// <returns>The event args instance for fluent configuration</returns>
-    public ConnectionEventArgs WithContext(string key, object value)
+    /// <param name="message">Message describing the event</param>
+    /// <param name="exception">Exception associated with the event</param>
+    /// <param name="data">Additional event data</param>
+    public ConnectionEventArgs(string message, Exception? exception, Dictionary<string, object?> data)
     {
-        Context[key] = value;
-        return this;
+        Message = message ?? throw new ArgumentNullException(nameof(message));
+        Exception = exception;
+        Timestamp = DateTimeOffset.UtcNow;
+        Data = data ?? new Dictionary<string, object?>();
     }
 
     /// <summary>
-    /// Gets a string representation of the connection event
+    /// Adds additional data to the event
     /// </summary>
-    /// <returns>Event description</returns>
+    /// <param name="key">Data key</param>
+    /// <param name="value">Data value</param>
+    public void AddData(string key, object? value)
+    {
+        Data[key] = value;
+    }
+
+    /// <summary>
+    /// Gets data from the event
+    /// </summary>
+    /// <typeparam name="T">Type of the data</typeparam>
+    /// <param name="key">Data key</param>
+    /// <returns>The data value or default if not found</returns>
+    public T? GetData<T>(string key)
+    {
+        if (Data.TryGetValue(key, out var value))
+        {
+            try
+            {
+                return (T?)value;
+            }
+            catch
+            {
+                return default;
+            }
+        }
+        return default;
+    }
+
+    /// <summary>
+    /// Returns a string representation of the event
+    /// </summary>
     public override string ToString()
     {
-        var result = $"[{Timestamp:yyyy-MM-dd HH:mm:ss}] {Message}";
+        var result = $"[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] {Message}";
         if (Exception != null)
         {
             result += $" - Exception: {Exception.Message}";

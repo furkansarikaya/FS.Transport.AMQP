@@ -1,7 +1,7 @@
 namespace FS.RabbitMQ.Connection;
 
 /// <summary>
-/// Enumeration of connection states
+/// Represents the state of a RabbitMQ connection
 /// </summary>
 public enum ConnectionState
 {
@@ -9,34 +9,34 @@ public enum ConnectionState
     /// Connection has not been initialized
     /// </summary>
     NotInitialized,
-    
+
     /// <summary>
     /// Connection is being established
     /// </summary>
     Connecting,
-    
+
     /// <summary>
-    /// Connection is established and healthy
+    /// Connection is active and ready for use
     /// </summary>
     Connected,
-    
+
     /// <summary>
-    /// Connection is temporarily disconnected
+    /// Connection is being closed
+    /// </summary>
+    Disconnecting,
+
+    /// <summary>
+    /// Connection has been closed
     /// </summary>
     Disconnected,
-    
+
     /// <summary>
     /// Connection is being recovered
     /// </summary>
     Recovering,
-    
+
     /// <summary>
-    /// Connection is permanently closed
-    /// </summary>
-    Closed,
-    
-    /// <summary>
-    /// Connection is in a failed state
+    /// Connection has failed
     /// </summary>
     Failed
 }

@@ -4,478 +4,189 @@ using FS.RabbitMQ.ErrorHandling;
 namespace FS.RabbitMQ.Producer;
 
 /// <summary>
-/// Configuration settings for the message producer
+/// Configuration settings for message producers
 /// </summary>
 public class ProducerSettings
 {
     /// <summary>
-    /// Producer name/identifier
+    /// Gets or sets the producer name
     /// </summary>
     public string Name { get; set; } = "DefaultProducer";
-    
+
     /// <summary>
-    /// Default exchange for messages when not specified
+    /// Gets or sets whether publisher confirms are enabled
     /// </summary>
-    public string? DefaultExchange { get; set; }
-    
+    public bool EnableConfirms { get; set; } = true;
+
     /// <summary>
-    /// Default routing key when not specified
+    /// Gets or sets the timeout for publisher confirms
     /// </summary>
-    public string? DefaultRoutingKey { get; set; }
-    
+    public TimeSpan ConfirmTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>
-    /// Default content type for messages
+    /// Gets or sets whether messages should be persistent
     /// </summary>
-    public string DefaultContentType { get; set; } = "application/json";
-    
+    public bool PersistentMessages { get; set; } = true;
+
     /// <summary>
-    /// Default content encoding for messages
+    /// Gets or sets whether to enable mandatory flag by default
     /// </summary>
-    public string DefaultContentEncoding { get; set; } = "utf-8";
-    
+    public bool MandatoryByDefault { get; set; } = false;
+
     /// <summary>
-    /// Default delivery mode (1 = non-persistent, 2 = persistent)
+    /// Gets or sets the maximum number of concurrent publish operations
     /// </summary>
-    public byte DefaultDeliveryMode { get; set; } = 2;
-    
+    public int MaxConcurrentPublishes { get; set; } = 100;
+
     /// <summary>
-    /// Enable publish confirmations
+    /// Gets or sets the batch size for batch operations
     /// </summary>
-    public bool EnableConfirmations { get; set; } = true;
-    
+    public int BatchSize { get; set; } = 100;
+
     /// <summary>
-    /// Timeout for confirmation acknowledgments
+    /// Gets or sets the timeout for batch operations
     /// </summary>
-    public TimeSpan ConfirmationTimeout { get; set; } = TimeSpan.FromSeconds(30);
-    
+    public TimeSpan BatchTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
     /// <summary>
-    /// Maximum number of unconfirmed messages
+    /// Gets or sets whether to use transactions
     /// </summary>
-    public int MaxUnconfirmedMessages { get; set; } = 1000;
-    
+    public bool UseTransactions { get; set; } = false;
+
     /// <summary>
-    /// Enable message batching for better performance
+    /// Gets or sets the retry policy for failed publishes
     /// </summary>
-    public bool EnableBatching { get; set; } = true;
-    
+    public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.None;
+
     /// <summary>
-    /// Maximum batch size for message publishing
+    /// Gets or sets the maximum number of retry attempts
     /// </summary>
-    public int MaxBatchSize { get; set; } = 100;
-    
+    public int MaxRetryAttempts { get; set; } = 3;
+
     /// <summary>
-    /// Maximum time to wait before publishing a partial batch
-    /// </summary>
-    public TimeSpan BatchTimeout { get; set; } = TimeSpan.FromMilliseconds(100);
-    
-    /// <summary>
-    /// Enable automatic retry on transient failures
-    /// </summary>
-    public bool EnableRetry { get; set; } = true;
-    
-    /// <summary>
-    /// Default retry policy name
-    /// </summary>
-    public string DefaultRetryPolicyName { get; set; } = "DefaultRetryPolicy";
-    
-    /// <summary>
-    /// Maximum number of retry attempts
-    /// </summary>
-    public int MaxRetries { get; set; } = 3;
-    
-    /// <summary>
-    /// Base delay between retry attempts
+    /// Gets or sets the retry delay
     /// </summary>
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
-    
+
     /// <summary>
-    /// Maximum delay between retry attempts
-    /// </summary>
-    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Retry delay multiplier for exponential backoff
-    /// </summary>
-    public double RetryDelayMultiplier { get; set; } = 2.0;
-    
-    /// <summary>
-    /// Enable transactional publishing
-    /// </summary>
-    public bool EnableTransactions { get; set; } = false;
-    
-    /// <summary>
-    /// Transaction timeout
-    /// </summary>
-    public TimeSpan TransactionTimeout { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Maximum number of concurrent transactions
-    /// </summary>
-    public int MaxConcurrentTransactions { get; set; } = 10;
-    
-    /// <summary>
-    /// Enable message scheduling
-    /// </summary>
-    public bool EnableScheduling { get; set; } = true;
-    
-    /// <summary>
-    /// Scheduling precision (how often to check for scheduled messages)
-    /// </summary>
-    public TimeSpan SchedulingPrecision { get; set; } = TimeSpan.FromSeconds(1);
-    
-    /// <summary>
-    /// Maximum number of scheduled messages
-    /// </summary>
-    public int MaxScheduledMessages { get; set; } = 10000;
-    
-    /// <summary>
-    /// Enable dead letter handling
-    /// </summary>
-    public bool EnableDeadLetter { get; set; } = true;
-    
-    /// <summary>
-    /// Default dead letter exchange
-    /// </summary>
-    public string DefaultDeadLetterExchange { get; set; } = "dead.letter";
-    
-    /// <summary>
-    /// Default dead letter routing key
-    /// </summary>
-    public string DefaultDeadLetterRoutingKey { get; set; } = "failed";
-    
-    /// <summary>
-    /// Enable message compression
-    /// </summary>
-    public bool EnableCompression { get; set; } = false;
-    
-    /// <summary>
-    /// Compression threshold (messages larger than this will be compressed)
-    /// </summary>
-    public int CompressionThreshold { get; set; } = 1024;
-    
-    /// <summary>
-    /// Compression algorithm to use
-    /// </summary>
-    public CompressionAlgorithm CompressionAlgorithm { get; set; } = CompressionAlgorithm.GZip;
-    
-    /// <summary>
-    /// Enable message deduplication
+    /// Gets or sets whether to enable deduplication
     /// </summary>
     public bool EnableDeduplication { get; set; } = false;
-    
+
     /// <summary>
-    /// Deduplication window (how long to remember message IDs)
+    /// Gets or sets the deduplication cache size
     /// </summary>
-    public TimeSpan DeduplicationWindow { get; set; } = TimeSpan.FromMinutes(5);
-    
+    public int DeduplicationCacheSize { get; set; } = 10000;
+
     /// <summary>
-    /// Maximum number of message IDs to remember for deduplication
+    /// Gets or sets the deduplication cache expiry time
     /// </summary>
-    public int MaxDeduplicationEntries { get; set; } = 100000;
-    
+    public TimeSpan DeduplicationCacheExpiry { get; set; } = TimeSpan.FromMinutes(10);
+
     /// <summary>
-    /// Enable message routing validation
+    /// Gets or sets custom headers to add to all messages
     /// </summary>
-    public bool EnableRoutingValidation { get; set; } = true;
-    
+    public Dictionary<string, object> DefaultHeaders { get; set; } = new();
+
     /// <summary>
-    /// Enable message serialization validation
+    /// Gets or sets whether to enable message compression
     /// </summary>
-    public bool EnableSerializationValidation { get; set; } = true;
-    
+    public bool EnableCompression { get; set; } = false;
+
     /// <summary>
-    /// Channel pool size for concurrent publishing
+    /// Gets or sets the timeout for publisher confirms
     /// </summary>
-    public int ChannelPoolSize { get; set; } = 10;
-    
+    public TimeSpan ConfirmationTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>
-    /// Maximum channel idle time before closing
+    /// Gets or sets custom arguments for the producer
     /// </summary>
-    public TimeSpan ChannelIdleTimeout { get; set; } = TimeSpan.FromMinutes(5);
-    
+    public Dictionary<string, object> Arguments { get; set; } = new Dictionary<string, object>();
+
     /// <summary>
-    /// Enable producer metrics collection
+    /// Gets or sets the maximum number of retries (alias for backward compatibility)
     /// </summary>
-    public bool EnableMetrics { get; set; } = true;
-    
-    /// <summary>
-    /// Metrics collection interval
-    /// </summary>
-    public TimeSpan MetricsInterval { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Enable producer health checks
-    /// </summary>
-    public bool EnableHealthChecks { get; set; } = true;
-    
-    /// <summary>
-    /// Health check interval
-    /// </summary>
-    public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Producer startup timeout
-    /// </summary>
-    public TimeSpan StartupTimeout { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Producer shutdown timeout
-    /// </summary>
-    public TimeSpan ShutdownTimeout { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Enable graceful shutdown (wait for pending messages)
-    /// </summary>
-    public bool EnableGracefulShutdown { get; set; } = true;
-    
-    /// <summary>
-    /// Custom error handling strategy
-    /// </summary>
-    public ErrorHandlingStrategy ErrorHandlingStrategy { get; set; } = ErrorHandlingStrategy.RetryThenDeadLetter;
-    
-    /// <summary>
-    /// Custom serializer settings
-    /// </summary>
-    public IDictionary<string, object>? SerializerSettings { get; set; }
-    
-    /// <summary>
-    /// Custom producer tags for identification
-    /// </summary>
-    public IDictionary<string, string>? Tags { get; set; }
-    
-    /// <summary>
-    /// Creates default producer settings
-    /// </summary>
-    /// <returns>Default producer settings</returns>
-    public static ProducerSettings CreateDefault()
+    public int MaxRetries
     {
-        return new ProducerSettings();
+        get => MaxRetryAttempts;
+        set => MaxRetryAttempts = value;
     }
-    
+
     /// <summary>
-    /// Creates producer settings optimized for high throughput
+    /// Validates the producer settings
     /// </summary>
-    /// <returns>High throughput producer settings</returns>
+    /// <returns>True if settings are valid, false otherwise</returns>
+    public bool Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            return false;
+
+        if (ConfirmTimeout <= TimeSpan.Zero)
+            return false;
+
+        if (ConfirmationTimeout <= TimeSpan.Zero)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Creates default settings for high throughput scenarios
+    /// </summary>
+    /// <returns>ProducerSettings configured for high throughput</returns>
     public static ProducerSettings CreateHighThroughput()
     {
         return new ProducerSettings
         {
             Name = "HighThroughputProducer",
-            EnableBatching = true,
-            MaxBatchSize = 1000,
-            BatchTimeout = TimeSpan.FromMilliseconds(50),
-            EnableConfirmations = true,
-            MaxUnconfirmedMessages = 10000,
-            ChannelPoolSize = 20,
-            EnableCompression = true,
-            CompressionThreshold = 512,
-            EnableDeduplication = false,
-            EnableHealthChecks = true,
-            MetricsInterval = TimeSpan.FromSeconds(10)
+            EnableConfirms = true,
+            PersistentMessages = false,
+            ConfirmTimeout = TimeSpan.FromSeconds(5),
+            ConfirmationTimeout = TimeSpan.FromSeconds(5),
+            EnableCompression = false
         };
     }
-    
+
     /// <summary>
-    /// Creates producer settings optimized for reliability
+    /// Creates default settings for reliable messaging
     /// </summary>
-    /// <returns>Reliable producer settings</returns>
+    /// <returns>ProducerSettings configured for reliability</returns>
     public static ProducerSettings CreateReliable()
     {
         return new ProducerSettings
         {
-            Name = "ReliableProducer",
-            EnableConfirmations = true,
+            Name = "ReliableProducer", 
+            EnableConfirms = true,
+            PersistentMessages = true,
+            ConfirmTimeout = TimeSpan.FromSeconds(60),
             ConfirmationTimeout = TimeSpan.FromSeconds(60),
-            MaxUnconfirmedMessages = 100,
-            EnableRetry = true,
-            MaxRetries = 5,
-            RetryDelay = TimeSpan.FromSeconds(2),
-            MaxRetryDelay = TimeSpan.FromMinutes(1),
-            EnableTransactions = false,
-            EnableDeadLetter = true,
-            EnableDeduplication = true,
-            EnableRoutingValidation = true,
-            EnableSerializationValidation = true,
-            EnableGracefulShutdown = true
-        };
-    }
-    
-    /// <summary>
-    /// Creates producer settings optimized for low latency
-    /// </summary>
-    /// <returns>Low latency producer settings</returns>
-    public static ProducerSettings CreateLowLatency()
-    {
-        return new ProducerSettings
-        {
-            Name = "LowLatencyProducer",
-            EnableBatching = false,
-            EnableConfirmations = false,
-            EnableRetry = false,
-            EnableTransactions = false,
-            EnableCompression = false,
-            EnableDeduplication = false,
-            EnableRoutingValidation = false,
-            EnableSerializationValidation = false,
-            ChannelPoolSize = 5,
-            MetricsInterval = TimeSpan.FromSeconds(60),
-            HealthCheckInterval = TimeSpan.FromSeconds(60)
-        };
-    }
-    
-    /// <summary>
-    /// Validates the producer settings
-    /// </summary>
-    /// <returns>Validation result</returns>
-    public SettingsValidationResult Validate()
-    {
-        var result = new SettingsValidationResult();
-        
-        if (string.IsNullOrWhiteSpace(Name))
-        {
-            result.Errors.Add("Producer name cannot be null or empty");
-        }
-        
-        if (MaxBatchSize <= 0)
-        {
-            result.Errors.Add("MaxBatchSize must be greater than zero");
-        }
-        
-        if (BatchTimeout <= TimeSpan.Zero)
-        {
-            result.Errors.Add("BatchTimeout must be greater than zero");
-        }
-        
-        if (ConfirmationTimeout <= TimeSpan.Zero)
-        {
-            result.Errors.Add("ConfirmationTimeout must be greater than zero");
-        }
-        
-        if (MaxUnconfirmedMessages <= 0)
-        {
-            result.Errors.Add("MaxUnconfirmedMessages must be greater than zero");
-        }
-        
-        if (MaxRetries < 0)
-        {
-            result.Errors.Add("MaxRetries cannot be negative");
-        }
-        
-        if (RetryDelay <= TimeSpan.Zero)
-        {
-            result.Errors.Add("RetryDelay must be greater than zero");
-        }
-        
-        if (MaxRetryDelay <= TimeSpan.Zero)
-        {
-            result.Errors.Add("MaxRetryDelay must be greater than zero");
-        }
-        
-        if (RetryDelayMultiplier <= 0)
-        {
-            result.Errors.Add("RetryDelayMultiplier must be greater than zero");
-        }
-        
-        if (ChannelPoolSize <= 0)
-        {
-            result.Errors.Add("ChannelPoolSize must be greater than zero");
-        }
-        
-        if (CompressionThreshold < 0)
-        {
-            result.Errors.Add("CompressionThreshold cannot be negative");
-        }
-        
-        if (EnableDeduplication && DeduplicationWindow <= TimeSpan.Zero)
-        {
-            result.Errors.Add("DeduplicationWindow must be greater than zero when deduplication is enabled");
-        }
-        
-        if (EnableDeduplication && MaxDeduplicationEntries <= 0)
-        {
-            result.Errors.Add("MaxDeduplicationEntries must be greater than zero when deduplication is enabled");
-        }
-        
-        result.IsValid = result.Errors.Count == 0;
-        return result;
-    }
-    
-    /// <summary>
-    /// Creates a copy of the producer settings
-    /// </summary>
-    /// <returns>Copy of producer settings</returns>
-    public ProducerSettings Clone()
-    {
-        return new ProducerSettings
-        {
-            Name = Name,
-            DefaultExchange = DefaultExchange,
-            DefaultRoutingKey = DefaultRoutingKey,
-            DefaultContentType = DefaultContentType,
-            DefaultContentEncoding = DefaultContentEncoding,
-            DefaultDeliveryMode = DefaultDeliveryMode,
-            EnableConfirmations = EnableConfirmations,
-            ConfirmationTimeout = ConfirmationTimeout,
-            MaxUnconfirmedMessages = MaxUnconfirmedMessages,
-            EnableBatching = EnableBatching,
-            MaxBatchSize = MaxBatchSize,
-            BatchTimeout = BatchTimeout,
-            EnableRetry = EnableRetry,
-            DefaultRetryPolicyName = DefaultRetryPolicyName,
-            MaxRetries = MaxRetries,
-            RetryDelay = RetryDelay,
-            MaxRetryDelay = MaxRetryDelay,
-            RetryDelayMultiplier = RetryDelayMultiplier,
-            EnableTransactions = EnableTransactions,
-            TransactionTimeout = TransactionTimeout,
-            MaxConcurrentTransactions = MaxConcurrentTransactions,
-            EnableScheduling = EnableScheduling,
-            SchedulingPrecision = SchedulingPrecision,
-            MaxScheduledMessages = MaxScheduledMessages,
-            EnableDeadLetter = EnableDeadLetter,
-            DefaultDeadLetterExchange = DefaultDeadLetterExchange,
-            DefaultDeadLetterRoutingKey = DefaultDeadLetterRoutingKey,
-            EnableCompression = EnableCompression,
-            CompressionThreshold = CompressionThreshold,
-            CompressionAlgorithm = CompressionAlgorithm,
-            EnableDeduplication = EnableDeduplication,
-            DeduplicationWindow = DeduplicationWindow,
-            MaxDeduplicationEntries = MaxDeduplicationEntries,
-            EnableRoutingValidation = EnableRoutingValidation,
-            EnableSerializationValidation = EnableSerializationValidation,
-            ChannelPoolSize = ChannelPoolSize,
-            ChannelIdleTimeout = ChannelIdleTimeout,
-            EnableMetrics = EnableMetrics,
-            MetricsInterval = MetricsInterval,
-            EnableHealthChecks = EnableHealthChecks,
-            HealthCheckInterval = HealthCheckInterval,
-            StartupTimeout = StartupTimeout,
-            ShutdownTimeout = ShutdownTimeout,
-            EnableGracefulShutdown = EnableGracefulShutdown,
-            ErrorHandlingStrategy = ErrorHandlingStrategy,
-            SerializerSettings = SerializerSettings?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-            Tags = Tags?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+            EnableCompression = false
         };
     }
 }
 
 /// <summary>
-/// Settings validation result
+/// Retry policy options for producers
 /// </summary>
-public class SettingsValidationResult
+public enum RetryPolicy
 {
     /// <summary>
-    /// Whether the settings are valid
+    /// No retry policy
     /// </summary>
-    public bool IsValid { get; set; } = true;
-    
+    None,
+
     /// <summary>
-    /// List of validation errors
+    /// Linear retry with fixed delay
     /// </summary>
-    public List<string> Errors { get; set; } = new();
-    
+    Linear,
+
     /// <summary>
-    /// List of validation warnings
+    /// Exponential backoff retry
     /// </summary>
-    public List<string> Warnings { get; set; } = new();
+    ExponentialBackoff,
+
+    /// <summary>
+    /// Circuit breaker pattern
+    /// </summary>
+    CircuitBreaker
 }

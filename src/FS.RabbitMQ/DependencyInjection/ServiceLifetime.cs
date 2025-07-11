@@ -73,14 +73,14 @@ public static class ServiceLifetimeConstants
             // Configuration services
             { typeof(IRabbitMQConfiguration), ServiceLifetime.Singleton },
             { typeof(RabbitMQConfiguration), ServiceLifetime.Singleton },
-            { typeof(ConnectionSettings), ServiceLifetime.Singleton },
+            { typeof(FS.RabbitMQ.Configuration.ConnectionSettings), ServiceLifetime.Singleton },
             { typeof(ProducerSettings), ServiceLifetime.Singleton },
             { typeof(ProducerSettings), ServiceLifetime.Singleton },
             { typeof(ConsumerSettings), ServiceLifetime.Singleton },
             { typeof(EventBusSettings), ServiceLifetime.Singleton },
             { typeof(EventStoreSettings), ServiceLifetime.Singleton },
             { typeof(SagaSettings), ServiceLifetime.Singleton },
-            { typeof(HealthCheckSettings), ServiceLifetime.Singleton },
+            { typeof(FS.RabbitMQ.Configuration.HealthCheckSettings), ServiceLifetime.Singleton },
 
             // Connection services
             { typeof(IConnectionManager), ServiceLifetime.Scoped },

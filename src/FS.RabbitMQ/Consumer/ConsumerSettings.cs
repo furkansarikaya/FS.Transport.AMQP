@@ -5,305 +5,308 @@ using FS.RabbitMQ.ErrorHandling;
 namespace FS.RabbitMQ.Consumer;
 
 /// <summary>
-/// Configuration settings for message consumer with comprehensive options for consumption behavior, error handling, and performance tuning
+/// Configuration settings for message consumers
 /// </summary>
 public class ConsumerSettings
 {
     /// <summary>
-    /// Consumer name for identification and monitoring
+    /// Gets or sets the consumer name
     /// </summary>
     public string Name { get; set; } = "DefaultConsumer";
-    
+
     /// <summary>
-    /// Number of concurrent consumers
-    /// </summary>
-    public int ConcurrentConsumers { get; set; } = Environment.ProcessorCount;
-    
-    /// <summary>
-    /// Consumer tag for RabbitMQ identification
-    /// </summary>
-    public string? ConsumerTag { get; set; }
-    
-    /// <summary>
-    /// Whether to automatically acknowledge messages after processing
-    /// </summary>
-    public bool AutoAcknowledge { get; set; } = false;
-    
-    /// <summary>
-    /// Quality of Service - Maximum number of unacknowledged messages
+    /// Gets or sets the prefetch count for the consumer
     /// </summary>
     public ushort PrefetchCount { get; set; } = 10;
-    
+
     /// <summary>
-    /// Whether to apply prefetch count globally for the connection
+    /// Gets or sets whether to automatically acknowledge messages
     /// </summary>
-    public bool GlobalPrefetch { get; set; } = false;
-    
+    public bool AutoAck { get; set; } = false;
+
     /// <summary>
-    /// Consumer priority for message distribution (higher values get more messages)
+    /// Gets or sets the maximum number of concurrent messages to process
     /// </summary>
-    public int Priority { get; set; } = 0;
-    
+    public int MaxConcurrentMessages { get; set; } = 10;
+
     /// <summary>
-    /// Whether this consumer should be exclusive to the queue
+    /// Gets or sets the consumer timeout
     /// </summary>
-    public bool Exclusive { get; set; } = false;
-    
+    public TimeSpan ConsumerTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
     /// <summary>
-    /// Custom consumer arguments
+    /// Gets or sets whether to enable dead letter handling
     /// </summary>
-    public IDictionary<string, object> Arguments { get; set; } = new Dictionary<string, object>();
-    
+    public bool EnableDeadLetter { get; set; } = true;
+
     /// <summary>
-    /// Maximum number of concurrent message processors
+    /// Gets or sets the maximum number of retry attempts
     /// </summary>
-    public int MaxConcurrentMessages { get; set; } = Environment.ProcessorCount;
-    
+    public int MaxRetryAttempts { get; set; } = 3;
+
     /// <summary>
-    /// Timeout for message processing before considering it failed
+    /// Gets or sets the retry delay
     /// </summary>
-    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromMinutes(5);
-    
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
+
     /// <summary>
-    /// Whether to enable message deduplication
+    /// Gets or sets whether to enable message deduplication
     /// </summary>
     public bool EnableDeduplication { get; set; } = false;
-    
+
     /// <summary>
-    /// Deduplication cache size
+    /// Gets or sets the deduplication cache size
     /// </summary>
     public int DeduplicationCacheSize { get; set; } = 10000;
-    
+
     /// <summary>
-    /// Deduplication cache TTL
+    /// Gets or sets the deduplication cache expiry time
     /// </summary>
-    public TimeSpan DeduplicationCacheTtl { get; set; } = TimeSpan.FromHours(1);
-    
+    public TimeSpan DeduplicationCacheExpiry { get; set; } = TimeSpan.FromMinutes(10);
+
     /// <summary>
-    /// Whether to enable message compression
-    /// </summary>
-    public bool EnableCompression { get; set; } = false;
-    
-    /// <summary>
-    /// Compression algorithm to use
-    /// </summary>
-    public CompressionAlgorithm CompressionAlgorithm { get; set; } = CompressionAlgorithm.GZip;
-    
-    /// <summary>
-    /// Whether to enable message encryption
-    /// </summary>
-    public bool EnableEncryption { get; set; } = false;
-    
-    /// <summary>
-    /// Encryption key for message decryption
-    /// </summary>
-    public string? EncryptionKey { get; set; }
-    
-    /// <summary>
-    /// Retry policy settings
-    /// </summary>
-    public RetryPolicySettings RetryPolicy { get; set; } = new();
-    
-    /// <summary>
-    /// Error handling strategy
-    /// </summary>
-    public ErrorHandlingStrategy ErrorHandling { get; set; } = ErrorHandlingStrategy.RetryThenDeadLetter;
-    
-    /// <summary>
-    /// Dead letter exchange for failed messages
-    /// </summary>
-    public string? DeadLetterExchange { get; set; }
-    
-    /// <summary>
-    /// Dead letter routing key
-    /// </summary>
-    public string? DeadLetterRoutingKey { get; set; }
-    
-    /// <summary>
-    /// Whether to enable consumer heartbeat
-    /// </summary>
-    public bool EnableHeartbeat { get; set; } = true;
-    
-    /// <summary>
-    /// Heartbeat interval
-    /// </summary>
-    public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Whether to enable consumer statistics
-    /// </summary>
-    public bool EnableStatistics { get; set; } = true;
-    
-    /// <summary>
-    /// Statistics collection interval
-    /// </summary>
-    public TimeSpan StatisticsInterval { get; set; } = TimeSpan.FromSeconds(30);
-    
-    /// <summary>
-    /// Whether to enable consumer metrics
-    /// </summary>
-    public bool EnableMetrics { get; set; } = true;
-    
-    /// <summary>
-    /// Metrics collection interval
-    /// </summary>
-    public TimeSpan MetricsInterval { get; set; } = TimeSpan.FromSeconds(10);
-    
-    /// <summary>
-    /// Whether to enable batch processing
+    /// Gets or sets whether to enable batch processing
     /// </summary>
     public bool EnableBatchProcessing { get; set; } = false;
-    
+
     /// <summary>
-    /// Batch size for batch processing
+    /// Gets or sets the batch size for batch processing
     /// </summary>
-    public int BatchSize { get; set; } = 100;
-    
+    public int BatchSize { get; set; } = 10;
+
     /// <summary>
-    /// Batch timeout for batch processing
+    /// Gets or sets the batch timeout
     /// </summary>
     public TimeSpan BatchTimeout { get; set; } = TimeSpan.FromSeconds(5);
-    
+
     /// <summary>
-    /// Whether to enable circuit breaker pattern
+    /// Gets or sets the statistics interval
     /// </summary>
-    public bool EnableCircuitBreaker { get; set; } = true;
-    
+    public TimeSpan StatisticsInterval { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>
-    /// Circuit breaker failure threshold
+    /// Gets or sets the heartbeat interval
     /// </summary>
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
-    
+    public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromMinutes(1);
+
     /// <summary>
-    /// Circuit breaker recovery timeout
+    /// Gets or sets whether messages should be automatically acknowledged
     /// </summary>
-    public TimeSpan CircuitBreakerRecoveryTimeout { get; set; } = TimeSpan.FromMinutes(1);
-    
+    public bool AutoAcknowledge { get; set; } = false;
+
     /// <summary>
-    /// Whether to enable consumer pause/resume functionality
+    /// Gets or sets whether to enable global prefetch
     /// </summary>
-    public bool EnablePauseResume { get; set; } = true;
-    
+    public bool GlobalPrefetch { get; set; } = false;
+
     /// <summary>
-    /// Custom serializer settings
+    /// Gets or sets the consumer priority
     /// </summary>
-    public SerializerSettings Serializer { get; set; } = new();
-    
+    public int Priority { get; set; } = 0;
+
     /// <summary>
-    /// Connection recovery settings
+    /// Gets or sets whether this consumer is exclusive
     /// </summary>
-    public ConnectionRecoverySettings ConnectionRecovery { get; set; } = new();
-    
+    public bool Exclusive { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the processing timeout
+    /// </summary>
+    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Gets or sets the deduplication cache TTL
+    /// </summary>
+    public TimeSpan DeduplicationCacheTtl { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// Gets or sets the retry policy name
+    /// </summary>
+    public string? RetryPolicy { get; set; }
+
+    /// <summary>
+    /// Gets or sets the error handling strategy
+    /// </summary>
+    public string? ErrorHandling { get; set; }
+
+    /// <summary>
+    /// Gets or sets the dead letter exchange
+    /// </summary>
+    public string? DeadLetterExchange { get; set; }
+
+    /// <summary>
+    /// Gets or sets the dead letter routing key
+    /// </summary>
+    public string? DeadLetterRoutingKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether to enable circuit breaker
+    /// </summary>
+    public bool EnableCircuitBreaker { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the circuit breaker failure threshold
+    /// </summary>
+    public int CircuitBreakerFailureThreshold { get; set; } = 10;
+
+    /// <summary>
+    /// Gets or sets the circuit breaker recovery timeout
+    /// </summary>
+    public TimeSpan CircuitBreakerRecoveryTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Gets or sets whether to enable pause/resume functionality
+    /// </summary>
+    public bool EnablePauseResume { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the serializer type
+    /// </summary>
+    public string? Serializer { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether to enable heartbeat
+    /// </summary>
+    public bool EnableHeartbeat { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether to enable statistics
+    /// </summary>
+    public bool EnableStatistics { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether to enable metrics
+    /// </summary>
+    public bool EnableMetrics { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the metrics interval
+    /// </summary>
+    public TimeSpan MetricsInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Gets or sets whether to enable compression
+    /// </summary>
+    public bool EnableCompression { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the compression algorithm
+    /// </summary>
+    public string? CompressionAlgorithm { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether to enable encryption
+    /// </summary>
+    public bool EnableEncryption { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the encryption key
+    /// </summary>
+    public string? EncryptionKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets connection recovery settings
+    /// </summary>
+    public string? ConnectionRecovery { get; set; }
+
+    /// <summary>
+    /// Gets or sets the consumer tag
+    /// </summary>
+    public string? ConsumerTag { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of concurrent consumers
+    /// </summary>
+    public int ConcurrentConsumers { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets custom arguments for the consumer
+    /// </summary>
+    public Dictionary<string, object> Arguments { get; set; } = new Dictionary<string, object>();
+
     /// <summary>
     /// Validates the consumer settings
     /// </summary>
-    /// <exception cref="ArgumentException">Thrown when settings are invalid</exception>
-    public void Validate()
+    /// <returns>True if settings are valid, false otherwise</returns>
+    public bool Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
-            throw new ArgumentException("Consumer name cannot be empty", nameof(Name));
-            
-        if (PrefetchCount == 0)
-            throw new ArgumentException("PrefetchCount must be greater than 0", nameof(PrefetchCount));
-            
+            return false;
+
+        if (PrefetchCount <= 0)
+            return false;
+
         if (MaxConcurrentMessages <= 0)
-            throw new ArgumentException("MaxConcurrentMessages must be greater than 0", nameof(MaxConcurrentMessages));
-            
+            return false;
+
         if (ProcessingTimeout <= TimeSpan.Zero)
-            throw new ArgumentException("ProcessingTimeout must be greater than zero", nameof(ProcessingTimeout));
-            
-        if (EnableDeduplication && DeduplicationCacheSize <= 0)
-            throw new ArgumentException("DeduplicationCacheSize must be greater than 0 when deduplication is enabled", nameof(DeduplicationCacheSize));
-            
-        if (EnableEncryption && string.IsNullOrWhiteSpace(EncryptionKey))
-            throw new ArgumentException("EncryptionKey is required when encryption is enabled", nameof(EncryptionKey));
-            
-        if (EnableBatchProcessing && BatchSize <= 0)
-            throw new ArgumentException("BatchSize must be greater than 0 when batch processing is enabled", nameof(BatchSize));
-            
-        if (EnableCircuitBreaker && CircuitBreakerFailureThreshold <= 0)
-            throw new ArgumentException("CircuitBreakerFailureThreshold must be greater than 0 when circuit breaker is enabled", nameof(CircuitBreakerFailureThreshold));
-            
-        // Validate nested settings
-        RetryPolicy.Validate();
-        Serializer.Validate();
-        ConnectionRecovery.Validate();
+            return false;
+
+        return true;
     }
-    
+
     /// <summary>
-    /// Creates a copy of the consumer settings
+    /// Creates a copy of the current settings
     /// </summary>
-    /// <returns>New instance with copied values</returns>
+    /// <returns>A new ConsumerSettings instance with the same values</returns>
     public ConsumerSettings Clone()
     {
         return new ConsumerSettings
         {
             Name = Name,
-            ConcurrentConsumers = ConcurrentConsumers,
-            ConsumerTag = ConsumerTag,
-            AutoAcknowledge = AutoAcknowledge,
             PrefetchCount = PrefetchCount,
+            AutoAck = AutoAck,
+            MaxConcurrentMessages = MaxConcurrentMessages,
+            ConsumerTimeout = ConsumerTimeout,
+            AutoAcknowledge = AutoAcknowledge,
             GlobalPrefetch = GlobalPrefetch,
             Priority = Priority,
             Exclusive = Exclusive,
-            Arguments = new Dictionary<string, object>(Arguments),
-            MaxConcurrentMessages = MaxConcurrentMessages,
             ProcessingTimeout = ProcessingTimeout,
-            EnableDeduplication = EnableDeduplication,
-            DeduplicationCacheSize = DeduplicationCacheSize,
             DeduplicationCacheTtl = DeduplicationCacheTtl,
-            EnableCompression = EnableCompression,
-            CompressionAlgorithm = CompressionAlgorithm,
-            EnableEncryption = EnableEncryption,
-            EncryptionKey = EncryptionKey,
-            RetryPolicy = RetryPolicy.Clone(),
+            RetryPolicy = RetryPolicy,
             ErrorHandling = ErrorHandling,
             DeadLetterExchange = DeadLetterExchange,
             DeadLetterRoutingKey = DeadLetterRoutingKey,
-            EnableHeartbeat = EnableHeartbeat,
-            HeartbeatInterval = HeartbeatInterval,
-            EnableStatistics = EnableStatistics,
-            StatisticsInterval = StatisticsInterval,
-            EnableMetrics = EnableMetrics,
-            MetricsInterval = MetricsInterval,
-            EnableBatchProcessing = EnableBatchProcessing,
-            BatchSize = BatchSize,
-            BatchTimeout = BatchTimeout,
             EnableCircuitBreaker = EnableCircuitBreaker,
             CircuitBreakerFailureThreshold = CircuitBreakerFailureThreshold,
             CircuitBreakerRecoveryTimeout = CircuitBreakerRecoveryTimeout,
             EnablePauseResume = EnablePauseResume,
-            Serializer = Serializer.Clone(),
-            ConnectionRecovery = ConnectionRecovery.Clone()
+            Serializer = Serializer,
+            EnableHeartbeat = EnableHeartbeat,
+            EnableStatistics = EnableStatistics,
+            EnableMetrics = EnableMetrics,
+            MetricsInterval = MetricsInterval,
+            EnableCompression = EnableCompression,
+            CompressionAlgorithm = CompressionAlgorithm,
+            EnableEncryption = EnableEncryption,
+            EncryptionKey = EncryptionKey,
+            ConnectionRecovery = ConnectionRecovery,
+            ConsumerTag = ConsumerTag,
+            ConcurrentConsumers = ConcurrentConsumers,
+            Arguments = new Dictionary<string, object>(Arguments)
         };
     }
-    
+
     /// <summary>
-    /// Creates default consumer settings for high-throughput scenarios
+    /// Creates settings optimized for high throughput
     /// </summary>
-    /// <returns>High-throughput consumer settings</returns>
     public static ConsumerSettings CreateHighThroughput()
     {
         return new ConsumerSettings
         {
             Name = "HighThroughputConsumer",
-            PrefetchCount = 1000,
-            MaxConcurrentMessages = Environment.ProcessorCount * 4,
-            ProcessingTimeout = TimeSpan.FromSeconds(30),
-            EnableBatchProcessing = true,
-            BatchSize = 100,
-            BatchTimeout = TimeSpan.FromSeconds(1),
-            EnableCircuitBreaker = true,
-            CircuitBreakerFailureThreshold = 10,
-            EnableStatistics = true,
-            StatisticsInterval = TimeSpan.FromSeconds(10)
+            PrefetchCount = 100,
+            MaxConcurrentMessages = 50,
+            AutoAcknowledge = true,
+            EnableMetrics = true,
+            EnableStatistics = true
         };
     }
-    
+
     /// <summary>
-    /// Creates default consumer settings for low-latency scenarios
+    /// Creates settings optimized for low latency
     /// </summary>
-    /// <returns>Low-latency consumer settings</returns>
     public static ConsumerSettings CreateLowLatency()
     {
         return new ConsumerSettings
@@ -311,41 +314,26 @@ public class ConsumerSettings
             Name = "LowLatencyConsumer",
             PrefetchCount = 1,
             MaxConcurrentMessages = 1,
-            ProcessingTimeout = TimeSpan.FromSeconds(5),
-            EnableBatchProcessing = false,
-            EnableCircuitBreaker = false,
-            EnableStatistics = true,
-            StatisticsInterval = TimeSpan.FromSeconds(5)
+            AutoAcknowledge = false,
+            EnableMetrics = true,
+            EnableStatistics = true
         };
     }
-    
+
     /// <summary>
-    /// Creates default consumer settings for reliable processing
+    /// Creates settings optimized for reliability
     /// </summary>
-    /// <returns>Reliable consumer settings</returns>
     public static ConsumerSettings CreateReliable()
     {
         return new ConsumerSettings
         {
             Name = "ReliableConsumer",
-            AutoAcknowledge = false,
             PrefetchCount = 10,
-            MaxConcurrentMessages = Environment.ProcessorCount,
-            ProcessingTimeout = TimeSpan.FromMinutes(5),
-            EnableDeduplication = true,
-            DeduplicationCacheSize = 10000,
-            RetryPolicy = new RetryPolicySettings
-            {
-                MaxRetries = 3,
-                InitialDelay = TimeSpan.FromSeconds(1),
-                MaxDelay = TimeSpan.FromMinutes(5),
-                BackoffMultiplier = 2.0
-            },
-            ErrorHandling = ErrorHandlingStrategy.RetryThenDeadLetter,
-            EnableCircuitBreaker = true,
-            CircuitBreakerFailureThreshold = 5,
+            MaxConcurrentMessages = 5,
+            AutoAcknowledge = false,
+            EnableMetrics = true,
             EnableStatistics = true,
-            EnableMetrics = true
+            EnableCircuitBreaker = true
         };
     }
 }

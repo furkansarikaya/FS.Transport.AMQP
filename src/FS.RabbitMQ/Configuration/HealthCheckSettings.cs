@@ -46,6 +46,24 @@ public class HealthCheckSettings
     public string TestQueueName { get; set; } = "health-check-test";
 
     /// <summary>
+    /// Gets or sets the health check interval as TimeSpan (for backward compatibility)
+    /// </summary>
+    public TimeSpan Interval
+    {
+        get => TimeSpan.FromMilliseconds(IntervalMs);
+        set => IntervalMs = (int)value.TotalMilliseconds;
+    }
+
+    /// <summary>
+    /// Gets or sets the health check timeout as TimeSpan (for backward compatibility)  
+    /// </summary>
+    public TimeSpan Timeout
+    {
+        get => TimeSpan.FromMilliseconds(TimeoutMs);
+        set => TimeoutMs = (int)value.TotalMilliseconds;
+    }
+
+    /// <summary>
     /// Validates health check settings
     /// </summary>
     public void Validate()

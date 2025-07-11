@@ -1,58 +1,55 @@
 namespace FS.RabbitMQ.ErrorHandling;
 
 /// <summary>
-/// Dead letter statistics for monitoring
+/// Statistics for dead letter handling operations
 /// </summary>
 public class DeadLetterStatistics
 {
     /// <summary>
-    /// Total number of messages processed
+    /// Gets or sets the total number of messages sent to dead letter queue
     /// </summary>
-    public long TotalMessages { get; set; }
-    
-    /// <summary>
-    /// Number of messages successfully sent to dead letter
-    /// </summary>
-    public long SuccessfulMessages { get; set; }
-    
-    /// <summary>
-    /// Number of messages that failed to be sent to dead letter
-    /// </summary>
-    public long FailedMessages { get; set; }
-    
-    /// <summary>
-    /// Average processing time
-    /// </summary>
-    public TimeSpan AverageProcessingTime { get; set; }
-    
-    /// <summary>
-    /// Success rate as percentage
-    /// </summary>
-    public double SuccessRate => TotalMessages > 0 ? (double)SuccessfulMessages / TotalMessages * 100 : 0;
+    public long TotalDeadLetters { get; set; }
 
     /// <summary>
-    /// Creates a copy of the statistics
+    /// Gets or sets the number of failed dead letter operations
     /// </summary>
-    /// <returns>Cloned statistics</returns>
-    public DeadLetterStatistics Clone()
-    {
-        return new DeadLetterStatistics
-        {
-            TotalMessages = TotalMessages,
-            SuccessfulMessages = SuccessfulMessages,
-            FailedMessages = FailedMessages,
-            AverageProcessingTime = AverageProcessingTime
-        };
-    }
+    public long FailedDeadLetters { get; set; }
 
     /// <summary>
-    /// Gets a string representation of the statistics
+    /// Gets or sets the number of messages requeued from dead letter
     /// </summary>
-    /// <returns>Statistics summary</returns>
-    public override string ToString()
-    {
-        return $"Dead Letter: {TotalMessages} total, {SuccessfulMessages} successful, " +
-               $"{FailedMessages} failed, Success Rate: {SuccessRate:F2}%, " +
-               $"Avg Time: {AverageProcessingTime.TotalMilliseconds:F2}ms";
-    }
+    public long RequeuedFromDeadLetter { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of currently active dead letter messages
+    /// </summary>
+    public int ActiveDeadLetters { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the last message was sent to dead letter
+    /// </summary>
+    public DateTimeOffset? LastDeadLetterTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the last message was requeued from dead letter
+    /// </summary>
+    public DateTimeOffset? LastRequeueTime { get; set; }
+
+    /// <summary>
+    /// Gets the success rate for dead letter operations
+    /// </summary>
+    public double SuccessRate => TotalDeadLetters > 0 ? 
+        (double)(TotalDeadLetters - FailedDeadLetters) / TotalDeadLetters * 100 : 0;
+
+    /// <summary>
+    /// Gets the failure rate for dead letter operations
+    /// </summary>
+    public double FailureRate => TotalDeadLetters > 0 ? 
+        (double)FailedDeadLetters / TotalDeadLetters * 100 : 0;
+
+    /// <summary>
+    /// Gets the requeue rate for dead letter messages
+    /// </summary>
+    public double RequeueRate => TotalDeadLetters > 0 ? 
+        (double)RequeuedFromDeadLetter / TotalDeadLetters * 100 : 0;
 }

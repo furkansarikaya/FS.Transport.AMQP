@@ -115,7 +115,7 @@ public class QueueManager : IQueueManager
                 
                 try
                 {
-                    var queueOk = channel.QueueDeclare(
+                    var queueOk = await channel.QueueDeclareAsync(
                         queue: name,
                         durable: durable,
                         exclusive: exclusive,
@@ -192,7 +192,7 @@ public class QueueManager : IQueueManager
                 
                 try
                 {
-                    var deletedMessageCount = channel.QueueDelete(name, ifUnused, ifEmpty);
+                    var deletedMessageCount = await channel.QueueDeleteAsync(name, ifUnused, ifEmpty);
                     _connectionManager.ReturnChannel(channel);
                     return deletedMessageCount;
                 }
@@ -266,7 +266,7 @@ public class QueueManager : IQueueManager
                 
                 try
                 {
-                    channel.QueueBind(queueName, exchangeName, routingKey, arguments);
+                    await channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -346,7 +346,7 @@ public class QueueManager : IQueueManager
                 
                 try
                 {
-                    channel.QueueUnbind(queueName, exchangeName, routingKey, arguments);
+                    await channel.QueueUnbindAsync(queueName, exchangeName, routingKey, arguments);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -404,7 +404,7 @@ public class QueueManager : IQueueManager
             try
             {
                 // Try to declare passively - this will throw if queue doesn't exist
-                channel.QueueDeclarePassive(name);
+                await channel.QueueDeclarePassiveAsync(name);
                 _connectionManager.ReturnChannel(channel);
                 return true;
             }
@@ -441,7 +441,7 @@ public class QueueManager : IQueueManager
             
             try
             {
-                var queueOk = channel.QueueDeclarePassive(name);
+                var queueOk = await channel.QueueDeclarePassiveAsync(name);
                 _connectionManager.ReturnChannel(channel);
                 
                 var info = new QueueInfo
@@ -502,7 +502,7 @@ public class QueueManager : IQueueManager
                 
                 try
                 {
-                    var purgedMessageCount = channel.QueuePurge(name);
+                    var purgedMessageCount = await channel.QueuePurgeAsync(name);
                     _connectionManager.ReturnChannel(channel);
                     return purgedMessageCount;
                 }

@@ -3,95 +3,88 @@ using RabbitMQ.Client;
 namespace FS.RabbitMQ.Connection;
 
 /// <summary>
-/// Interface for managing RabbitMQ connections with automatic reconnection, pooling, and health monitoring
+/// Interface for managing RabbitMQ connections and channels
 /// </summary>
 public interface IConnectionManager : IDisposable
 {
     /// <summary>
-    /// Gets the current connection status
+    /// Gets whether the connection is currently connected
     /// </summary>
     bool IsConnected { get; }
-    
+
     /// <summary>
     /// Gets the current connection state
     /// </summary>
     ConnectionState State { get; }
-    
+
     /// <summary>
-    /// Gets connection statistics and metrics
+    /// Gets connection statistics
     /// </summary>
     ConnectionStatistics Statistics { get; }
-    
+
     /// <summary>
-    /// Establishes connection to RabbitMQ server with retry logic and auto-recovery
+    /// Event raised when the connection is established
+    /// </summary>
+    event EventHandler<ConnectionEventArgs>? Connected;
+
+    /// <summary>
+    /// Event raised when the connection is lost
+    /// </summary>
+    event EventHandler<ConnectionEventArgs>? Disconnected;
+
+    /// <summary>
+    /// Event raised when the connection is recovering
+    /// </summary>
+    event EventHandler<ConnectionEventArgs>? Recovering;
+
+    /// <summary>
+    /// Event raised when the connection recovery is complete
+    /// </summary>
+    event EventHandler<ConnectionEventArgs>? RecoveryComplete;
+
+    /// <summary>
+    /// Event raised when the connection recovery fails
+    /// </summary>
+    event EventHandler<ConnectionEventArgs>? RecoveryFailed;
+
+    /// <summary>
+    /// Gets a channel from the pool
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if connection was established successfully</returns>
-    Task<bool> ConnectAsync(CancellationToken cancellationToken = default);
-    
+    /// <returns>A channel from the pool</returns>
+    Task<IChannel> GetChannelAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
-    /// Disconnects from RabbitMQ server gracefully, closing all channels and connections
+    /// Returns a channel to the pool
+    /// </summary>
+    /// <param name="channel">The channel to return</param>
+    void ReturnChannel(IChannel channel);
+
+    /// <summary>
+    /// Creates a new channel (not from pool)
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>A new channel</returns>
+    Task<IChannel> CreateChannelAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Connects to RabbitMQ
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the connection operation</returns>
+    Task ConnectAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Disconnects from RabbitMQ
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the disconnection operation</returns>
     Task DisconnectAsync(CancellationToken cancellationToken = default);
-    
+
     /// <summary>
-    /// Gets a channel from the connection pool with automatic recovery
+    /// Performs health check on the connection
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>RabbitMQ channel</returns>
-    Task<IModel> GetChannelAsync(CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Returns a channel to the pool for reuse
-    /// </summary>
-    /// <param name="channel">Channel to return</param>
-    void ReturnChannel(IModel channel);
-    
-    /// <summary>
-    /// Creates a new dedicated channel (not pooled)
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Dedicated RabbitMQ channel</returns>
-    Task<IModel> CreateChannelAsync(CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Tests the connection health by performing a lightweight operation
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if connection is healthy</returns>
-    Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Forces a connection recovery attempt
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if recovery was successful</returns>
-    Task<bool> RecoverAsync(CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Event raised when connection is established
-    /// </summary>
-    event EventHandler<ConnectionEventArgs>? Connected;
-    
-    /// <summary>
-    /// Event raised when connection is lost
-    /// </summary>
-    event EventHandler<ConnectionEventArgs>? Disconnected;
-    
-    /// <summary>
-    /// Event raised when connection recovery starts
-    /// </summary>
-    event EventHandler<ConnectionEventArgs>? Recovering;
-    
-    /// <summary>
-    /// Event raised when connection recovery completes successfully
-    /// </summary>
-    event EventHandler<ConnectionEventArgs>? Recovered;
-    
-    /// <summary>
-    /// Event raised when connection recovery fails
-    /// </summary>
-    event EventHandler<ConnectionEventArgs>? RecoveryFailed;
+    /// <returns>Task representing the health check operation</returns>
+    Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default);
 }

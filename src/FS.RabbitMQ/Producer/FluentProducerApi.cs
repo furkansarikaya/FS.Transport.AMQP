@@ -1,4 +1,5 @@
 using FS.RabbitMQ.Events;
+using RabbitMQ.Client;
 
 namespace FS.RabbitMQ.Producer;
 
@@ -174,7 +175,7 @@ public class FluentProducerApi<T> where T : class
     /// <returns>Fluent API instance</returns>
     public FluentProducerApi<T> ExpiresAt(DateTimeOffset expiresAt)
     {
-        _context.Expiration = expiresAt;
+        _context.Expiration = expiresAt.ToString("O"); // Convert to ISO 8601 string
         return this;
     }
 
@@ -207,7 +208,7 @@ public class FluentProducerApi<T> where T : class
     /// <returns>Fluent API instance</returns>
     public FluentProducerApi<T> AsPersistent()
     {
-        _context.DeliveryMode = 2;
+        _context.DeliveryMode = DeliveryModes.Persistent;
         return this;
     }
 
@@ -217,7 +218,7 @@ public class FluentProducerApi<T> where T : class
     /// <returns>Fluent API instance</returns>
     public FluentProducerApi<T> AsTransient()
     {
-        _context.DeliveryMode = 1;
+        _context.DeliveryMode = DeliveryModes.Transient;
         return this;
     }
 
@@ -377,10 +378,14 @@ public class FluentProducerApi<T> where T : class
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Publish result</returns>
-    public Task<PublishResult> PublishAsync(CancellationToken cancellationToken = default)
+    public async Task<PublishResult> PublishAsync(CancellationToken cancellationToken = default)
     {
         ValidateConfiguration();
-        return _producer.PublishAsync(_message, _context, cancellationToken);
+        
+        // Serialize message to bytes
+        var messageBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(_message);
+        var success = await _producer.PublishAsync(_context.Exchange, _context.RoutingKey, messageBytes, null, _context.Mandatory, cancellationToken);
+        return new PublishResult { IsSuccess = success, MessageId = Guid.NewGuid().ToString() };
     }
 
     /// <summary>
@@ -390,7 +395,11 @@ public class FluentProducerApi<T> where T : class
     public PublishResult Publish()
     {
         ValidateConfiguration();
-        return _producer.Publish(_message, _context);
+        
+        // Serialize message to bytes
+        var messageBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(_message);
+        var success = _producer.Publish(_context.Exchange, _context.RoutingKey, messageBytes, null, _context.Mandatory);
+        return new PublishResult { IsSuccess = success, MessageId = Guid.NewGuid().ToString() };
     }
 
     private void ValidateConfiguration()

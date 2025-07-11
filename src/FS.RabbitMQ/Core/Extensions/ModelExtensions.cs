@@ -3,58 +3,57 @@ using RabbitMQ.Client;
 namespace FS.RabbitMQ.Core.Extensions;
 
 /// <summary>
-/// Extension methods for RabbitMQ IModel
+/// Extension methods for RabbitMQ IChannel
 /// </summary>
 public static class ModelExtensions
 {
     /// <summary>
-    /// Safely closes a channel/model, ignoring any exceptions
+    /// Safely closes an IChannel, handling any exceptions that may occur
     /// </summary>
-    /// <param name="model">Channel/model to close</param>
-    public static void SafeClose(this IModel? model)
+    /// <param name="channel">The channel to close</param>
+    public static async Task SafeCloseAsync(this IChannel? channel)
     {
-        if (model == null || model.IsClosed)
+        if (channel == null || !channel.IsOpen)
             return;
 
         try
         {
-            if (model.IsOpen)
-            {
-                model.Close();
-            }
+            await channel.CloseAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore exceptions during close
+            // Log the exception but don't rethrow
+            // In a production environment, you'd want to use a proper logger
+            Console.WriteLine($"Error closing channel: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Safely disposes a channel/model, ignoring any exceptions
+    /// Safely disposes a RabbitMQ channel without throwing exceptions
     /// </summary>
-    /// <param name="model">Channel/model to dispose</param>
-    public static void SafeDispose(this IModel? model)
+    /// <param name="channel">The channel to dispose</param>
+    public static void SafeDispose(this IChannel? channel)
     {
-        if (model == null)
-            return;
-
+        if (channel is null) return;
+        
         try
         {
-            model.Dispose();
+            channel.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore exceptions during dispose
+            // Log the exception if logger is available
+            Console.WriteLine($"Error disposing channel: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Checks if the model is usable (not null, open, and not closing)
+    /// Checks if a channel is usable (open and not disposed)
     /// </summary>
-    /// <param name="model">Channel/model to check</param>
-    /// <returns>True if the model is usable</returns>
-    public static bool IsUsable(this IModel? model)
+    /// <param name="channel">The channel to check</param>
+    /// <returns>True if the channel is usable, false otherwise</returns>
+    public static bool IsUsable(this IChannel? channel)
     {
-        return model != null && model.IsOpen && !model.IsClosed;
+        return channel is not null && channel.IsOpen;
     }
 }

@@ -174,7 +174,7 @@ public class ErrorHandler : IErrorHandler
         {
             _logger.LogWarning("Sending message to dead letter queue: {ErrorContext}", context.ToString());
             
-            var success = await _deadLetterHandler.SendToDeadLetterAsync(context, cancellationToken);
+            var success = await _deadLetterHandler.HandleDeadLetterAsync(context, cancellationToken);
             
             if (success)
             {

@@ -1,59 +1,119 @@
 namespace FS.RabbitMQ.Connection;
 
 /// <summary>
-/// Connection statistics and metrics
+/// Statistics for RabbitMQ connection operations
 /// </summary>
 public class ConnectionStatistics
 {
     /// <summary>
-    /// Total number of successful connections
+    /// Gets or sets the total number of connection attempts
     /// </summary>
-    public long TotalConnections { get; set; }
-    
+    public long ConnectionAttempts { get; set; }
+
     /// <summary>
-    /// Total number of connection failures
+    /// Gets or sets the number of successful connections
     /// </summary>
-    public long FailedConnections { get; set; }
-    
+    public long ConnectionSuccesses { get; set; }
+
     /// <summary>
-    /// Total number of recovery attempts
+    /// Gets or sets the number of failed connection attempts
+    /// </summary>
+    public long ConnectionFailures { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of connection shutdowns
+    /// </summary>
+    public long ConnectionShutdowns { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of connection blocks
+    /// </summary>
+    public long ConnectionBlocks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of connection unblocks
+    /// </summary>
+    public long ConnectionUnblocks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of callback exceptions
+    /// </summary>
+    public long CallbackExceptions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of channel shutdowns
+    /// </summary>
+    public long ChannelShutdowns { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of channel callback exceptions
+    /// </summary>
+    public long ChannelCallbackExceptions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of recovery attempts
     /// </summary>
     public long RecoveryAttempts { get; set; }
-    
+
     /// <summary>
-    /// Total number of successful recoveries
+    /// Gets or sets the number of successful recoveries
     /// </summary>
     public long SuccessfulRecoveries { get; set; }
-    
+
     /// <summary>
-    /// Current number of active channels
+    /// Gets or sets the number of active channels
     /// </summary>
     public int ActiveChannels { get; set; }
-    
+
     /// <summary>
-    /// Current number of pooled channels
+    /// Gets or sets the number of health checks performed
     /// </summary>
-    public int PooledChannels { get; set; }
-    
+    public long HealthChecks { get; set; }
+
     /// <summary>
-    /// Last connection time
+    /// Gets or sets the number of failed health checks
     /// </summary>
-    public DateTime? LastConnected { get; set; }
-    
+    public long HealthCheckFailures { get; set; }
+
     /// <summary>
-    /// Last disconnection time
+    /// Gets the connection success rate as a percentage
     /// </summary>
-    public DateTime? LastDisconnected { get; set; }
-    
+    public double SuccessRate => ConnectionAttempts > 0 ? 
+        (double)ConnectionSuccesses / ConnectionAttempts * 100 : 0;
+
     /// <summary>
-    /// Current connection uptime
+    /// Gets the connection failure rate as a percentage
     /// </summary>
-    public TimeSpan? Uptime => LastConnected.HasValue && LastDisconnected?.CompareTo(LastConnected) < 0 
-        ? DateTime.UtcNow - LastConnected.Value 
-        : null;
-    
+    public double FailureRate => ConnectionAttempts > 0 ? 
+        (double)ConnectionFailures / ConnectionAttempts * 100 : 0;
+
     /// <summary>
-    /// Connection availability percentage (last 24 hours)
+    /// Gets the recovery success rate as a percentage
     /// </summary>
-    public double AvailabilityPercentage { get; set; } = 100.0;
+    public double RecoverySuccessRate => RecoveryAttempts > 0 ? 
+        (double)SuccessfulRecoveries / RecoveryAttempts * 100 : 0;
+
+    /// <summary>
+    /// Gets the health check success rate as a percentage
+    /// </summary>
+    public double HealthCheckSuccessRate => HealthChecks > 0 ? 
+        (double)(HealthChecks - HealthCheckFailures) / HealthChecks * 100 : 0;
+
+    /// <summary>
+    /// Total number of connections (alias for backward compatibility)
+    /// </summary>
+    public long TotalConnections
+    {
+        get => ConnectionAttempts;
+        set => ConnectionAttempts = value;
+    }
+
+    /// <summary>
+    /// Number of failed connections (alias for backward compatibility)
+    /// </summary>
+    public long FailedConnections
+    {
+        get => ConnectionFailures;
+        set => ConnectionFailures = value;
+    }
 }

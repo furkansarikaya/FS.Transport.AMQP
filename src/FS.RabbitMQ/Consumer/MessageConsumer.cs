@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.Consumer;
 
@@ -46,7 +47,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
     
     private ConsumerStatus _status = ConsumerStatus.NotInitialized;
     private ConsumerStatistics _statistics;
-    private IModel? _channel;
+    private IChannel? _channel;
     private bool _disposed;
     private bool _paused;
     private readonly object _lockObject = new();
@@ -229,7 +230,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
                 {
                     if (_channel?.IsOpen == true)
                     {
-                        _channel.BasicCancel(consumer.ConsumerTag);
+                        await _channel.BasicCancelAsync(consumer.ConsumerTag);
                     }
                 }
                 catch (Exception ex)
@@ -250,10 +251,13 @@ public class MessageConsumer : IMessageConsumer, IDisposable
             _activeConsumers.Clear();
             _processingMessages.Clear();
             
-            _channel?.Close();
-            _channel?.Dispose();
-            _channel = null;
-            
+            if (_channel != null)
+            {
+                await _channel.CloseAsync();
+                _channel.Dispose();
+                _channel = null;
+            }
+
             ChangeStatus(ConsumerStatus.Stopped, "Consumer stopped successfully");
             
             _logger.LogInformation("Consumer {Name} stopped successfully", _settings.Name);
@@ -326,7 +330,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
             var consumerTag = context.ConsumerTag ?? $"consumer-{Guid.NewGuid():N}";
             var consumer = new AsyncEventingBasicConsumer(_channel);
             
-                        consumer.Received += async (sender, eventArgs) =>
+            consumer.ReceivedAsync += async (sender, eventArgs) =>
             {
                 if (_paused || cancellationToken.IsCancellationRequested)
                     return;
@@ -334,18 +338,11 @@ public class MessageConsumer : IMessageConsumer, IDisposable
                 await ProcessMessageAsync(eventArgs, messageHandler, context, cancellationToken);
             };
             
-            consumer.ConsumerCancelled += (sender, eventArgs) =>
-            {
-                _logger.LogWarning("Consumer {ConsumerTag} was cancelled", eventArgs.ConsumerTags.FirstOrDefault());
-                _activeConsumers.TryRemove(consumerTag, out _);
-                return Task.CompletedTask;
-            };
-            
             // Set QoS
-            _channel.BasicQos(0, context.Settings.PrefetchCount, context.Settings.GlobalPrefetch);
+            await _channel.BasicQosAsync(0, context.Settings.PrefetchCount, context.Settings.GlobalPrefetch);
             
             // Start consuming
-            var actualConsumerTag = _channel.BasicConsume(
+            var actualConsumerTag = await _channel.BasicConsumeAsync(
                 queue: queueName,
                 autoAck: context.AutoAcknowledge,
                 consumerTag: consumerTag,
@@ -508,7 +505,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         {
             if (_channel?.IsOpen == true)
             {
-                _channel.BasicAck(deliveryTag, multiple);
+                await _channel.BasicAckAsync(deliveryTag, multiple);
                 Interlocked.Increment(ref _acknowledgedMessages);
                 
                 OnMessageAcknowledged(new MessageAcknowledgedEventArgs
@@ -532,7 +529,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         {
             if (_channel?.IsOpen == true)
             {
-                _channel.BasicReject(deliveryTag, requeue);
+                await _channel.BasicRejectAsync(deliveryTag, requeue);
                 Interlocked.Increment(ref _rejectedMessages);
                 
                 if (requeue)
@@ -598,7 +595,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         {
             if (_channel?.IsOpen == true)
             {
-                var queueInfo = _channel.QueueDeclarePassive(queueName);
+                var queueInfo = await _channel.QueueDeclarePassiveAsync(queueName);
                 return queueInfo.MessageCount;
             }
             return 0;
@@ -616,7 +613,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         {
             if (_channel?.IsOpen == true)
             {
-                var queueInfo = _channel.QueueDeclarePassive(queueName);
+                var queueInfo = await _channel.QueueDeclarePassiveAsync(queueName);
                 return queueInfo.ConsumerCount;
             }
             return 0;
@@ -641,7 +638,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
             
             // Subscribe to connection events
             _connectionManager.Disconnected += OnConnectionLost;
-            _connectionManager.Recovered += OnConnectionRecovered;
+            _connectionManager.RecoveryComplete += OnConnectionRecovered;
             
             _logger.LogDebug("Consumer channel initialized successfully");
         }

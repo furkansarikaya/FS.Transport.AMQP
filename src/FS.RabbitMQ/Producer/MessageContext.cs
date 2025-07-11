@@ -3,207 +3,181 @@ using RabbitMQ.Client;
 namespace FS.RabbitMQ.Producer;
 
 /// <summary>
-/// Context information for message publishing including exchange, routing, and options
+/// Context information for message publishing
 /// </summary>
 public class MessageContext
 {
     /// <summary>
-    /// Exchange name where the message should be published
+    /// Gets or sets the exchange to publish to
     /// </summary>
-    public required string Exchange { get; set; }
-    
+    public string Exchange { get; set; } = string.Empty;
+
     /// <summary>
-    /// Routing key for message routing
+    /// Gets or sets the routing key
     /// </summary>
-    public required string RoutingKey { get; set; }
-    
+    public string RoutingKey { get; set; } = string.Empty;
+
     /// <summary>
-    /// Message properties (headers, TTL, priority, etc.)
+    /// Gets or sets the message body
     /// </summary>
-    public IBasicProperties? Properties { get; set; }
-    
+    public ReadOnlyMemory<byte> Body { get; set; }
+
     /// <summary>
-    /// Custom headers to be added to the message
+    /// Gets or sets the message properties
     /// </summary>
-    public IDictionary<string, object>? Headers { get; set; }
-    
+    public IReadOnlyBasicProperties? Properties { get; set; }
+
     /// <summary>
-    /// Message priority (0-255, higher values indicate higher priority)
+    /// Gets or sets whether the message is mandatory
     /// </summary>
-    public byte? Priority { get; set; }
-    
+    public bool Mandatory { get; set; }
+
     /// <summary>
-    /// Message time-to-live (TTL) in milliseconds
+    /// Gets or sets the message ID
     /// </summary>
-    public TimeSpan? TimeToLive { get; set; }
-    
+    public string MessageId { get; set; } = string.Empty;
+
     /// <summary>
-    /// Message expiration time (absolute time when message expires)
+    /// Gets or sets the correlation ID
     /// </summary>
-    public DateTimeOffset? Expiration { get; set; }
-    
+    public string CorrelationId { get; set; } = string.Empty;
+
     /// <summary>
-    /// Content type of the message (e.g., "application/json")
+    /// Gets or sets when the message was created
     /// </summary>
-    public string? ContentType { get; set; }
-    
+    public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+
     /// <summary>
-    /// Content encoding of the message (e.g., "utf-8")
+    /// Gets or sets additional context data
     /// </summary>
-    public string? ContentEncoding { get; set; }
-    
+    public Dictionary<string, object?> AdditionalData { get; set; } = new();
+
     /// <summary>
-    /// Message correlation ID for request-response patterns
+    /// Gets or sets the message headers
     /// </summary>
-    public string? CorrelationId { get; set; }
-    
+    public Dictionary<string, object>? Headers { get; set; }
+
     /// <summary>
-    /// Reply-to queue for response messages
-    /// </summary>
-    public string? ReplyTo { get; set; }
-    
-    /// <summary>
-    /// Message type identifier
+    /// Gets or sets the message type
     /// </summary>
     public string? MessageType { get; set; }
-    
+
     /// <summary>
-    /// Message delivery mode (1 = non-persistent, 2 = persistent)
+    /// Gets or sets the message priority (0-255)
     /// </summary>
-    public byte? DeliveryMode { get; set; }
-    
+    public byte? Priority { get; set; }
+
     /// <summary>
-    /// Application-specific message identifier
+    /// Gets or sets the time-to-live for the message in milliseconds
     /// </summary>
-    public string? MessageId { get; set; }
-    
+    public TimeSpan? TimeToLive { get; set; }
+
     /// <summary>
-    /// User ID associated with the message
+    /// Gets or sets the message expiration
     /// </summary>
-    public string? UserId { get; set; }
-    
+    public string? Expiration { get; set; }
+
     /// <summary>
-    /// Application ID that generated the message
+    /// Gets or sets whether to wait for publisher confirmation
     /// </summary>
-    public string? AppId { get; set; }
-    
+    public bool WaitForConfirmation { get; set; }
+
     /// <summary>
-    /// Timestamp when the message was created
+    /// Gets or sets the confirmation timeout
     /// </summary>
-    public DateTimeOffset? Timestamp { get; set; }
-    
+    public TimeSpan? ConfirmationTimeout { get; set; }
+
     /// <summary>
-    /// Whether to wait for broker confirmation
+    /// Gets or sets the delivery mode (persistent or transient)
     /// </summary>
-    public bool WaitForConfirmation { get; set; } = true;
-    
+    public DeliveryModes? DeliveryMode { get; set; }
+
     /// <summary>
-    /// Timeout for waiting broker confirmation
+    /// Gets or sets the reply-to queue
     /// </summary>
-    public TimeSpan ConfirmationTimeout { get; set; } = TimeSpan.FromSeconds(30);
-    
+    public string? ReplyTo { get; set; }
+
     /// <summary>
-    /// Whether the message should be published as mandatory
+    /// Gets or sets the content type
     /// </summary>
-    public bool Mandatory { get; set; } = false;
-    
+    public string? ContentType { get; set; }
+
     /// <summary>
-    /// Whether the message should be published as immediate
+    /// Gets or sets the content encoding
     /// </summary>
-    public bool Immediate { get; set; } = false;
-    
+    public string? ContentEncoding { get; set; }
+
     /// <summary>
-    /// Custom serializer to use for this message (overrides default)
-    /// </summary>
-    public string? SerializerType { get; set; }
-    
-    /// <summary>
-    /// Retry policy name to use for this message
+    /// Gets or sets the retry policy name
     /// </summary>
     public string? RetryPolicyName { get; set; }
-    
+
     /// <summary>
-    /// Custom retry count for this message
+    /// Gets or sets the maximum number of retries
     /// </summary>
     public int? MaxRetries { get; set; }
-    
+
     /// <summary>
-    /// Dead letter exchange for failed messages
+    /// Gets or sets the dead letter exchange
     /// </summary>
     public string? DeadLetterExchange { get; set; }
-    
+
     /// <summary>
-    /// Dead letter routing key for failed messages
+    /// Gets or sets the dead letter routing key
     /// </summary>
     public string? DeadLetterRoutingKey { get; set; }
-    
+
     /// <summary>
-    /// Creates a new message context with basic information
+    /// Creates a MessageContext from basic information
     /// </summary>
     /// <param name="exchange">Exchange name</param>
     /// <param name="routingKey">Routing key</param>
-    /// <returns>New message context</returns>
-    public static MessageContext Create(string exchange, string routingKey)
+    /// <param name="body">Message body</param>
+    /// <param name="properties">Message properties</param>
+    /// <param name="mandatory">Whether message is mandatory</param>
+    /// <returns>A new MessageContext instance</returns>
+    public static MessageContext Create(
+        string exchange,
+        string routingKey,
+        ReadOnlyMemory<byte> body,
+        IBasicProperties? properties = null,
+        bool mandatory = false)
     {
         return new MessageContext
         {
             Exchange = exchange,
             RoutingKey = routingKey,
-            Timestamp = DateTimeOffset.UtcNow
+            Body = body,
+            Properties = properties,
+            Mandatory = mandatory,
+            MessageId = properties?.MessageId ?? Guid.NewGuid().ToString(),
+            CorrelationId = properties?.CorrelationId ?? string.Empty
         };
     }
-    
+
     /// <summary>
-    /// Creates a new message context with basic information and content type
+    /// Creates a MessageContext from basic information without body
     /// </summary>
     /// <param name="exchange">Exchange name</param>
     /// <param name="routingKey">Routing key</param>
-    /// <param name="contentType">Content type</param>
-    /// <returns>New message context</returns>
-    public static MessageContext Create(string exchange, string routingKey, string contentType)
+    /// <param name="properties">Message properties</param>
+    /// <param name="mandatory">Whether message is mandatory</param>
+    /// <returns>A new MessageContext instance</returns>
+    public static MessageContext Create(
+        string exchange,
+        string routingKey,
+        IBasicProperties? properties = null,
+        bool mandatory = false)
     {
         return new MessageContext
         {
             Exchange = exchange,
             RoutingKey = routingKey,
-            ContentType = contentType,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-    }
-    
-    /// <summary>
-    /// Creates a copy of this message context
-    /// </summary>
-    /// <returns>Copy of message context</returns>
-    public MessageContext Clone()
-    {
-        return new MessageContext
-        {
-            Exchange = Exchange,
-            RoutingKey = RoutingKey,
-            Properties = Properties,
-            Headers = Headers?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-            Priority = Priority,
-            TimeToLive = TimeToLive,
-            Expiration = Expiration,
-            ContentType = ContentType,
-            ContentEncoding = ContentEncoding,
-            CorrelationId = CorrelationId,
-            ReplyTo = ReplyTo,
-            MessageType = MessageType,
-            DeliveryMode = DeliveryMode,
-            MessageId = MessageId,
-            UserId = UserId,
-            AppId = AppId,
-            Timestamp = Timestamp,
-            WaitForConfirmation = WaitForConfirmation,
-            Mandatory = Mandatory,
-            Immediate = Immediate,
-            SerializerType = SerializerType,
-            RetryPolicyName = RetryPolicyName,
-            MaxRetries = MaxRetries,
-            DeadLetterExchange = DeadLetterExchange,
-            DeadLetterRoutingKey = DeadLetterRoutingKey
+            Body = ReadOnlyMemory<byte>.Empty,
+            Properties = properties,
+            Mandatory = mandatory,
+            MessageId = properties?.MessageId ?? Guid.NewGuid().ToString(),
+            CorrelationId = properties?.CorrelationId ?? string.Empty
         };
     }
 }
@@ -247,6 +221,36 @@ public class EventPublishContext : MessageContext
     /// Whether this is a domain event or integration event
     /// </summary>
     public bool IsDomainEvent { get; set; } = false;
+    
+    /// <summary>
+    /// Gets or sets the message priority (0-255)
+    /// </summary>
+    public new byte? Priority { get; set; }
+
+    /// <summary>
+    /// Gets or sets the time-to-live for the message
+    /// </summary>
+    public new TimeSpan? TimeToLive { get; set; }
+
+    /// <summary>
+    /// Gets or sets the delivery mode (persistent or transient)
+    /// </summary>
+    public new DeliveryModes? DeliveryMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of retries
+    /// </summary>
+    public new int? MaxRetries { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether to wait for publisher confirmation
+    /// </summary>
+    public new bool WaitForConfirmation { get; set; }
+
+    /// <summary>
+    /// Gets or sets the retry policy name
+    /// </summary>
+    public new string? RetryPolicyName { get; set; }
     
     /// <summary>
     /// Creates a new event context for domain events

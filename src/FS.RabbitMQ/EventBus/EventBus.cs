@@ -4,6 +4,7 @@ using FS.RabbitMQ.Core;
 using FS.RabbitMQ.EventHandlers;
 using FS.RabbitMQ.Events;
 using FS.RabbitMQ.Producer;
+using RabbitMQ.Client;
 
 namespace FS.RabbitMQ.EventBus;
 
@@ -151,7 +152,16 @@ public class EventBus : IEventBus
             var exchangeName = "domain-events";
             var routingKey = typeof(T).Name;
             
-            await _producer.PublishAsync(domainEvent, exchangeName, routingKey, cancellationToken).ConfigureAwait(false);
+            // Serialize the domain event to bytes
+            var messageBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(domainEvent);
+            var properties = new BasicProperties
+            {
+                ContentType = "application/json",
+                MessageId = Guid.NewGuid().ToString(),
+                Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            };
+            
+            await _producer.PublishAsync(exchangeName, routingKey, messageBytes, properties, false, cancellationToken).ConfigureAwait(false);
             
             _statistics.TotalEventsPublished++;
             _statistics.LastEventPublished = DateTimeOffset.UtcNow;
@@ -184,7 +194,16 @@ public class EventBus : IEventBus
             var exchangeName = "integration-events";
             var routingKey = typeof(T).Name;
             
-            await _producer.PublishAsync(integrationEvent, exchangeName, routingKey, cancellationToken).ConfigureAwait(false);
+            // Serialize the integration event to bytes
+            var messageBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(integrationEvent);
+            var properties = new BasicProperties
+            {
+                ContentType = "application/json",
+                MessageId = Guid.NewGuid().ToString(),
+                Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            };
+            
+            await _producer.PublishAsync(exchangeName, routingKey, messageBytes, properties, false, cancellationToken).ConfigureAwait(false);
             
             _statistics.TotalEventsPublished++;
             _statistics.LastEventPublished = DateTimeOffset.UtcNow;

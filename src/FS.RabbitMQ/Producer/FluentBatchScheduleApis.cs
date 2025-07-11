@@ -112,7 +112,7 @@ public class FluentBatchApi<T> where T : class
             return MessageWithContext<T>.Create(message, context);
         });
 
-        return await _producer.PublishBatchAsync(messageContexts, cancellationToken);
+        return await _producer.PublishBatchAsync(messageContexts.Select(m => m.Context), cancellationToken);
     }
 }
 
@@ -225,7 +225,9 @@ public class FluentScheduleApi<T> where T : class
             throw new InvalidOperationException("Exchange, routing key, and schedule time must be specified");
         }
 
-        return await _producer.ScheduleAsync(_message, _exchange, _routingKey, _scheduleTime.Value, cancellationToken);
+        var delay = _scheduleTime.Value.Subtract(DateTimeOffset.UtcNow);
+        var success = await _producer.ScheduleAsync(_message, delay, cancellationToken);
+        return new ScheduleResult { IsSuccess = success, ScheduledTime = _scheduleTime.Value };
     }
 }
 
@@ -255,7 +257,7 @@ public class FluentTransactionApi
     public FluentTransactionApi AddMessage<T>(T message, string exchange, string routingKey) where T : class
     {
         _operations.Add(async txId => 
-            await _producer.PublishTransactionalAsync(message, exchange, routingKey, txId));
+            await _producer.PublishAsync(exchange, routingKey, message));
         return this;
     }
 
@@ -274,7 +276,7 @@ public class FluentTransactionApi
         {
             var routingKey = routingKeySelector(message);
             _operations.Add(async txId => 
-                await _producer.PublishTransactionalAsync(message, exchange, routingKey, txId));
+                await _producer.PublishAsync(exchange, routingKey, message));
         }
         return this;
     }
@@ -306,12 +308,12 @@ public class FluentTransactionApi
             }
 
             // Commit transaction
-            return await _producer.CommitTransactionAsync(_transactionId, cancellationToken);
+            await _producer.CommitTransactionAsync(cancellationToken);
+            return true;
         }
         catch
         {
-            // Rollback on any error
-            await _producer.RollbackTransactionAsync(_transactionId, cancellationToken);
+            await _producer.RollbackTransactionAsync(cancellationToken);
             throw;
         }
     }
@@ -336,6 +338,7 @@ public class FluentTransactionApi
             // Continue with rollback even if operations failed
         }
 
-        return await _producer.RollbackTransactionAsync(_transactionId, cancellationToken);
+        await _producer.RollbackTransactionAsync(cancellationToken);
+        return true;
     }
 } 

@@ -27,7 +27,7 @@ public static class ConnectionExtensions
     /// <param name="configureConnection">Connection configuration action</param>
     /// <returns>Service collection for fluent configuration</returns>
     public static IServiceCollection ConfigureConnection(this IServiceCollection services, 
-        Action<ConnectionSettings> configureConnection)
+        Action<FS.RabbitMQ.Configuration.ConnectionSettings> configureConnection)
     {
         services.Configure<RabbitMQConfiguration>(config => configureConnection(config.Connection));
         return services;
@@ -71,7 +71,7 @@ public static class ConnectionExtensions
     /// <param name="configureSsl">SSL configuration action</param>
     /// <returns>Service collection for fluent configuration</returns>
     public static IServiceCollection ConfigureSsl(this IServiceCollection services, 
-        Action<SslSettings> configureSsl)
+        Action<FS.RabbitMQ.Configuration.SslSettings> configureSsl)
     {
         services.Configure<RabbitMQConfiguration>(config =>
         {

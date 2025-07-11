@@ -36,6 +36,28 @@ public class SslSettings
     public string SslProtocol { get; set; } = "Tls12";
 
     /// <summary>
+    /// Gets or sets whether SSL is enabled (for backward compatibility)
+    /// </summary>
+    public bool Enabled { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the SSL version (for backward compatibility)
+    /// </summary>
+    public System.Security.Authentication.SslProtocols Version 
+    { 
+        get => Enum.TryParse<System.Security.Authentication.SslProtocols>(SslProtocol, out var result) 
+               ? result 
+               : System.Security.Authentication.SslProtocols.Tls12;
+        set => SslProtocol = value.ToString();
+    }
+
+    /// <summary>
+    /// Gets or sets the acceptable policy errors (for backward compatibility)
+    /// </summary>
+    public System.Net.Security.SslPolicyErrors AcceptablePolicyErrors { get; set; } = 
+        System.Net.Security.SslPolicyErrors.None;
+
+    /// <summary>
     /// Validates SSL settings
     /// </summary>
     /// <exception cref="ArgumentException">Thrown when SSL settings are invalid</exception>

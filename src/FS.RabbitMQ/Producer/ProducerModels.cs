@@ -140,6 +140,38 @@ public class ProducerStatistics
     /// Additional custom metrics
     /// </summary>
     public IDictionary<string, object> CustomMetrics { get; set; } = new Dictionary<string, object>();
+
+    /// <summary>
+    /// Total number of messages published (alias for backward compatibility)
+    /// </summary>
+    public long TotalPublished
+    {
+        get => TotalMessages;
+        set => TotalMessages = value;
+    }
+
+    /// <summary>
+    /// Total number of messages confirmed by broker (alias for backward compatibility)
+    /// </summary>
+    public long TotalConfirmed
+    {
+        get => SuccessfulMessages;
+        set => SuccessfulMessages = value;
+    }
+
+    /// <summary>
+    /// Total number of failed messages (alias for backward compatibility)
+    /// </summary>
+    public long TotalFailed
+    {
+        get => FailedMessages;
+        set => FailedMessages = value;
+    }
+
+    /// <summary>
+    /// Whether the producer is currently connected and running
+    /// </summary>
+    public bool IsConnected => Status == ProducerStatus.Running;
 }
 
 /// <summary>

@@ -1,91 +1,112 @@
 namespace FS.RabbitMQ.ErrorHandling;
 
 /// <summary>
-/// Represents a message that has been sent to a dead letter queue due to processing failure
+/// Represents a message in the dead letter queue
 /// </summary>
 public class DeadLetterMessage
 {
     /// <summary>
-    /// Gets or sets the unique identifier of the message
+    /// Gets or sets the unique identifier for this dead letter message
     /// </summary>
-    /// <value>The message ID</value>
     public string MessageId { get; set; } = string.Empty;
-    
+
     /// <summary>
-    /// Gets or sets the correlation identifier for message correlation
+    /// Gets or sets the original message ID
     /// </summary>
-    /// <value>The correlation ID</value>
-    public string CorrelationId { get; set; } = string.Empty;
-    
-    /// <summary>
-    /// Gets or sets the timestamp when the message was originally created
-    /// </summary>
-    /// <value>The original message timestamp</value>
-    public DateTimeOffset OriginalTimestamp { get; set; }
-    
-    /// <summary>
-    /// Gets or sets the timestamp when the error occurred
-    /// </summary>
-    /// <value>The error timestamp</value>
-    public DateTimeOffset ErrorTimestamp { get; set; }
-    
-    /// <summary>
-    /// Gets or sets the number of processing attempts made for this message
-    /// </summary>
-    /// <value>The attempt count</value>
-    public int AttemptCount { get; set; }
-    
+    public string OriginalMessageId { get; set; } = string.Empty;
+
     /// <summary>
     /// Gets or sets the original exchange where the message was published
     /// </summary>
-    /// <value>The original exchange name</value>
     public string OriginalExchange { get; set; } = string.Empty;
-    
+
     /// <summary>
-    /// Gets or sets the original routing key used for the message
+    /// Gets or sets the original routing key
     /// </summary>
-    /// <value>The original routing key</value>
     public string OriginalRoutingKey { get; set; } = string.Empty;
-    
+
     /// <summary>
-    /// Gets or sets the original queue where the message was consumed from
+    /// Gets or sets the original queue name
     /// </summary>
-    /// <value>The original queue name</value>
     public string OriginalQueue { get; set; } = string.Empty;
-    
+
     /// <summary>
-    /// Gets or sets the consumer tag that was processing the message
+    /// Gets or sets the message body
     /// </summary>
-    /// <value>The consumer tag</value>
-    public string ConsumerTag { get; set; } = string.Empty;
-    
+    public ReadOnlyMemory<byte> MessageBody { get; set; }
+
     /// <summary>
-    /// Gets or sets the operation that was being performed when the error occurred
+    /// Gets or sets the content type of the message
     /// </summary>
-    /// <value>The operation name</value>
-    public string Operation { get; set; } = string.Empty;
-    
+    public string ContentType { get; set; } = string.Empty;
+
     /// <summary>
-    /// Gets or sets the exception details that caused the message to be dead lettered
+    /// Gets or sets the delivery mode
     /// </summary>
-    /// <value>The exception information</value>
-    public DeadLetterException Exception { get; set; } = new();
-    
+    public byte DeliveryMode { get; set; }
+
     /// <summary>
-    /// Gets or sets the message headers
+    /// Gets or sets the message priority
     /// </summary>
-    /// <value>Dictionary of message headers</value>
+    public byte Priority { get; set; }
+
+    /// <summary>
+    /// Gets or sets the correlation ID
+    /// </summary>
+    public string CorrelationId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the error message that caused this to be dead lettered
+    /// </summary>
+    public string ErrorMessage { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the type of error that occurred
+    /// </summary>
+    public string ErrorType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the stack trace of the error
+    /// </summary>
+    public string ErrorStackTrace { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the number of retry attempts made
+    /// </summary>
+    public int RetryCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the message first encountered an error
+    /// </summary>
+    public DateTimeOffset FirstErrorTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the message was last processed unsuccessfully
+    /// </summary>
+    public DateTimeOffset LastErrorTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the message was sent to the dead letter queue
+    /// </summary>
+    public DateTimeOffset DeadLetterTime { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Gets or sets the number of times this message has been requeued from dead letter
+    /// </summary>
+    public int RequeueCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the message was last requeued
+    /// </summary>
+    public DateTimeOffset? LastRequeueTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the original message headers
+    /// </summary>
     public Dictionary<string, object> Headers { get; set; } = new();
-    
+
     /// <summary>
-    /// Gets or sets the message properties
+    /// Gets or sets additional contextual data
     /// </summary>
-    /// <value>Dictionary of message properties</value>
-    public Dictionary<string, object> Properties { get; set; } = new();
-    
-    /// <summary>
-    /// Gets or sets the original message body
-    /// </summary>
-    /// <value>The original message content</value>
-    public string OriginalMessage { get; set; } = string.Empty;
+    public Dictionary<string, object?> AdditionalData { get; set; } = new();
 }

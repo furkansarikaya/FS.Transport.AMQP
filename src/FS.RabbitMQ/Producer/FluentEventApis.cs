@@ -1,4 +1,5 @@
 using FS.RabbitMQ.Events;
+using RabbitMQ.Client;
 
 namespace FS.RabbitMQ.Producer;
 
@@ -72,7 +73,7 @@ public class FluentDomainEventApi<T> where T : class, IDomainEvent
     /// <returns>Fluent API instance</returns>
     public FluentDomainEventApi<T> AsPersistent()
     {
-        _context.DeliveryMode = 2;
+        _context.DeliveryMode = DeliveryModes.Persistent;
         return this;
     }
 
@@ -177,7 +178,7 @@ public class FluentIntegrationEventApi<T> where T : class, IIntegrationEvent
     /// <returns>Fluent API instance</returns>
     public FluentIntegrationEventApi<T> AsPersistent()
     {
-        _context.DeliveryMode = 2;
+        _context.DeliveryMode = DeliveryModes.Persistent;
         return this;
     }
 

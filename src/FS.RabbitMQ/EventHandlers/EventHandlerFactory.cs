@@ -186,7 +186,7 @@ public class EventHandlerFactory : IEventHandlerFactory
                 handler.HandlerName, @event.EventType, duration.TotalMilliseconds, context.HandlingId);
 
             // Handle the error through error handler
-            var errorContext = ErrorHandling.ErrorContext.FromEvent(ex, @event, $"EventHandler:{handler.HandlerName}");
+            var errorContext = ErrorHandling.ErrorContext.FromEvent(ex, @event.EventType, $"EventHandler:{handler.HandlerName}");
             await _errorHandler.HandleErrorAsync(errorContext, cancellationToken);
 
             return EventHandlingResult.Failure(handler.HandlerName, ex, duration);

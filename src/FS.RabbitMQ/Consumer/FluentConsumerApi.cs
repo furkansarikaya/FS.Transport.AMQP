@@ -494,7 +494,7 @@ public class FluentConsumerApi<T> : IFluentConsumerApi<T> where T : class
         };
         
         _context.RetryPolicy = retryPolicy;
-        _context.Settings.RetryPolicy = retryPolicy;
+        _context.Settings.RetryPolicy = retryPolicy.PolicyType; // Convert to string
         
         return this;
     }
@@ -510,7 +510,7 @@ public class FluentConsumerApi<T> : IFluentConsumerApi<T> where T : class
     public IFluentConsumerApi<T> WithRetryPolicy(RetryPolicySettings retryPolicy)
     {
         _context.RetryPolicy = retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy));
-        _context.Settings.RetryPolicy = retryPolicy;
+        _context.Settings.RetryPolicy = retryPolicy.PolicyType; // Convert to string
         return this;
     }
 
@@ -526,7 +526,7 @@ public class FluentConsumerApi<T> : IFluentConsumerApi<T> where T : class
     public IFluentConsumerApi<T> WithErrorHandling(ErrorHandlingStrategy strategy)
     {
         _context.ErrorHandling = strategy;
-        _context.Settings.ErrorHandling = strategy;
+        _context.Settings.ErrorHandling = strategy.ToString(); // Convert to string
         return this;
     }
 
@@ -585,7 +585,7 @@ public class FluentConsumerApi<T> : IFluentConsumerApi<T> where T : class
     public IFluentConsumerApi<T> WithSerializer(SerializerSettings settings)
     {
         _context.Serializer = settings ?? throw new ArgumentNullException(nameof(settings));
-        _context.Settings.Serializer = settings;
+        _context.Settings.Serializer = settings.SerializerType; // Convert to string
         return this;
     }
 
@@ -627,7 +627,7 @@ public class FluentConsumerApi<T> : IFluentConsumerApi<T> where T : class
     public IFluentConsumerApi<T> WithArguments(IDictionary<string, object> arguments)
     {
         _context.Arguments = arguments ?? throw new ArgumentNullException(nameof(arguments));
-        _context.Settings.Arguments = arguments;
+        _context.Settings.Arguments = new Dictionary<string, object>(arguments); // Convert to Dictionary
         return this;
     }
 

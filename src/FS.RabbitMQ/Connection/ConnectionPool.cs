@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
-using FS.RabbitMQ.Configuration;
-using FS.RabbitMQ.Core.Extensions;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
+using FS.RabbitMQ.Configuration;
+using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.Connection;
 
 /// <summary>
-/// Thread-safe connection pool for managing RabbitMQ channels with automatic cleanup and health monitoring
+/// Manages a pool of RabbitMQ channels for efficient resource utilization
 /// </summary>
 public class ConnectionPool : IDisposable
 {
@@ -20,25 +20,28 @@ public class ConnectionPool : IDisposable
     private volatile bool _disposed;
     private IConnection? _connection;
 
-    public ConnectionPool(ConnectionSettings settings, ILogger logger)
+    /// <summary>
+    /// Initializes a new instance of the ConnectionPool
+    /// </summary>
+    /// <param name="maxChannels">Maximum number of channels in the pool</param>
+    /// <param name="logger">Logger instance</param>
+    public ConnectionPool(int maxChannels, ILogger logger)
     {
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _settings = new ConnectionSettings { MaxChannels = maxChannels };
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _availableChannels = new ConcurrentQueue<PooledChannel>();
         _activeChannels = new ConcurrentDictionary<int, PooledChannel>();
-        _semaphore = new SemaphoreSlim(_settings.MaxConnections, _settings.MaxConnections);
+        _semaphore = new SemaphoreSlim(maxChannels, maxChannels);
         
-        // Setup cleanup timer to run every minute
+        // Setup cleanup timer to run every 5 minutes
         _cleanupTimer = new Timer(CleanupExpiredChannels, null, 
-            TimeSpan.FromMilliseconds(_settings.PoolCleanupIntervalMs), 
-            TimeSpan.FromMilliseconds(_settings.PoolCleanupIntervalMs));
-            
-        _logger.LogDebug("ConnectionPool initialized with max connections: {MaxConnections}", _settings.MaxConnections);
+            TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
     }
 
     /// <summary>
-    /// Initializes the pool with a primary connection
+    /// Initializes the connection pool with a RabbitMQ connection
     /// </summary>
+    /// <param name="connection">The RabbitMQ connection</param>
     public async Task InitializeAsync(IConnection connection)
     {
         if (_disposed)
@@ -46,17 +49,19 @@ public class ConnectionPool : IDisposable
 
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         
-        // Pre-create minimum number of channels
-        for (int i = 0; i < _settings.MinConnections; i++)
+        // Pre-create some channels for the pool
+        var initialChannelCount = Math.Min(_settings.MaxChannels ?? 10, 5);
+        
+        for (int i = 0; i < initialChannelCount; i++)
         {
             try
             {
-                var channel = CreatePooledChannel();
-                _availableChannels.Enqueue(channel);
+                var pooledChannel = await CreatePooledChannelAsync();
+                _availableChannels.Enqueue(pooledChannel);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to pre-create channel {Index} during pool initialization", i);
+                _logger.LogWarning(ex, "Failed to pre-create channel {ChannelIndex} during pool initialization", i);
             }
         }
         
@@ -67,7 +72,7 @@ public class ConnectionPool : IDisposable
     /// <summary>
     /// Gets a channel from the pool or creates a new one
     /// </summary>
-    public async Task<IModel> GetChannelAsync(CancellationToken cancellationToken = default)
+    public async Task<IChannel> GetChannelAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(ConnectionPool));
@@ -99,7 +104,7 @@ public class ConnectionPool : IDisposable
             }
             
             // No available channels, create a new one
-            var newChannel = CreatePooledChannel();
+            var newChannel = await CreatePooledChannelAsync();
             _activeChannels.TryAdd(newChannel.Channel.ChannelNumber, newChannel);
             
             _logger.LogTrace("Created new pooled channel {ChannelNumber}", newChannel.Channel.ChannelNumber);
@@ -119,7 +124,7 @@ public class ConnectionPool : IDisposable
     /// <summary>
     /// Returns a channel to the pool for reuse
     /// </summary>
-    public void ReturnChannel(IModel channel)
+    public void ReturnChannel(IChannel channel)
     {
         if (_disposed || channel == null)
             return;
@@ -128,7 +133,7 @@ public class ConnectionPool : IDisposable
         {
             if (_activeChannels.TryRemove(channel.ChannelNumber, out var pooledChannel))
             {
-                if (channel.IsUsable() && !pooledChannel.IsExpired && _availableChannels.Count < _settings.MaxConnections)
+                if (channel.IsUsable() && !pooledChannel.IsExpired && _availableChannels.Count < (_settings.MaxChannels ?? 10))
                 {
                     pooledChannel.LastUsed = DateTime.UtcNow;
                     _availableChannels.Enqueue(pooledChannel);
@@ -157,19 +162,19 @@ public class ConnectionPool : IDisposable
     /// <summary>
     /// Closes all channels and clears the pool
     /// </summary>
-    public async Task CloseAsync()
+    public async Task CleanupAsync()
     {
         if (_disposed)
             return;
 
-        _logger.LogInformation("Closing connection pool");
+        _logger.LogInformation("Cleaning up connection pool");
         
         // Close all available channels
         while (_availableChannels.TryDequeue(out var pooledChannel))
         {
             try
             {
-                pooledChannel.Channel.SafeClose();
+                await pooledChannel.Channel.SafeCloseAsync();
                 pooledChannel.Channel.SafeDispose();
             }
             catch (Exception ex)
@@ -183,7 +188,7 @@ public class ConnectionPool : IDisposable
         {
             try
             {
-                activeChannel.Channel.SafeClose();
+                await activeChannel.Channel.SafeCloseAsync();
                 activeChannel.Channel.SafeDispose();
             }
             catch (Exception ex)
@@ -193,15 +198,15 @@ public class ConnectionPool : IDisposable
         }
         
         _activeChannels.Clear();
-        _logger.LogInformation("Connection pool closed");
+        _logger.LogInformation("Connection pool cleaned up");
     }
 
-    private PooledChannel CreatePooledChannel()
+    private async Task<PooledChannel> CreatePooledChannelAsync()
     {
         if (_connection == null || !_connection.IsOpen)
             throw new InvalidOperationException("Connection is not available");
 
-        var channel = _connection.CreateModel();
+        var channel = await _connection.CreateChannelAsync();
         return new PooledChannel(channel, DateTime.UtcNow);
     }
 
@@ -259,6 +264,9 @@ public class ConnectionPool : IDisposable
         }
     }
 
+    /// <summary>
+    /// Disposes the connection pool and all its resources
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -269,12 +277,15 @@ public class ConnectionPool : IDisposable
         try
         {
             _cleanupTimer?.Dispose();
-            CloseAsync().GetAwaiter().GetResult();
-            _semaphore?.Dispose();
+            CleanupAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during ConnectionPool disposal");
+            _logger.LogError(ex, "Error during connection pool disposal");
+        }
+        finally
+        {
+            _semaphore?.Dispose();
         }
     }
 }

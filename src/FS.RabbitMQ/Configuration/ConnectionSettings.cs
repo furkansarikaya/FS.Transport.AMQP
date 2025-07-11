@@ -114,6 +114,39 @@ public class ConnectionSettings
     public bool AutoRecoveryEnabled { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the maximum number of channels (for backward compatibility)
+    /// </summary>
+    public int? MaxChannels { get; set; } = 20;
+
+    /// <summary>
+    /// Gets or sets the health check settings
+    /// </summary>
+    public HealthCheckSettings HealthCheck { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the requested connection timeout (for backward compatibility)
+    /// </summary>
+    public TimeSpan RequestedConnectionTimeout
+    {
+        get => ConnectionTimeout;
+        set => ConnectionTimeout = value;
+    }
+
+    /// <summary>
+    /// Gets or sets automatic recovery settings (for backward compatibility)
+    /// </summary>
+    public AutomaticRecoverySettings AutomaticRecovery { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the client provided connection name (for backward compatibility)  
+    /// </summary>
+    public string? ClientProvidedName
+    {
+        get => ConnectionName;
+        set => ConnectionName = value;
+    }
+
+    /// <summary>
     /// Validates the connection settings and throws if invalid
     /// </summary>
     /// <exception cref="ArgumentException">Thrown when settings are invalid</exception>
@@ -220,4 +253,25 @@ public class ConnectionSettings
         return $"RabbitMQ Connection: {UserName}@{HostName}:{Port}{VirtualHost} " +
                $"(SSL: {UseSsl}, Heartbeat: {HeartbeatInterval}s, Pool: {MinConnections}-{MaxConnections})";
     }
+}
+
+/// <summary>
+/// Settings for automatic recovery functionality
+/// </summary>
+public class AutomaticRecoverySettings
+{
+    /// <summary>
+    /// Gets or sets whether automatic recovery is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the network recovery interval
+    /// </summary>
+    public TimeSpan NetworkRecoveryInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Gets or sets whether topology recovery is enabled
+    /// </summary>
+    public bool TopologyRecoveryEnabled { get; set; } = true;
 }

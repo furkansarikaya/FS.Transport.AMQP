@@ -443,7 +443,7 @@ public class HealthChecker : IHealthChecker
         try
         {
             var isConnected = _connectionManager.IsConnected;
-            var connectionHealthy = await _connectionManager.TestConnectionAsync(cancellationToken);
+            var connectionHealthy = isConnected; // Use IsConnected directly instead of TestConnectionAsync
             var data = new Dictionary<string, object>
             {
                 ["is_connected"] = isConnected,

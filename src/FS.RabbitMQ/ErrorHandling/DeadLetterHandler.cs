@@ -1,130 +1,152 @@
-using System.Text.Json;
-using FS.RabbitMQ.Configuration;
-using FS.RabbitMQ.Connection;
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.Core.Extensions;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
-using Constants = FS.RabbitMQ.Core.Constants;
+using System.Text;
+using System.Text.Json;
+using System.Collections.Concurrent;
+using FS.RabbitMQ.Connection;
+using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.ErrorHandling;
 
 /// <summary>
-/// Handles dead letter operations with comprehensive error information preservation
+/// Handles dead letter messages in RabbitMQ with comprehensive error tracking and recovery options
 /// </summary>
 public class DeadLetterHandler : IDeadLetterHandler
 {
-    private readonly ErrorHandlingSettings _settings;
     private readonly IConnectionManager _connectionManager;
+    private readonly DeadLetterSettings _settings;
     private readonly ILogger<DeadLetterHandler> _logger;
     private readonly DeadLetterStatistics _statistics;
-    private volatile bool _infrastructureSetup;
+    private readonly ConcurrentDictionary<string, DeadLetterMessage> _deadLetterMessages;
+    private readonly SemaphoreSlim _operationLock;
+    private volatile bool _disposed;
 
+    /// <summary>
+    /// Initializes a new instance of the DeadLetterHandler
+    /// </summary>
+    /// <param name="connectionManager">Connection manager instance</param>
+    /// <param name="settings">Dead letter settings</param>
+    /// <param name="logger">Logger instance</param>
     public DeadLetterHandler(
-        IOptions<RabbitMQConfiguration> configuration,
         IConnectionManager connectionManager,
+        DeadLetterSettings settings,
         ILogger<DeadLetterHandler> logger)
     {
-        _settings = configuration?.Value?.ErrorHandling ?? throw new ArgumentNullException(nameof(configuration));
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _statistics = new DeadLetterStatistics();
+        _deadLetterMessages = new ConcurrentDictionary<string, DeadLetterMessage>();
+        _operationLock = new SemaphoreSlim(1, 1);
     }
 
     /// <summary>
-    /// Sends a message to dead letter with comprehensive error information
+    /// Handles a dead letter message by sending it to the dead letter queue
     /// </summary>
-    public async Task<bool> SendToDeadLetterAsync(ErrorContext context, CancellationToken cancellationToken = default)
+    /// <param name="context">Error context containing the message and error information</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the handling operation</returns>
+    public async Task<bool> HandleDeadLetterAsync(ErrorContext context, CancellationToken cancellationToken = default)
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(DeadLetterHandler));
+
         if (context == null)
             throw new ArgumentNullException(nameof(context));
 
+        await _operationLock.WaitAsync(cancellationToken);
+        
         try
         {
-            _statistics.TotalMessages++;
-            var startTime = DateTime.UtcNow;
+            _logger.LogWarning("Handling dead letter message: {MessageId} from {Exchange}/{RoutingKey}",
+                context.MessageProperties?.MessageId, context.ExchangeName, context.RoutingKey);
 
-            using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
-            
-            // Ensure dead letter infrastructure exists
-            if (!_infrastructureSetup)
-            {
-                await SetupDeadLetterInfrastructureAsync(channel, cancellationToken);
-            }
-
-            // Create dead letter message with error information
+            // Create dead letter message
             var deadLetterMessage = CreateDeadLetterMessage(context);
-            var properties = CreateDeadLetterProperties(context, channel);
             
-            // Publish to dead letter exchange
-            channel.SafeBasicPublish(
-                _settings.DeadLetterExchange,
-                _settings.DeadLetterRoutingKey,
-                deadLetterMessage,
-                properties,
-                mandatory: false
-            );
-
-            _connectionManager.ReturnChannel(channel);
+            // Store in memory tracking
+            _deadLetterMessages[deadLetterMessage.MessageId] = deadLetterMessage;
             
-            var duration = DateTime.UtcNow - startTime;
-            _statistics.SuccessfulMessages++;
-            _statistics.AverageProcessingTime = CalculateAverageTime(duration);
+            // Send to dead letter queue
+            var success = await SendToDeadLetterQueueAsync(context, deadLetterMessage, cancellationToken);
             
-            _logger.LogInformation("Message sent to dead letter queue in {Duration}ms: {MessageId}", 
-                duration.TotalMilliseconds, context.MessageId);
-
-            return true;
+            if (success)
+            {
+                _statistics.TotalDeadLetters++;
+                _statistics.LastDeadLetterTime = DateTimeOffset.UtcNow;
+                _logger.LogInformation("Dead letter message handled successfully: {MessageId}", deadLetterMessage.MessageId);
+            }
+            else
+            {
+                _statistics.FailedDeadLetters++;
+                _logger.LogError("Failed to handle dead letter message: {MessageId}", deadLetterMessage.MessageId);
+            }
+            
+            return success;
         }
         catch (Exception ex)
         {
-            _statistics.FailedMessages++;
-            _logger.LogError(ex, "Failed to send message to dead letter queue: {ErrorContext}", context.ToString());
+            _statistics.FailedDeadLetters++;
+            _logger.LogError(ex, "Error handling dead letter message");
             return false;
+        }
+        finally
+        {
+            _operationLock.Release();
         }
     }
 
     /// <summary>
-    /// Sets up dead letter exchange and queue infrastructure
+    /// Sets up the dead letter infrastructure (exchanges, queues, bindings)
     /// </summary>
-    public async Task<bool> SetupDeadLetterInfrastructureAsync(IModel channel, CancellationToken cancellationToken = default)
+    /// <param name="channel">The RabbitMQ channel to use for setup</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the setup operation</returns>
+    public async Task<bool> SetupDeadLetterInfrastructureAsync(IChannel channel, CancellationToken cancellationToken = default)
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(DeadLetterHandler));
+
+        if (channel == null)
+            throw new ArgumentNullException(nameof(channel));
+
         try
         {
-            _logger.LogDebug("Setting up dead letter infrastructure");
+            _logger.LogInformation("Setting up dead letter infrastructure");
 
             // Declare dead letter exchange
-            channel.ExchangeDeclare(
+            await channel.ExchangeDeclareAsync(
                 exchange: _settings.DeadLetterExchange,
-                type: ExchangeType.Topic,
+                type: "direct",
                 durable: true,
                 autoDelete: false,
-                arguments: null
-            );
+                arguments: null,
+                cancellationToken: cancellationToken);
 
             // Declare dead letter queue
-            var queueArgs = new Dictionary<string, object>();
-            
-            channel.QueueDeclare(
+            var queueArguments = new Dictionary<string, object>();
+            if (_settings.MessageTtl.HasValue)
+            {
+                queueArguments["x-message-ttl"] = (int)_settings.MessageTtl.Value.TotalMilliseconds;
+            }
+
+            await channel.QueueDeclareAsync(
                 queue: _settings.DeadLetterQueue,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
-                arguments: queueArgs
-            );
+                arguments: queueArguments,
+                cancellationToken: cancellationToken);
 
-            // Bind queue to exchange
-            channel.QueueBind(
+            // Bind dead letter queue to exchange
+            await channel.QueueBindAsync(
                 queue: _settings.DeadLetterQueue,
                 exchange: _settings.DeadLetterExchange,
                 routingKey: _settings.DeadLetterRoutingKey,
-                arguments: null
-            );
+                arguments: null,
+                cancellationToken: cancellationToken);
 
-            _infrastructureSetup = true;
-            _logger.LogInformation("Dead letter infrastructure setup completed successfully");
-
+            _logger.LogInformation("Dead letter infrastructure setup completed");
             return true;
         }
         catch (Exception ex)
@@ -135,109 +157,255 @@ public class DeadLetterHandler : IDeadLetterHandler
     }
 
     /// <summary>
-    /// Gets dead letter statistics
+    /// Gets statistics about dead letter handling
     /// </summary>
+    /// <returns>Dead letter statistics</returns>
     public DeadLetterStatistics GetStatistics()
     {
-        return _statistics.Clone();
-    }
-
-    private byte[] CreateDeadLetterMessage(ErrorContext context)
-    {
-        var deadLetterInfo = new DeadLetterMessage
+        var stats = new DeadLetterStatistics
         {
-            MessageId = context.MessageId ?? Guid.NewGuid().ToString(),
-            CorrelationId = context.CorrelationId,
-            OriginalTimestamp = context.OriginalTimestamp ?? DateTime.UtcNow,
-            ErrorTimestamp = context.ErrorTimestamp,
-            AttemptCount = context.AttemptCount,
-            OriginalExchange = context.ExchangeName,
-            OriginalRoutingKey = context.RoutingKey,
-            OriginalQueue = context.QueueName,
-            ConsumerTag = context.ConsumerTag,
-            Operation = context.Operation,
-            Exception = new DeadLetterException
-            {
-                Type = context.Exception.GetType().FullName ?? context.Exception.GetType().Name,
-                Message = TruncateErrorMessage(context.Exception.Message),
-                StackTrace = _settings.IncludeErrorDetails ? context.Exception.StackTrace : null,
-                Source = context.Exception.Source
-            },
-            Headers = context.Headers?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, object>(),
-            Properties = context.Properties?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, object>(),
-            OriginalMessage = context.MessageBody?.ToArray() != null ? Convert.ToBase64String(context.MessageBody.Value.ToArray()) : string.Empty
+            TotalDeadLetters = _statistics.TotalDeadLetters,
+            FailedDeadLetters = _statistics.FailedDeadLetters,
+            LastDeadLetterTime = _statistics.LastDeadLetterTime,
+            ActiveDeadLetters = _deadLetterMessages.Count
         };
 
-        var options = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false
-        };
-
-        return JsonSerializer.SerializeToUtf8Bytes(deadLetterInfo, options);
+        return stats;
     }
 
-    private IBasicProperties CreateDeadLetterProperties(ErrorContext context, IModel channel)
+    /// <summary>
+    /// Requeues a message from the dead letter queue back to the original queue
+    /// </summary>
+    /// <param name="messageId">The message ID to requeue</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the requeue operation</returns>
+    public async Task<bool> RequeueFromDeadLetterAsync(string messageId, CancellationToken cancellationToken = default)
     {
-        var properties = channel.CreateBasicProperties();
-        
-        properties.MessageId = context.MessageId ?? Guid.NewGuid().ToString();
-        properties.CorrelationId = context.CorrelationId;
-        properties.Timestamp = new AmqpTimestamp(((DateTimeOffset)context.ErrorTimestamp).ToUnixTimeSeconds());
-                    properties.ContentType = Constants.ContentTypes.Json;
-        properties.DeliveryMode = 2; // Persistent
-        
-        // Add headers with error information
-        properties.Headers = new Dictionary<string, object>();
-        
-        if (_settings.IncludeOriginalHeaders && context.Headers != null)
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(DeadLetterHandler));
+
+        if (string.IsNullOrEmpty(messageId))
+            throw new ArgumentException("Message ID cannot be null or empty", nameof(messageId));
+
+        if (!_deadLetterMessages.TryGetValue(messageId, out var deadLetterMessage))
         {
-            foreach (var header in context.Headers)
+            _logger.LogWarning("Dead letter message not found: {MessageId}", messageId);
+            return false;
+        }
+
+        try
+        {
+            _logger.LogInformation("Requeuing dead letter message: {MessageId}", messageId);
+
+            using var channel = await _connectionManager.CreateChannelAsync(cancellationToken);
+            
+            // Recreate the original message properties
+            var properties = new BasicProperties
             {
-                properties.Headers[$"original-{header.Key}"] = header.Value;
+                MessageId = deadLetterMessage.OriginalMessageId,
+                CorrelationId = deadLetterMessage.CorrelationId,
+                ContentType = deadLetterMessage.ContentType,
+                DeliveryMode = (DeliveryModes)deadLetterMessage.DeliveryMode,
+                Priority = deadLetterMessage.Priority,
+                Headers = new Dictionary<string, object>()
+            };
+
+            // Add requeue tracking header
+            properties.Headers["x-requeued-from-dlq"] = true;
+            properties.Headers["x-requeue-count"] = (deadLetterMessage.RequeueCount + 1).ToString();
+            properties.Headers["x-requeue-time"] = DateTimeOffset.UtcNow.ToString("O");
+
+            // Publish back to original exchange
+            await channel.BasicPublishAsync(
+                exchange: deadLetterMessage.OriginalExchange,
+                routingKey: deadLetterMessage.OriginalRoutingKey,
+                mandatory: false,
+                basicProperties: properties,
+                body: deadLetterMessage.MessageBody);
+
+            // Update tracking
+            deadLetterMessage.RequeueCount++;
+            deadLetterMessage.LastRequeueTime = DateTimeOffset.UtcNow;
+            
+            _logger.LogInformation("Dead letter message requeued successfully: {MessageId}", messageId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to requeue dead letter message: {MessageId}", messageId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Purges all messages from the dead letter queue
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the purge operation</returns>
+    public async Task<bool> PurgeDeadLetterQueueAsync(CancellationToken cancellationToken = default)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(DeadLetterHandler));
+
+        try
+        {
+            _logger.LogInformation("Purging dead letter queue: {Queue}", _settings.DeadLetterQueue);
+
+            using var channel = await _connectionManager.CreateChannelAsync(cancellationToken);
+            
+            var purgeResult = await channel.QueuePurgeAsync(_settings.DeadLetterQueue, cancellationToken);
+            
+            // Clear in-memory tracking
+            _deadLetterMessages.Clear();
+            
+            _logger.LogInformation("Dead letter queue purged successfully. {MessageCount} messages removed", purgeResult);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to purge dead letter queue");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the configuration settings for dead letter handling
+    /// </summary>
+    /// <returns>Dead letter configuration settings</returns>
+    public DeadLetterSettings GetSettings()
+    {
+        return _settings;
+    }
+
+    private DeadLetterMessage CreateDeadLetterMessage(ErrorContext context)
+    {
+        var messageId = context.MessageProperties?.MessageId ?? Guid.NewGuid().ToString();
+        
+        return new DeadLetterMessage
+        {
+            MessageId = Guid.NewGuid().ToString(),
+            OriginalMessageId = messageId,
+            OriginalExchange = context.ExchangeName ?? string.Empty,
+            OriginalRoutingKey = context.RoutingKey ?? string.Empty,
+            OriginalQueue = context.QueueName ?? string.Empty,
+            MessageBody = context.MessageBody,
+            ContentType = context.MessageProperties?.ContentType ?? "application/json",
+            DeliveryMode = (byte)(context.MessageProperties?.DeliveryMode ?? DeliveryModes.Transient),
+            Priority = context.MessageProperties?.Priority ?? 0,
+            CorrelationId = context.MessageProperties?.CorrelationId ?? string.Empty,
+            ErrorMessage = context.Exception.Message,
+            ErrorType = context.Exception.GetType().Name,
+            ErrorStackTrace = context.Exception.StackTrace ?? string.Empty,
+            RetryCount = context.RetryCount,
+            FirstErrorTime = DateTimeOffset.UtcNow,
+            LastErrorTime = DateTimeOffset.UtcNow,
+            RequeueCount = 0,
+            Headers = ExtractHeaders(context.MessageProperties),
+            AdditionalData = context.AdditionalData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+        };
+    }
+
+    private async Task<bool> SendToDeadLetterQueueAsync(ErrorContext context, DeadLetterMessage deadLetterMessage, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var channel = await _connectionManager.CreateChannelAsync(cancellationToken);
+            
+            // Create properties for dead letter message
+            var properties = CreateDeadLetterProperties(context, channel);
+            
+            // Serialize the dead letter message
+            var messageBody = JsonSerializer.SerializeToUtf8Bytes(deadLetterMessage);
+            
+            // Publish to dead letter exchange
+            await channel.BasicPublishAsync(
+                exchange: _settings.DeadLetterExchange,
+                routingKey: _settings.DeadLetterRoutingKey,
+                body: messageBody,
+                mandatory: false,
+                cancellationToken: cancellationToken);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send message to dead letter queue");
+            return false;
+        }
+    }
+
+    private IBasicProperties CreateDeadLetterProperties(ErrorContext context, IChannel channel)
+    {
+        var properties = new BasicProperties
+        {
+            MessageId = Guid.NewGuid().ToString(),
+            Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+            ContentType = "application/json",
+            DeliveryMode = DeliveryModes.Persistent,
+            Headers = new Dictionary<string, object>
+            {
+                ["x-dead-letter-time"] = DateTimeOffset.UtcNow.ToString("O"),
+                ["x-original-exchange"] = context.ExchangeName ?? string.Empty,
+                ["x-original-routing-key"] = context.RoutingKey ?? string.Empty,
+                ["x-original-queue"] = context.QueueName ?? string.Empty,
+                ["x-error-type"] = context.Exception.GetType().Name,
+                ["x-error-message"] = context.Exception.Message,
+                ["x-retry-count"] = context.RetryCount.ToString(),
+                ["x-max-retries"] = context.MaxRetries.ToString()
             }
-        }
-        
-        // Add dead letter specific headers
-                    properties.Headers[Constants.Headers.DeathReason] = TruncateErrorMessage(context.Exception.Message);
-            properties.Headers[Constants.Headers.RetryCount] = context.AttemptCount;
-            properties.Headers[Constants.Headers.OriginalExchange] = context.ExchangeName ?? "";
-            properties.Headers[Constants.Headers.OriginalRoutingKey] = context.RoutingKey ?? "";
-        properties.Headers["x-death-timestamp"] = context.ErrorTimestamp.ToString("O");
-        properties.Headers["x-exception-type"] = context.Exception.GetType().Name;
-        
-        if (!string.IsNullOrEmpty(context.QueueName))
+        };
+
+        // Add original message properties if available
+        if (context.MessageProperties != null)
         {
-            properties.Headers["x-original-queue"] = context.QueueName;
-        }
-        
-        if (!string.IsNullOrEmpty(context.Operation))
-        {
-            properties.Headers["x-failed-operation"] = context.Operation;
+            properties.Headers["x-original-message-id"] = context.MessageProperties.MessageId ?? string.Empty;
+            properties.Headers["x-original-correlation-id"] = context.MessageProperties.CorrelationId ?? string.Empty;
+            properties.Headers["x-original-content-type"] = context.MessageProperties.ContentType ?? string.Empty;
+            
+            if (context.MessageProperties.Headers != null)
+            {
+                foreach (var header in context.MessageProperties.Headers)
+                {
+                    properties.Headers[$"x-original-header-{header.Key}"] = header.Value;
+                }
+            }
         }
 
         return properties;
     }
 
-    private string TruncateErrorMessage(string message)
+    private Dictionary<string, object> ExtractHeaders(IReadOnlyBasicProperties? properties)
     {
-        if (string.IsNullOrEmpty(message))
-            return "No error message";
-            
-        return message.Length > _settings.MaxErrorMessageLength 
-            ? message.Substring(0, _settings.MaxErrorMessageLength) + "..." 
-            : message;
+        var headers = new Dictionary<string, object>();
+        
+        if (properties?.Headers != null)
+        {
+            foreach (var header in properties.Headers)
+            {
+                headers[header.Key] = header.Value;
+            }
+        }
+        
+        return headers;
     }
 
-    private TimeSpan CalculateAverageTime(TimeSpan currentDuration)
+    /// <summary>
+    /// Disposes the dead letter handler and all its resources
+    /// </summary>
+    public void Dispose()
     {
-        var totalProcessed = _statistics.SuccessfulMessages + _statistics.FailedMessages;
-        if (totalProcessed <= 1)
-            return currentDuration;
+        if (_disposed)
+            return;
 
-        var currentAverage = _statistics.AverageProcessingTime;
-        var newAverage = ((currentAverage.TotalMilliseconds * (totalProcessed - 1)) + currentDuration.TotalMilliseconds) / totalProcessed;
+        _disposed = true;
         
-        return TimeSpan.FromMilliseconds(newAverage);
+        try
+        {
+            _operationLock?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during disposal");
+        }
     }
 }
