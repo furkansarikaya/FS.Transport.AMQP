@@ -38,16 +38,41 @@
         <!-- License Configuration -->
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        
+        <!-- Package Metadata -->
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
 
         <!-- Symbol Configuration -->
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        
+        <!-- Assembly Information -->
+        <AssemblyName>FS.RabbitMQ</AssemblyName>
+        <AssemblyDescription>Production-ready RabbitMQ client library with advanced error handling, retry policies, automatic reconnection, and exchange/queue management for .NET 9</AssemblyDescription>
+        <Copyright>Copyright (c) 2025 Furkan Sarıkaya</Copyright>
 
         <!-- Warning Configuration -->
         <NoWarn>1701;1702</NoWarn>
         <WarningsAsErrors />
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     </PropertyGroup>
+
+    <!-- Include README in package -->
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <!-- Package Icon Configuration -->
+    <ItemGroup>
+        <None Include="icon.png" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- Analyzer and Code Quality -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
+    </ItemGroup>
 
     <ItemGroup>
         <!-- Core Dependencies -->
