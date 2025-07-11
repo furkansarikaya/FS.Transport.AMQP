@@ -260,17 +260,18 @@ public class ResetQueueStatisticsCommandHandler : IRequestHandler<ResetQueueStat
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<QueueOperationResult> HandleAsync(ResetQueueStatisticsCommand request, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<QueueOperationResult> HandleAsync(ResetQueueStatisticsCommand request, CancellationToken cancellationToken = default)
     {
         try
         {
             // QueueManager doesn't have ResetStatisticsAsync, so we'll just return success
-            return QueueOperationResult.CreateSuccess("*", "ResetStatistics");
+            return Task.FromResult(QueueOperationResult.CreateSuccess("*", "ResetStatistics"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to reset queue statistics: {Message}", ex.Message);
-            return QueueOperationResult.CreateFailure("*", "ResetStatistics", ex.Message, ex);
+            return Task.FromResult(QueueOperationResult.CreateFailure("*", "ResetStatistics", ex.Message, ex));
         }
     }
 } 

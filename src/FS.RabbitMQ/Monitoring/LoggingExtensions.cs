@@ -543,7 +543,7 @@ public static class LoggingExtensions
             }
         }
 
-        return logger.BeginScope(scopeData);
+        return logger.BeginScope(scopeData) ?? throw new InvalidOperationException();
     }
 }
 

@@ -53,18 +53,19 @@ public class GetExchangeStatisticsQueryHandler : IRequestHandler<GetExchangeStat
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ExchangeStatisticsResult> HandleAsync(GetExchangeStatisticsQuery request, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<ExchangeStatisticsResult> HandleAsync(GetExchangeStatisticsQuery request, CancellationToken cancellationToken = default)
     {
         try
         {
             var statistics = _exchangeManager.GetStatistics();
             var history = request.IncludeHistory ? new List<ExchangeStatisticsSnapshot>() : null;
-            return ExchangeStatisticsResult.CreateSuccess(statistics, history);
+            return Task.FromResult(ExchangeStatisticsResult.CreateSuccess(statistics, history));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get exchange statistics");
-            return ExchangeStatisticsResult.CreateFailure(ex.Message);
+            return Task.FromResult(ExchangeStatisticsResult.CreateFailure(ex.Message));
         }
     }
 }
@@ -181,7 +182,8 @@ public class GetExchangePerformanceQueryHandler : IRequestHandler<GetExchangePer
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ExchangePerformanceResult> HandleAsync(GetExchangePerformanceQuery request, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<ExchangePerformanceResult> HandleAsync(GetExchangePerformanceQuery request, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -194,12 +196,12 @@ public class GetExchangePerformanceQueryHandler : IRequestHandler<GetExchangePer
                 Timestamp = DateTimeOffset.UtcNow
             };
 
-            return ExchangePerformanceResult.CreateSuccess(performance);
+            return Task.FromResult(ExchangePerformanceResult.CreateSuccess(performance));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get performance data for exchange {ExchangeName}", request.Name);
-            return ExchangePerformanceResult.CreateFailure(ex.Message);
+            return Task.FromResult(ExchangePerformanceResult.CreateFailure(ex.Message));
         }
     }
 }

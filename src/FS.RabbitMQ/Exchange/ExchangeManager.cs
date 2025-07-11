@@ -152,7 +152,7 @@ public class ExchangeManager : IExchangeManager
 
             var success = await _retryPolicy.ExecuteAsync(async () =>
             {
-                using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                await using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
                 
                 try
                 {
@@ -161,7 +161,7 @@ public class ExchangeManager : IExchangeManager
                         type: type,
                         durable: durable,
                         autoDelete: autoDelete,
-                        arguments: arguments);
+                        arguments: (arguments?? new Dictionary<string, object>())!, cancellationToken: cancellationToken);
 
                     _connectionManager.ReturnChannel(channel);
                     return true;
@@ -331,11 +331,11 @@ public class ExchangeManager : IExchangeManager
 
             var success = await _retryPolicy.ExecuteAsync(async () =>
             {
-                using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                await using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
                 
                 try
                 {
-                    await channel.ExchangeBindAsync(destination, source, routingKey, arguments);
+                    await channel.ExchangeBindAsync(destination, source, routingKey, (arguments ?? new Dictionary<string, object>())!, cancellationToken: cancellationToken);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -420,11 +420,11 @@ public class ExchangeManager : IExchangeManager
 
             var success = await _retryPolicy.ExecuteAsync(async () =>
             {
-                using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                await using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
                 
                 try
                 {
-                    await channel.ExchangeUnbindAsync(destination, source, routingKey, arguments);
+                    await channel.ExchangeUnbindAsync(destination, source, routingKey, (arguments ?? new Dictionary<string, object>())!, cancellationToken: cancellationToken);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -491,11 +491,11 @@ public class ExchangeManager : IExchangeManager
             try
             {
                 // Try to declare passively - this will throw if exchange doesn't exist
-                await channel.ExchangeDeclarePassiveAsync(name);
+                await channel.ExchangeDeclarePassiveAsync(name, cancellationToken);
                 _connectionManager.ReturnChannel(channel);
                 return true;
             }
-            catch (OperationInterruptedException ex) when (ex.ShutdownReason.ReplyCode == 404)
+            catch (OperationInterruptedException ex) when (ex.ShutdownReason is { ReplyCode: 404 })
             {
                 // Exchange not found
                 _connectionManager.ReturnChannel(channel);
@@ -715,7 +715,8 @@ public class ExchangeManager : IExchangeManager
     /// <exception cref="ArgumentException">
     /// Thrown when exchangeName is null or empty
     /// </exception>
-    public async Task<IEnumerable<ExchangeBindingInfo>> GetBindingsAsync(string exchangeName, CancellationToken cancellationToken = default)
+    public Task<IEnumerable<ExchangeBindingInfo>> GetBindingsAsync(string exchangeName,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(exchangeName))
             throw new ArgumentException("Exchange name cannot be null or empty", nameof(exchangeName));
@@ -725,12 +726,12 @@ public class ExchangeManager : IExchangeManager
             // For now, return empty list as we don't track bindings in ExchangeDeclaration
             // In a production environment, you would use RabbitMQ Management API
             // to get actual bindings from the server
-            return new List<ExchangeBindingInfo>();
+            return Task.FromResult<IEnumerable<ExchangeBindingInfo>>(new List<ExchangeBindingInfo>());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting bindings for exchange {ExchangeName}: {ErrorMessage}", exchangeName, ex.Message);
-            return new List<ExchangeBindingInfo>();
+            return Task.FromResult<IEnumerable<ExchangeBindingInfo>>(new List<ExchangeBindingInfo>());
         }
     }
 

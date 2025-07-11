@@ -17,7 +17,7 @@ internal class PooledChannel(IChannel channel, DateTime created)
     /// <summary>
     /// Gets the unique identifier for this pooled channel
     /// </summary>
-    public string Id { get; }
+    public string Id { get; } = null!;
 
     /// <summary>
     /// Gets the time when this channel was created

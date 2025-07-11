@@ -1,12 +1,9 @@
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
-using FS.RabbitMQ.Configuration;
 using FS.RabbitMQ.Connection;
-using FS.RabbitMQ.Core.Extensions;
 using FS.RabbitMQ.ErrorHandling;
 
 namespace FS.RabbitMQ.Producer;
@@ -389,7 +386,7 @@ public class MessageProducer : IMessageProducer
         {
             ContentType = "application/json",
             DeliveryMode = context.DeliveryMode ?? DeliveryModes.Persistent,
-            Headers = context.Headers ?? new Dictionary<string, object>()
+            Headers = (context.Headers ?? new Dictionary<string, object>())!
         };
 
         var success = await PublishAsync(context.Exchange, context.RoutingKey, messageBytes, properties, context.Mandatory, cancellationToken);
@@ -416,7 +413,7 @@ public class MessageProducer : IMessageProducer
             Headers = new Dictionary<string, object>
             {
                 ["x-delay"] = (int)delay.TotalMilliseconds
-            }
+            }!
         };
 
         return await PublishAsync("amq.direct", "scheduled", messageBytes, properties, false, cancellationToken);

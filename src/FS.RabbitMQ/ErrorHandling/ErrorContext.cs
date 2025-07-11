@@ -1,6 +1,5 @@
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Collections.Concurrent;
 using System.Text;
 
 namespace FS.RabbitMQ.ErrorHandling;

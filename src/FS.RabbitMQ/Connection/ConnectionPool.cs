@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
-using FS.RabbitMQ.Configuration;
 using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.Connection;
@@ -44,29 +43,33 @@ public class ConnectionPool : IDisposable
     /// <param name="connection">The RabbitMQ connection</param>
     public async Task InitializeAsync(IConnection connection)
     {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(ConnectionPool));
-
-        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-        
-        // Pre-create some channels for the pool
-        var initialChannelCount = Math.Min(_settings.MaxChannels ?? 10, 5);
-        
-        for (int i = 0; i < initialChannelCount; i++)
+        if (!_disposed)
         {
-            try
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+
+            // Pre-create some channels for the pool
+            var initialChannelCount = Math.Min(_settings.MaxChannels ?? 10, 5);
+
+            for (var i = 0; i < initialChannelCount; i++)
             {
-                var pooledChannel = await CreatePooledChannelAsync();
-                _availableChannels.Enqueue(pooledChannel);
+                try
+                {
+                    var pooledChannel = await CreatePooledChannelAsync();
+                    _availableChannels.Enqueue(pooledChannel);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to pre-create channel {ChannelIndex} during pool initialization", i);
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to pre-create channel {ChannelIndex} during pool initialization", i);
-            }
+
+            _logger.LogInformation("ConnectionPool initialized with {ChannelCount} pre-created channels",
+                _availableChannels.Count);
         }
-        
-        _logger.LogInformation("ConnectionPool initialized with {ChannelCount} pre-created channels", 
-            _availableChannels.Count);
+        else
+        {
+            throw new ObjectDisposedException(nameof(ConnectionPool));
+        }
     }
 
     /// <summary>

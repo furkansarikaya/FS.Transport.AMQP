@@ -1,5 +1,4 @@
 using FS.Mediator.Features.RequestHandling.Core;
-using FS.RabbitMQ.Configuration;
 
 namespace FS.RabbitMQ.Connection;
 

@@ -438,7 +438,7 @@ public class HealthChecker : IHealthChecker
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous health check operation.</returns>
-    private async Task<HealthCheckResult> CheckConnectionHealthAsync(CancellationToken cancellationToken)
+    private Task<HealthCheckResult> CheckConnectionHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -453,20 +453,20 @@ public class HealthChecker : IHealthChecker
 
             if (isConnected && connectionHealthy)
             {
-                return HealthCheckResult.Healthy("Connection is healthy", data);
+                return Task.FromResult(HealthCheckResult.Healthy("Connection is healthy", data));
             }
             else if (isConnected && !connectionHealthy)
             {
-                return HealthCheckResult.Degraded("Connection is established but not responding properly", data);
+                return Task.FromResult(HealthCheckResult.Degraded("Connection is established but not responding properly", data));
             }
             else
             {
-                return HealthCheckResult.Unhealthy("Connection is not available", data: data);
+                return Task.FromResult(HealthCheckResult.Unhealthy("Connection is not available", data: data));
             }
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Connection health check failed", ex);
+            return Task.FromResult(HealthCheckResult.Unhealthy("Connection health check failed", ex));
         }
     }
 
@@ -475,7 +475,7 @@ public class HealthChecker : IHealthChecker
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous health check operation.</returns>
-    private async Task<HealthCheckResult> CheckQueuesHealthAsync(CancellationToken cancellationToken)
+    private static Task<HealthCheckResult> CheckQueuesHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -485,11 +485,11 @@ public class HealthChecker : IHealthChecker
                 ["queue_manager_available"] = true
             };
 
-            return HealthCheckResult.Healthy("Queue manager is healthy", data);
+            return Task.FromResult(HealthCheckResult.Healthy("Queue manager is healthy", data));
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Queue health check failed", ex);
+            return Task.FromResult(HealthCheckResult.Unhealthy("Queue health check failed", ex));
         }
     }
 
@@ -498,7 +498,7 @@ public class HealthChecker : IHealthChecker
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous health check operation.</returns>
-    private async Task<HealthCheckResult> CheckExchangesHealthAsync(CancellationToken cancellationToken)
+    private static Task<HealthCheckResult> CheckExchangesHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -508,11 +508,11 @@ public class HealthChecker : IHealthChecker
                 ["exchange_manager_available"] = true
             };
 
-            return HealthCheckResult.Healthy("Exchange manager is healthy", data);
+            return Task.FromResult(HealthCheckResult.Healthy("Exchange manager is healthy", data));
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Exchange health check failed", ex);
+            return Task.FromResult(HealthCheckResult.Unhealthy("Exchange health check failed", ex));
         }
     }
 
@@ -521,7 +521,7 @@ public class HealthChecker : IHealthChecker
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous health check operation.</returns>
-    private async Task<HealthCheckResult> CheckProducerHealthAsync(CancellationToken cancellationToken)
+    private static Task<HealthCheckResult> CheckProducerHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -531,11 +531,11 @@ public class HealthChecker : IHealthChecker
                 ["producer_available"] = true
             };
 
-            return HealthCheckResult.Healthy("Message producer is healthy", data);
+            return Task.FromResult(HealthCheckResult.Healthy("Message producer is healthy", data));
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Producer health check failed", ex);
+            return Task.FromResult(HealthCheckResult.Unhealthy("Producer health check failed", ex));
         }
     }
 
@@ -544,7 +544,7 @@ public class HealthChecker : IHealthChecker
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous health check operation.</returns>
-    private async Task<HealthCheckResult> CheckConsumerHealthAsync(CancellationToken cancellationToken)
+    private static Task<HealthCheckResult> CheckConsumerHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -554,11 +554,11 @@ public class HealthChecker : IHealthChecker
                 ["consumer_available"] = true
             };
 
-            return HealthCheckResult.Healthy("Message consumer is healthy", data);
+            return Task.FromResult(HealthCheckResult.Healthy("Message consumer is healthy", data));
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Consumer health check failed", ex);
+            return Task.FromResult(HealthCheckResult.Unhealthy("Consumer health check failed", ex));
         }
     }
 

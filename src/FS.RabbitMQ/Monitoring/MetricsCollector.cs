@@ -352,7 +352,7 @@ public class MetricsCollector : IMetricsCollector
     /// <summary>
     /// Collects connection-related metrics.
     /// </summary>
-    private async Task CollectConnectionMetrics()
+    private Task CollectConnectionMetrics()
     {
         try
         {
@@ -369,12 +369,14 @@ public class MetricsCollector : IMetricsCollector
         {
             _logger.LogWarning(ex, "Error collecting connection metrics");
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Collects performance-related metrics.
     /// </summary>
-    private async Task CollectPerformanceMetrics()
+    private Task CollectPerformanceMetrics()
     {
         try
         {
@@ -390,6 +392,8 @@ public class MetricsCollector : IMetricsCollector
         {
             _logger.LogWarning(ex, "Error collecting performance metrics");
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

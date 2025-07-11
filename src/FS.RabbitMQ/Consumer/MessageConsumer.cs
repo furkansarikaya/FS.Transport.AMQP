@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.Consumer;
 
@@ -321,48 +320,50 @@ public class MessageConsumer : IMessageConsumer, IDisposable
             
         if (string.IsNullOrWhiteSpace(queueName))
             throw new ArgumentException("Queue name cannot be empty", nameof(queueName));
-            
-        if (messageHandler == null)
-            throw new ArgumentNullException(nameof(messageHandler));
-            
+
+        ArgumentNullException.ThrowIfNull(messageHandler);
+
         try
         {
             var consumerTag = context.ConsumerTag ?? $"consumer-{Guid.NewGuid():N}";
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            
-            consumer.ReceivedAsync += async (sender, eventArgs) =>
+            if (_channel != null)
             {
-                if (_paused || cancellationToken.IsCancellationRequested)
-                    return;
+                var consumer = new AsyncEventingBasicConsumer(_channel);
+            
+                consumer.ReceivedAsync += async (sender, eventArgs) =>
+                {
+                    if (_paused || cancellationToken.IsCancellationRequested)
+                        return;
                 
-                await ProcessMessageAsync(eventArgs, messageHandler, context, cancellationToken);
-            };
+                    await ProcessMessageAsync(eventArgs, messageHandler, context, cancellationToken);
+                };
             
-            // Set QoS
-            await _channel.BasicQosAsync(0, context.Settings.PrefetchCount, context.Settings.GlobalPrefetch);
+                // Set QoS
+                await _channel.BasicQosAsync(0, context.Settings.PrefetchCount, context.Settings.GlobalPrefetch, cancellationToken);
             
-            // Start consuming
-            var actualConsumerTag = await _channel.BasicConsumeAsync(
-                queue: queueName,
-                autoAck: context.AutoAcknowledge,
-                consumerTag: consumerTag,
-                noLocal: false,
-                exclusive: context.Exclusive,
-                arguments: context.Arguments,
-                consumer: consumer);
+                // Start consuming
+                var actualConsumerTag = await _channel.BasicConsumeAsync(
+                    queue: queueName,
+                    autoAck: context.AutoAcknowledge,
+                    consumerTag: consumerTag,
+                    noLocal: false,
+                    exclusive: context.Exclusive,
+                    arguments: context.Arguments,
+                    consumer: consumer, cancellationToken: cancellationToken);
                 
-            var consumerInfo = new ConsumerInfo
-            {
-                ConsumerTag = actualConsumerTag,
-                QueueName = queueName,
-                Context = context,
-                StartTime = DateTimeOffset.UtcNow
-            };
+                var consumerInfo = new ConsumerInfo
+                {
+                    ConsumerTag = actualConsumerTag,
+                    QueueName = queueName,
+                    Context = context,
+                    StartTime = DateTimeOffset.UtcNow
+                };
             
-            _activeConsumers[actualConsumerTag] = consumerInfo;
+                _activeConsumers[actualConsumerTag] = consumerInfo;
             
-            _logger.LogInformation("Started consuming from queue {QueueName} with consumer tag {ConsumerTag}", 
-                queueName, actualConsumerTag);
+                _logger.LogInformation("Started consuming from queue {QueueName} with consumer tag {ConsumerTag}", 
+                    queueName, actualConsumerTag);
+            }
         }
         catch (Exception ex)
         {
@@ -550,15 +551,17 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public async Task RequeueAsync(ulong deliveryTag)
     {
         await RejectAsync(deliveryTag, true);
     }
 
-    public async Task PauseAsync()
+    /// <inheritdoc />
+    public Task PauseAsync()
     {
         if (_paused)
-            return;
+            return Task.CompletedTask;
             
         _paused = true;
         ChangeStatus(ConsumerStatus.Paused, "Consumer paused");
@@ -570,12 +573,14 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         });
         
         _logger.LogInformation("Consumer {Name} paused", _settings.Name);
+        return Task.CompletedTask;
     }
 
-    public async Task ResumeAsync()
+    /// <inheritdoc />
+    public Task ResumeAsync()
     {
         if (!_paused)
-            return;
+            return Task.CompletedTask;
             
         _paused = false;
         ChangeStatus(ConsumerStatus.Running, "Consumer resumed");
@@ -587,6 +592,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         });
         
         _logger.LogInformation("Consumer {Name} resumed", _settings.Name);
+        return Task.CompletedTask;
     }
 
     public async Task<uint> GetMessageCountAsync(string queueName)
@@ -701,7 +707,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
                     Exchange = eventArgs.Exchange,
                     RoutingKey = eventArgs.RoutingKey,
                     Properties = eventArgs.BasicProperties,
-                    Headers = eventArgs.BasicProperties?.Headers?.ToDictionary(h => h.Key, h => h.Value),
+                    Headers = eventArgs.BasicProperties?.Headers?.ToDictionary(h => h.Key, h => h.Value ?? string.Empty),
                     MessageType = typeof(T).Name,
                     Timestamp = DateTimeOffset.UtcNow
                 };
@@ -764,33 +770,36 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         
         try
         {
-            var errorContext = ErrorContext.FromDelivery(exception, eventArgs, _channel)
-                .WithQueue(context.QueueName);
-            
-            var result = await _errorHandler.HandleErrorAsync(errorContext);
-            var shouldRequeue = result.ShouldRequeue;
-            
-            if (shouldRequeue)
+            if (_channel != null)
             {
-                await RejectAsync(eventArgs.DeliveryTag, true);
+                var errorContext = ErrorContext.FromDelivery(exception, eventArgs, _channel)
+                    .WithQueue(context.QueueName);
+            
+                var result = await _errorHandler.HandleErrorAsync(errorContext);
+                var shouldRequeue = result.ShouldRequeue;
+            
+                if (shouldRequeue)
+                {
+                    await RejectAsync(eventArgs.DeliveryTag, true);
+                }
+                else
+                {
+                    await RejectAsync(eventArgs.DeliveryTag, false);
+                }
+            
+                OnMessageProcessingFailed(new MessageProcessingFailedEventArgs
+                {
+                    MessageId = messageId,
+                    QueueName = context.QueueName,
+                    Exchange = eventArgs.Exchange,
+                    RoutingKey = eventArgs.RoutingKey,
+                    Error = exception,
+                    DeliveryTag = eventArgs.DeliveryTag,
+                    Requeued = shouldRequeue,
+                    ConsumerTag = eventArgs.ConsumerTag,
+                    Timestamp = DateTimeOffset.UtcNow
+                });
             }
-            else
-            {
-                await RejectAsync(eventArgs.DeliveryTag, false);
-            }
-            
-            OnMessageProcessingFailed(new MessageProcessingFailedEventArgs
-            {
-                MessageId = messageId,
-                QueueName = context.QueueName,
-                Exchange = eventArgs.Exchange,
-                RoutingKey = eventArgs.RoutingKey,
-                Error = exception,
-                DeliveryTag = eventArgs.DeliveryTag,
-                Requeued = shouldRequeue,
-                ConsumerTag = eventArgs.ConsumerTag,
-                Timestamp = DateTimeOffset.UtcNow
-            });
         }
         catch (Exception handlingEx)
         {

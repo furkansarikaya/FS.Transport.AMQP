@@ -373,11 +373,9 @@ public class SagaOrchestrator : ISagaOrchestrator
     /// <param name="query">Get active sagas query</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task with get active sagas result</returns>
-    public async Task<GetActiveSagasResult> GetActiveSagasAsync(GetActiveSagasQuery query, CancellationToken cancellationToken = default)
+    public Task<GetActiveSagasResult> GetActiveSagasAsync(GetActiveSagasQuery query, CancellationToken cancellationToken = default)
     {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(SagaOrchestrator));
-        
+        if (_disposed) throw new ObjectDisposedException(nameof(SagaOrchestrator));
         try
         {
             var sagas = _activeSagas.Values
@@ -386,19 +384,21 @@ public class SagaOrchestrator : ISagaOrchestrator
                 .Where(s => query.State == null || s.State == query.State)
                 .Select(s => s.StateContext)
                 .ToList();
-            
+
             var totalCount = sagas.Count;
             var pagedSagas = sagas
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
                 .ToList();
-            
-            return GetActiveSagasResult.CreateSuccess(pagedSagas, totalCount, query.Page, query.PageSize);
+
+            return Task.FromResult(GetActiveSagasResult.CreateSuccess(pagedSagas, totalCount, query.Page, query.PageSize));
         }
         catch (Exception ex)
         {
-            return GetActiveSagasResult.CreateFailure(ex.Message, ex);
+            return Task.FromResult(GetActiveSagasResult.CreateFailure(ex.Message, ex));
         }
+
+        throw new ObjectDisposedException(nameof(SagaOrchestrator));
     }
     
     /// <summary>
@@ -583,10 +583,10 @@ public class SagaOrchestrator : ISagaOrchestrator
     /// <param name="sagaId">Saga identifier</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Saga instance or null if not found</returns>
-    public async Task<ISaga?> GetSagaInstanceAsync(string sagaId, CancellationToken cancellationToken = default)
+    public Task<ISaga?> GetSagaInstanceAsync(string sagaId, CancellationToken cancellationToken = default)
     {
         _activeSagas.TryGetValue(sagaId, out var saga);
-        return saga;
+        return Task.FromResult(saga);
     }
     
     /// <summary>
@@ -657,15 +657,15 @@ public class SagaOrchestrator : ISagaOrchestrator
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the start operation</returns>
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(SagaOrchestrator));
-        
+        if (_disposed) throw new ObjectDisposedException(nameof(SagaOrchestrator));
         if (_running)
-            return;
-        
+            return Task.CompletedTask;
+
         _running = true;
+        return Task.CompletedTask;
+
     }
     
     /// <summary>

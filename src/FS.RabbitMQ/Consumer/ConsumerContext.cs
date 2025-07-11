@@ -32,7 +32,7 @@ public class ConsumerContext
     /// <summary>
     /// Custom consumer arguments
     /// </summary>
-    public IDictionary<string, object> Arguments { get; set; } = new Dictionary<string, object>();
+    public IDictionary<string, object?> Arguments { get; set; } = new Dictionary<string, object?>();
     
     /// <summary>
     /// Message processing context
@@ -316,7 +316,7 @@ public class ConsumerContext
             ExchangeName = ExchangeName,
             RoutingKey = RoutingKey,
             Settings = Settings.Clone(),
-            Arguments = new Dictionary<string, object>(Arguments),
+            Arguments = new Dictionary<string, object?>(Arguments),
             ProcessingContext = ProcessingContext?.Clone(),
             ConsumerTag = ConsumerTag,
             Exclusive = Exclusive,

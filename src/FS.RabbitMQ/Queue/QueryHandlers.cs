@@ -53,18 +53,19 @@ public class GetQueueStatisticsQueryHandler : IRequestHandler<GetQueueStatistics
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<QueueStatisticsResult> HandleAsync(GetQueueStatisticsQuery request, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<QueueStatisticsResult> HandleAsync(GetQueueStatisticsQuery request, CancellationToken cancellationToken = default)
     {
         try
         {
             var statistics = _queueManager.GetStatistics();
             var history = request.IncludeHistory ? new List<QueueStatisticsSnapshot>() : null;
-            return QueueStatisticsResult.CreateSuccess(statistics, history);
+            return Task.FromResult(QueueStatisticsResult.CreateSuccess(statistics, history));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get queue statistics");
-            return QueueStatisticsResult.CreateFailure(ex.Message);
+            return Task.FromResult(QueueStatisticsResult.CreateFailure(ex.Message));
         }
     }
 }
@@ -241,7 +242,8 @@ public class GetQueuePerformanceQueryHandler : IRequestHandler<GetQueuePerforman
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<QueuePerformanceResult> HandleAsync(GetQueuePerformanceQuery request, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<QueuePerformanceResult> HandleAsync(GetQueuePerformanceQuery request, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -254,12 +256,12 @@ public class GetQueuePerformanceQueryHandler : IRequestHandler<GetQueuePerforman
                 Timestamp = DateTimeOffset.UtcNow
             };
 
-            return QueuePerformanceResult.CreateSuccess(performance);
+            return Task.FromResult(QueuePerformanceResult.CreateSuccess(performance));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get performance data for queue {QueueName}", request.Name);
-            return QueuePerformanceResult.CreateFailure(ex.Message);
+            return Task.FromResult(QueuePerformanceResult.CreateFailure(ex.Message));
         }
     }
 }

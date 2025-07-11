@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -6,7 +5,6 @@ using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using FS.RabbitMQ.Configuration;
 using FS.RabbitMQ.Core.Exceptions;
-using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.Connection;
 
@@ -26,7 +24,6 @@ public class ConnectionManager : IConnectionManager
     private volatile ConnectionState _state = ConnectionState.NotInitialized;
     private volatile bool _disposed;
     private IConnection? _primaryConnection;
-    private DateTime _lastConnectionAttempt;
     private int _consecutiveFailures;
     private readonly ConnectionStatistics _statistics;
 
@@ -118,7 +115,6 @@ public class ConnectionManager : IConnectionManager
                 _settings.HostName, _settings.Port);
 
             _state = ConnectionState.Connecting;
-            _lastConnectionAttempt = DateTime.UtcNow;
             _statistics.ConnectionAttempts++;
 
             var factory = CreateConnectionFactory();
@@ -434,7 +430,7 @@ public class ConnectionManager : IConnectionManager
             factory.Ssl = new SslOption
             {
                 Enabled = true,
-                ServerName = _settings.Ssl.ServerName,
+                ServerName = _settings.Ssl.ServerName ?? string.Empty,
                 Version = _settings.Ssl.Version,
                 AcceptablePolicyErrors = _settings.Ssl.AcceptablePolicyErrors
             };

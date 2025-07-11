@@ -224,17 +224,18 @@ public class ResetExchangeStatisticsCommandHandler : IRequestHandler<ResetExchan
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ExchangeOperationResult> HandleAsync(ResetExchangeStatisticsCommand request, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task<ExchangeOperationResult> HandleAsync(ResetExchangeStatisticsCommand request, CancellationToken cancellationToken = default)
     {
         try
         {
             // ExchangeManager doesn't have ResetStatisticsAsync, so we'll just return success
-            return ExchangeOperationResult.CreateSuccess("*", "ResetStatistics");
+            return Task.FromResult(ExchangeOperationResult.CreateSuccess("*", "ResetStatistics"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to reset exchange statistics: {Message}", ex.Message);
-            return ExchangeOperationResult.CreateFailure("*", "ResetStatistics", ex.Message, ex);
+            return Task.FromResult(ExchangeOperationResult.CreateFailure("*", "ResetStatistics", ex.Message, ex));
         }
     }
 } 

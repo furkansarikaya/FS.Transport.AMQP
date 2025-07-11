@@ -626,7 +626,7 @@ public class FluentConsumerApi<T> : IFluentConsumerApi<T> where T : class
     /// </exception>
     public IFluentConsumerApi<T> WithArguments(IDictionary<string, object> arguments)
     {
-        _context.Arguments = arguments ?? throw new ArgumentNullException(nameof(arguments));
+        _context.Arguments = (arguments ?? throw new ArgumentNullException(nameof(arguments)))!;
         _context.Settings.Arguments = new Dictionary<string, object>(arguments); // Convert to Dictionary
         return this;
     }

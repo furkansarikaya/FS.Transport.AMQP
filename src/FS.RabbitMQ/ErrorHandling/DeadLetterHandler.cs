@@ -1,10 +1,8 @@
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
-using System.Text;
 using System.Text.Json;
 using System.Collections.Concurrent;
 using FS.RabbitMQ.Connection;
-using FS.RabbitMQ.Core.Extensions;
 
 namespace FS.RabbitMQ.ErrorHandling;
 
@@ -124,7 +122,7 @@ public class DeadLetterHandler : IDeadLetterHandler
                 cancellationToken: cancellationToken);
 
             // Declare dead letter queue
-            var queueArguments = new Dictionary<string, object>();
+            var queueArguments = new Dictionary<string, object?>();
             if (_settings.MessageTtl.HasValue)
             {
                 queueArguments["x-message-ttl"] = (int)_settings.MessageTtl.Value.TotalMilliseconds;
@@ -207,7 +205,7 @@ public class DeadLetterHandler : IDeadLetterHandler
                 ContentType = deadLetterMessage.ContentType,
                 DeliveryMode = (DeliveryModes)deadLetterMessage.DeliveryMode,
                 Priority = deadLetterMessage.Priority,
-                Headers = new Dictionary<string, object>()
+                Headers = new Dictionary<string, object>()!
             };
 
             // Add requeue tracking header
@@ -301,7 +299,7 @@ public class DeadLetterHandler : IDeadLetterHandler
             LastErrorTime = DateTimeOffset.UtcNow,
             RequeueCount = 0,
             Headers = ExtractHeaders(context.MessageProperties),
-            AdditionalData = context.AdditionalData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+            AdditionalData = context.AdditionalData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)!
         };
     }
 
@@ -342,7 +340,7 @@ public class DeadLetterHandler : IDeadLetterHandler
             Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
             ContentType = "application/json",
             DeliveryMode = DeliveryModes.Persistent,
-            Headers = new Dictionary<string, object>
+            Headers = new Dictionary<string, object?>
             {
                 ["x-dead-letter-time"] = DateTimeOffset.UtcNow.ToString("O"),
                 ["x-original-exchange"] = context.ExchangeName ?? string.Empty,
@@ -382,7 +380,7 @@ public class DeadLetterHandler : IDeadLetterHandler
         {
             foreach (var header in properties.Headers)
             {
-                headers[header.Key] = header.Value;
+                headers[header.Key] = header.Value ?? string.Empty;
             }
         }
         

@@ -111,7 +111,7 @@ public class QueueManager : IQueueManager
 
             var result = await _retryPolicy.ExecuteAsync(async () =>
             {
-                using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                await using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
                 
                 try
                 {
@@ -120,7 +120,7 @@ public class QueueManager : IQueueManager
                         durable: durable,
                         exclusive: exclusive,
                         autoDelete: autoDelete,
-                        arguments: arguments);
+                        arguments: (arguments ?? new Dictionary<string, object>())!, cancellationToken: cancellationToken);
 
                     _connectionManager.ReturnChannel(channel);
                     
@@ -262,11 +262,11 @@ public class QueueManager : IQueueManager
 
             var success = await _retryPolicy.ExecuteAsync(async () =>
             {
-                using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                await using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
                 
                 try
                 {
-                    await channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments);
+                    await channel.QueueBindAsync(queueName, exchangeName, routingKey, (arguments ?? new Dictionary<string, object>())!, cancellationToken: cancellationToken);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -342,11 +342,11 @@ public class QueueManager : IQueueManager
 
             var success = await _retryPolicy.ExecuteAsync(async () =>
             {
-                using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                await using var channel = await _connectionManager.GetChannelAsync(cancellationToken);
                 
                 try
                 {
-                    await channel.QueueUnbindAsync(queueName, exchangeName, routingKey, arguments);
+                    await channel.QueueUnbindAsync(queueName, exchangeName, routingKey, (arguments ?? new Dictionary<string, object>())!, cancellationToken: cancellationToken);
                     _connectionManager.ReturnChannel(channel);
                     return true;
                 }
@@ -408,7 +408,7 @@ public class QueueManager : IQueueManager
                 _connectionManager.ReturnChannel(channel);
                 return true;
             }
-            catch (OperationInterruptedException ex) when (ex.ShutdownReason.ReplyCode == 404)
+            catch (OperationInterruptedException ex) when (ex.ShutdownReason is { ReplyCode: 404 })
             {
                 // Queue not found
                 _connectionManager.ReturnChannel(channel);
@@ -462,7 +462,7 @@ public class QueueManager : IQueueManager
 
                 return info;
             }
-            catch (OperationInterruptedException ex) when (ex.ShutdownReason.ReplyCode == 404)
+            catch (OperationInterruptedException ex) when (ex.ShutdownReason is { ReplyCode: 404 })
             {
                 // Queue not found
                 _connectionManager.ReturnChannel(channel);
@@ -680,7 +680,7 @@ public class QueueManager : IQueueManager
     /// <summary>
     /// Gets all bindings for a specific queue
     /// </summary>
-    public async Task<IEnumerable<QueueBindingInfo>> GetBindingsAsync(string queueName, CancellationToken cancellationToken = default)
+    public Task<IEnumerable<QueueBindingInfo>> GetBindingsAsync(string queueName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(queueName))
             throw new ArgumentException("Queue name cannot be null or empty", nameof(queueName));
@@ -690,24 +690,24 @@ public class QueueManager : IQueueManager
             // Check if we have the queue in our declared queues tracking
             if (_declaredQueues.TryGetValue(queueName, out var declaration))
             {
-                return declaration.Bindings.Select(b => new QueueBindingInfo
+                return Task.FromResult<IEnumerable<QueueBindingInfo>>(declaration.Bindings.Select(b => new QueueBindingInfo
                 {
                     QueueName = queueName,
                     ExchangeName = b.Exchange,
                     RoutingKey = b.RoutingKey,
-                    Arguments = b.Arguments?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
-                }).ToList();
+                    Arguments = b.Arguments?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, object>()
+                }).ToList());
             }
 
             // If not tracked locally, return empty list
             // Note: In a production environment, you might want to use RabbitMQ Management API
             // to get actual bindings from the server
-            return new List<QueueBindingInfo>();
+            return Task.FromResult<IEnumerable<QueueBindingInfo>>(new List<QueueBindingInfo>());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting bindings for queue {QueueName}: {ErrorMessage}", queueName, ex.Message);
-            return new List<QueueBindingInfo>();
+            return Task.FromResult<IEnumerable<QueueBindingInfo>>(new List<QueueBindingInfo>());
         }
     }
 

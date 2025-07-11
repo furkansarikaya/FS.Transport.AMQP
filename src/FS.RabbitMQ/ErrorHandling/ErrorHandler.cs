@@ -137,7 +137,7 @@ public class ErrorHandler : IErrorHandler
         return _statistics.Clone();
     }
 
-    private async Task<ErrorHandlingResult> HandleIgnoreAsync(ErrorContext context, CancellationToken cancellationToken)
+    private Task<ErrorHandlingResult> HandleIgnoreAsync(ErrorContext context, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Ignoring error and acknowledging message: {ErrorContext}", context.ToString());
         
@@ -147,7 +147,7 @@ public class ErrorHandler : IErrorHandler
             LogError(context);
         }
 
-        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledged, "Error ignored and message acknowledged");
+        return Task.FromResult(ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledged, "Error ignored and message acknowledged"));
     }
 
     private async Task<ErrorHandlingResult> HandleRetryAsync(ErrorContext context, CancellationToken cancellationToken)
@@ -196,12 +196,12 @@ public class ErrorHandler : IErrorHandler
         }
     }
 
-    private async Task<ErrorHandlingResult> HandleRequeueAsync(ErrorContext context, CancellationToken cancellationToken)
+    private Task<ErrorHandlingResult> HandleRequeueAsync(ErrorContext context, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Requeuing message for later processing: {ErrorContext}", context.ToString());
         
         // For requeue, we don't acknowledge the message and let it be redelivered
-        return ErrorHandlingResult.Requeue("Message requeued for later processing");
+        return Task.FromResult(ErrorHandlingResult.Requeue("Message requeued for later processing"));
     }
 
     private async Task<ErrorHandlingResult> HandleCustomAsync(ErrorContext context, CancellationToken cancellationToken)

@@ -1,6 +1,3 @@
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.ErrorHandling;
-
 namespace FS.RabbitMQ.Producer;
 
 /// <summary>

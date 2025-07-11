@@ -1,7 +1,5 @@
 using System.Text;
-using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 
 namespace FS.RabbitMQ.Core.Extensions;
 
