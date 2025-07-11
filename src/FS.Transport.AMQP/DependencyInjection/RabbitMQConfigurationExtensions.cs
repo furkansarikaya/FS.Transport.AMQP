@@ -315,7 +315,7 @@ public static class RabbitMQConfigurationExtensions
     /// services.ValidateRabbitMQConfiguration(config =>
     /// {
     ///     var errors = new List&lt;string&gt;();
-    ///     if (config.Connection.HostName == "localhost" && Environment.IsProduction)
+    ///     if (config.Connection.HostName == "localhost" &amp;&amp; Environment.IsProduction)
     ///         errors.Add("Cannot use localhost in production");
     ///     return errors;
     /// });

@@ -16,6 +16,15 @@ namespace FS.Transport.AMQP.Core;
 /// <summary>
 /// Main RabbitMQ client implementation providing centralized access to all RabbitMQ operations
 /// </summary>
+/// <remarks>
+/// This class serves as the primary entry point for all RabbitMQ operations, providing:
+/// - Centralized connection management
+/// - Unified access to all RabbitMQ features
+/// - Automatic initialization and shutdown
+/// - Health monitoring and status tracking
+/// - Event-driven architecture support
+/// - Comprehensive error handling and recovery
+/// </remarks>
 public class RabbitMQClient : IRabbitMQClient
 {
     private readonly ILogger<RabbitMQClient> _logger;
@@ -24,15 +33,76 @@ public class RabbitMQClient : IRabbitMQClient
     private bool _disposed;
     private ClientStatus _status = ClientStatus.NotInitialized;
 
+    /// <summary>
+    /// Gets the connection manager for RabbitMQ connectivity
+    /// </summary>
+    /// <value>
+    /// The connection manager instance responsible for managing RabbitMQ connections
+    /// </value>
     public IConnectionManager ConnectionManager { get; }
+    
+    /// <summary>
+    /// Gets the exchange manager for RabbitMQ exchange operations
+    /// </summary>
+    /// <value>
+    /// The exchange manager instance for creating, deleting, and managing exchanges
+    /// </value>
     public IExchangeManager ExchangeManager { get; }
+    
+    /// <summary>
+    /// Gets the queue manager for RabbitMQ queue operations
+    /// </summary>
+    /// <value>
+    /// The queue manager instance for creating, deleting, and managing queues
+    /// </value>
     public IQueueManager QueueManager { get; }
+    
+    /// <summary>
+    /// Gets the message producer for publishing messages
+    /// </summary>
+    /// <value>
+    /// The message producer instance for sending messages to RabbitMQ
+    /// </value>
     public IMessageProducer Producer { get; }
+    
+    /// <summary>
+    /// Gets the message consumer for consuming messages
+    /// </summary>
+    /// <value>
+    /// The message consumer instance for receiving messages from RabbitMQ
+    /// </value>
     public IMessageConsumer Consumer { get; }
+    
+    /// <summary>
+    /// Gets the event bus for event-driven architecture
+    /// </summary>
+    /// <value>
+    /// The event bus instance for publishing and subscribing to events
+    /// </value>
     public IEventBus EventBus { get; }
+    
+    /// <summary>
+    /// Gets the event store for event sourcing
+    /// </summary>
+    /// <value>
+    /// The event store instance for storing and retrieving events
+    /// </value>
     public IEventStore EventStore { get; }
+    
+    /// <summary>
+    /// Gets the health checker for monitoring RabbitMQ health
+    /// </summary>
+    /// <value>
+    /// The health checker instance for monitoring connection and service health
+    /// </value>
     public IHealthChecker HealthChecker { get; }
     
+    /// <summary>
+    /// Gets the current status of the RabbitMQ client
+    /// </summary>
+    /// <value>
+    /// The current client status (NotInitialized, Initializing, Ready, Disconnected, Reconnecting, ShuttingDown, Shutdown, Failed)
+    /// </value>
     public ClientStatus Status 
     { 
         get => _status; 
@@ -47,8 +117,28 @@ public class RabbitMQClient : IRabbitMQClient
         } 
     }
 
+    /// <summary>
+    /// Occurs when the client status changes
+    /// </summary>
     public event EventHandler<ClientStatusChangedEventArgs>? StatusChanged;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RabbitMQClient"/> class
+    /// </summary>
+    /// <param name="connectionManager">Connection manager for RabbitMQ connectivity</param>
+    /// <param name="exchangeManager">Exchange manager for exchange operations</param>
+    /// <param name="queueManager">Queue manager for queue operations</param>
+    /// <param name="producer">Message producer for publishing messages</param>
+    /// <param name="consumer">Message consumer for consuming messages</param>
+    /// <param name="eventBus">Event bus for event-driven architecture</param>
+    /// <param name="eventStore">Event store for event sourcing</param>
+    /// <param name="healthChecker">Health checker for monitoring</param>
+    /// <param name="configuration">RabbitMQ configuration settings</param>
+    /// <param name="logger">Logger for client activities</param>
+    /// <param name="serviceProvider">Service provider for dependency injection</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when any required parameter is null
+    /// </exception>
     public RabbitMQClient(
         IConnectionManager connectionManager,
         IExchangeManager exchangeManager,
@@ -80,6 +170,21 @@ public class RabbitMQClient : IRabbitMQClient
         ConnectionManager.Recovering += OnConnectionRecovering;
     }
 
+    /// <summary>
+    /// Initializes the RabbitMQ client and all its components
+    /// </summary>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous initialization operation</returns>
+    /// <exception cref="ObjectDisposedException">
+    /// Thrown when the client has been disposed
+    /// </exception>
+    /// <exception cref="RabbitMQClientException">
+    /// Thrown when client initialization fails
+    /// </exception>
+    /// <remarks>
+    /// This method initializes the connection to RabbitMQ, auto-declares configured exchanges and queues,
+    /// and prepares all components for operation. It should be called before using any other client features.
+    /// </remarks>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed)
@@ -113,6 +218,18 @@ public class RabbitMQClient : IRabbitMQClient
         }
     }
 
+    /// <summary>
+    /// Gracefully shuts down the RabbitMQ client and all its components
+    /// </summary>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous shutdown operation</returns>
+    /// <exception cref="RabbitMQClientException">
+    /// Thrown when client shutdown encounters an error
+    /// </exception>
+    /// <remarks>
+    /// This method gracefully shuts down all components in reverse order of initialization,
+    /// ensuring proper cleanup of resources and connections.
+    /// </remarks>
     public async Task ShutdownAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed || Status == ClientStatus.NotInitialized)
@@ -196,6 +313,13 @@ public class RabbitMQClient : IRabbitMQClient
         Status = ClientStatus.Reconnecting;
     }
 
+    /// <summary>
+    /// Releases all resources used by the <see cref="RabbitMQClient"/>
+    /// </summary>
+    /// <remarks>
+    /// This method performs cleanup of all managed resources and unsubscribes from events.
+    /// After disposal, the client cannot be reused.
+    /// </remarks>
     public void Dispose()
     {
         if (_disposed)

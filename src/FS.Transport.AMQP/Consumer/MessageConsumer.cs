@@ -15,8 +15,19 @@ using RabbitMQ.Client.Events;
 namespace FS.Transport.AMQP.Consumer;
 
 /// <summary>
-/// High-performance message consumer with enterprise features including automatic acknowledgment, retry policies, error handling, and monitoring
+/// Provides high-performance message consumption from RabbitMQ with automatic error handling, retry policies, and event-driven processing
 /// </summary>
+/// <remarks>
+/// This class implements comprehensive message consumption capabilities including:
+/// - Automatic acknowledgment and rejection handling
+/// - Built-in retry policies with exponential backoff
+/// - Event-driven architecture support (domain events, integration events)
+/// - Dead letter queue management
+/// - Performance monitoring and statistics
+/// - Connection recovery and fault tolerance
+/// - Batch processing capabilities
+/// - Deduplication support
+/// </remarks>
 public class MessageConsumer : IMessageConsumer, IDisposable
 {
     private readonly IConnectionManager _connectionManager;
@@ -40,7 +51,7 @@ public class MessageConsumer : IMessageConsumer, IDisposable
     private bool _paused;
     private readonly object _lockObject = new();
     
-    // Statistics backing fields
+    // Performance counters
     private long _totalMessages = 0;
     private long _successfulMessages = 0;
     private long _failedMessages = 0;
@@ -51,22 +62,85 @@ public class MessageConsumer : IMessageConsumer, IDisposable
     private long _currentlyProcessing = 0;
     private long _duplicatesDetected = 0;
     private long _connectionRecoveries = 0;
-    
+
     // Events
+    /// <summary>
+    /// Occurs when a message is received from RabbitMQ
+    /// </summary>
     public event EventHandler<MessageReceivedEventArgs>? MessageReceived;
-    public event EventHandler<MessageProcessedEventArgs>? MessageProcessed;
-    public event EventHandler<MessageProcessingFailedEventArgs>? MessageProcessingFailed;
-    public event EventHandler<MessageAcknowledgedEventArgs>? MessageAcknowledged;
-    public event EventHandler<MessageRejectedEventArgs>? MessageRejected;
-    public event EventHandler<ConsumerStatusChangedEventArgs>? StatusChanged;
-    public event EventHandler<ConsumerPausedEventArgs>? ConsumerPaused;
-    public event EventHandler<ConsumerResumedEventArgs>? ConsumerResumed;
     
+    /// <summary>
+    /// Occurs when a message has been successfully processed
+    /// </summary>
+    public event EventHandler<MessageProcessedEventArgs>? MessageProcessed;
+    
+    /// <summary>
+    /// Occurs when message processing fails
+    /// </summary>
+    public event EventHandler<MessageProcessingFailedEventArgs>? MessageProcessingFailed;
+    
+    /// <summary>
+    /// Occurs when a message is acknowledged to RabbitMQ
+    /// </summary>
+    public event EventHandler<MessageAcknowledgedEventArgs>? MessageAcknowledged;
+    
+    /// <summary>
+    /// Occurs when a message is rejected
+    /// </summary>
+    public event EventHandler<MessageRejectedEventArgs>? MessageRejected;
+    
+    /// <summary>
+    /// Occurs when the consumer status changes
+    /// </summary>
+    public event EventHandler<ConsumerStatusChangedEventArgs>? StatusChanged;
+    
+    /// <summary>
+    /// Occurs when the consumer is paused
+    /// </summary>
+    public event EventHandler<ConsumerPausedEventArgs>? ConsumerPaused;
+    
+    /// <summary>
+    /// Occurs when the consumer is resumed
+    /// </summary>
+    public event EventHandler<ConsumerResumedEventArgs>? ConsumerResumed;
+
     // Properties
+    /// <summary>
+    /// Gets the current status of the consumer
+    /// </summary>
+    /// <value>
+    /// The current consumer status (NotInitialized, Starting, Running, Stopping, Stopped, Faulted)
+    /// </value>
     public ConsumerStatus Status => _status;
+    
+    /// <summary>
+    /// Gets the consumer settings
+    /// </summary>
+    /// <value>
+    /// The consumer configuration settings
+    /// </value>
     public ConsumerSettings Settings => _settings;
+    
+    /// <summary>
+    /// Gets real-time consumer statistics
+    /// </summary>
+    /// <value>
+    /// A <see cref="ConsumerStatistics"/> object containing performance metrics and counters
+    /// </value>
     public ConsumerStatistics Statistics => _statistics;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MessageConsumer"/> class
+    /// </summary>
+    /// <param name="connectionManager">Connection manager for RabbitMQ connectivity</param>
+    /// <param name="errorHandler">Error handler for processing failures</param>
+    /// <param name="retryPolicyFactory">Factory for creating retry policies</param>
+    /// <param name="settings">Consumer configuration settings</param>
+    /// <param name="config">RabbitMQ configuration</param>
+    /// <param name="logger">Logger for consumer activities</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when any required parameter is null
+    /// </exception>
     public MessageConsumer(
         IConnectionManager connectionManager,
         IErrorHandler errorHandler,
@@ -98,6 +172,17 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         _logger.LogInformation("MessageConsumer initialized with settings: {Settings}", _settings.Name);
     }
 
+    /// <summary>
+    /// Starts the consumer and begins processing messages
+    /// </summary>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous start operation</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the consumer is already running
+    /// </exception>
+    /// <exception cref="ConnectionException">
+    /// Thrown when unable to establish connection to RabbitMQ
+    /// </exception>
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         if (_status == ConsumerStatus.Running)
@@ -119,6 +204,15 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         }
     }
 
+    /// <summary>
+    /// Stops the consumer and gracefully shuts down message processing
+    /// </summary>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous stop operation</returns>
+    /// <remarks>
+    /// This method waits for in-flight messages to complete processing before stopping.
+    /// A 30-second timeout is applied to prevent hanging on stuck messages.
+    /// </remarks>
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         if (_status == ConsumerStatus.Stopped || _status == ConsumerStatus.Stopping)
@@ -171,12 +265,51 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         }
     }
 
+    /// <summary>
+    /// Consumes messages from a specific queue with automatic deserialization and processing
+    /// </summary>
+    /// <typeparam name="T">The type of messages to consume</typeparam>
+    /// <param name="queueName">Name of the queue to consume from</param>
+    /// <param name="messageHandler">Handler function for processing messages</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous consumption operation</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the consumer is not running
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when queue name is empty or whitespace
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when message handler is null
+    /// </exception>
+    /// <remarks>
+    /// The message handler should return true for successful processing or false for failures.
+    /// Failed messages will be handled according to the configured retry policy.
+    /// </remarks>
     public async Task ConsumeAsync<T>(string queueName, Func<T, MessageContext, Task<bool>> messageHandler, CancellationToken cancellationToken = default) where T : class
     {
         var context = ConsumerContext.CreateForQueue(queueName);
         await ConsumeAsync(queueName, messageHandler, context, cancellationToken);
     }
 
+    /// <summary>
+    /// Consumes messages from a specific queue with custom consumer context
+    /// </summary>
+    /// <typeparam name="T">The type of messages to consume</typeparam>
+    /// <param name="queueName">Name of the queue to consume from</param>
+    /// <param name="messageHandler">Handler function for processing messages</param>
+    /// <param name="context">Consumer context with additional configuration</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous consumption operation</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the consumer is not running
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when queue name is empty or whitespace
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when message handler or context is null
+    /// </exception>
     public async Task ConsumeAsync<T>(string queueName, Func<T, MessageContext, Task<bool>> messageHandler, ConsumerContext context, CancellationToken cancellationToken = default) where T : class
     {
         if (_status != ConsumerStatus.Running)
@@ -241,6 +374,22 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         }
     }
 
+    /// <summary>
+    /// Consumes events from an exchange with automatic event handler invocation
+    /// </summary>
+    /// <typeparam name="T">The type of events to consume</typeparam>
+    /// <param name="exchangeName">Name of the exchange to consume from</param>
+    /// <param name="routingKey">Routing key pattern for event filtering</param>
+    /// <param name="eventHandler">Event handler implementation</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous event consumption operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when event handler is null
+    /// </exception>
+    /// <remarks>
+    /// This method automatically creates a temporary queue bound to the exchange with the specified routing key.
+    /// The queue is exclusive and will be deleted when the consumer stops.
+    /// </remarks>
     public async Task ConsumeEventAsync<T>(string exchangeName, string routingKey, IAsyncEventHandler<T> eventHandler, CancellationToken cancellationToken = default) where T : class, IEvent
     {
         var handler = new Func<T, FS.Transport.AMQP.EventHandlers.EventContext, Task<bool>>(async (evt, ctx) =>
@@ -259,6 +408,18 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         await ConsumeEventAsync(exchangeName, routingKey, handler, cancellationToken);
     }
 
+    /// <summary>
+    /// Consumes events from an exchange with custom event handler function
+    /// </summary>
+    /// <typeparam name="T">The type of events to consume</typeparam>
+    /// <param name="exchangeName">Name of the exchange to consume from</param>
+    /// <param name="routingKey">Routing key pattern for event filtering</param>
+    /// <param name="eventHandler">Event handler function</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous event consumption operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when event handler is null
+    /// </exception>
     public async Task ConsumeEventAsync<T>(string exchangeName, string routingKey, Func<T, FS.Transport.AMQP.EventHandlers.EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IEvent
     {
         var context = ConsumerContext.CreateForTopic(exchangeName, routingKey);
@@ -274,6 +435,21 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         await ConsumeAsync(context.QueueName, messageHandler, context, cancellationToken);
     }
 
+    /// <summary>
+    /// Consumes domain events for a specific aggregate type
+    /// </summary>
+    /// <typeparam name="T">The type of domain events to consume</typeparam>
+    /// <param name="aggregateType">The aggregate type to consume events for</param>
+    /// <param name="eventHandler">Domain event handler function</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous domain event consumption operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when event handler is null
+    /// </exception>
+    /// <remarks>
+    /// Domain events are consumed from a dedicated queue for the aggregate type.
+    /// The queue follows the naming convention: domain-events.{aggregateType}
+    /// </remarks>
     public async Task ConsumeDomainEventAsync<T>(string aggregateType, Func<T, FS.Transport.AMQP.EventHandlers.EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IDomainEvent
     {
         var context = ConsumerContext.CreateForDomainEvents(aggregateType);
@@ -291,6 +467,21 @@ public class MessageConsumer : IMessageConsumer, IDisposable
         await ConsumeAsync(context.QueueName, messageHandler, context, cancellationToken);
     }
 
+    /// <summary>
+    /// Consumes integration events for a specific service
+    /// </summary>
+    /// <typeparam name="T">The type of integration events to consume</typeparam>
+    /// <param name="serviceName">The service name to consume events for</param>
+    /// <param name="eventHandler">Integration event handler function</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous integration event consumption operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when event handler is null
+    /// </exception>
+    /// <remarks>
+    /// Integration events are consumed from a dedicated queue for the service.
+    /// The queue follows the naming convention: integration-events.{serviceName}
+    /// </remarks>
     public async Task ConsumeIntegrationEventAsync<T>(string serviceName, Func<T, FS.Transport.AMQP.EventHandlers.EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
     {
         var context = ConsumerContext.CreateForIntegrationEvents(serviceName);

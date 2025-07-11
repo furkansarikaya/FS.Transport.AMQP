@@ -4,13 +4,21 @@ using Microsoft.Extensions.Logging;
 namespace FS.Transport.AMQP.Core;
 
 /// <summary>
-/// Health check implementation for RabbitMQ connection
+/// Health check implementation for RabbitMQ connectivity
 /// </summary>
 public class RabbitMQHealthCheck : IHealthCheck
 {
     private readonly IRabbitMQClientFactory _clientFactory;
     private readonly ILogger<RabbitMQHealthCheck> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RabbitMQHealthCheck"/> class
+    /// </summary>
+    /// <param name="clientFactory">Factory for creating RabbitMQ clients</param>
+    /// <param name="logger">Logger for health check activities</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when clientFactory or logger is null
+    /// </exception>
     public RabbitMQHealthCheck(IRabbitMQClientFactory clientFactory, ILogger<RabbitMQHealthCheck> logger)
     {
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
@@ -18,60 +26,37 @@ public class RabbitMQHealthCheck : IHealthCheck
     }
 
     /// <summary>
-    /// Performs the health check by testing RabbitMQ connectivity
+    /// Performs a health check by testing RabbitMQ connectivity
     /// </summary>
     /// <param name="context">Health check context</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Health check result</returns>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous health check operation.
+    /// The task result contains the health check result.
+    /// </returns>
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try
         {
-            using var client = _clientFactory.CreateClient();
+            var client = _clientFactory.CreateClient();
             
-            // Check if connection manager is available and connected
-            if (client.ConnectionManager == null)
+            // Test connection
+            await client.InitializeAsync(cancellationToken);
+            
+            // Check if connection is healthy
+            if (client.ConnectionManager.IsConnected)
             {
-                return HealthCheckResult.Unhealthy("Connection manager is not available");
+                return HealthCheckResult.Healthy("RabbitMQ connection is healthy");
             }
-
-            if (!client.ConnectionManager.IsConnected)
+            else
             {
-                // Try to connect
-                var connected = await client.ConnectionManager.ConnectAsync(cancellationToken);
-                if (!connected)
-                {
-                    return HealthCheckResult.Unhealthy("Unable to establish connection to RabbitMQ");
-                }
+                return HealthCheckResult.Unhealthy("RabbitMQ connection is not established");
             }
-
-            // Perform a lightweight operation to verify the connection is working
-            using var channel = await client.ConnectionManager.GetChannelAsync();
-            if (channel == null || !channel.IsOpen)
-            {
-                return HealthCheckResult.Unhealthy("Unable to create channel");
-            }
-
-            var data = new Dictionary<string, object>
-            {
-                ["status"] = client.Status.ToString(),
-                ["connected"] = client.ConnectionManager.IsConnected,
-                ["timestamp"] = DateTime.UtcNow
-            };
-
-            return HealthCheckResult.Healthy("RabbitMQ connection is healthy", data);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "RabbitMQ health check failed");
-            
-            var data = new Dictionary<string, object>
-            {
-                ["error"] = ex.Message,
-                ["timestamp"] = DateTime.UtcNow
-            };
-
-            return HealthCheckResult.Unhealthy("RabbitMQ health check failed", ex, data);
+            return HealthCheckResult.Unhealthy("RabbitMQ health check failed", ex);
         }
     }
 }

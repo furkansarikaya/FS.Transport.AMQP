@@ -166,8 +166,8 @@ public static class ServiceDescriptors
     /// <code>
     /// var descriptors = ServiceDescriptors.DiscoverServices(
     ///     new[] { typeof(Program).Assembly },
-    ///     serviceType => serviceType.IsInterface && serviceType.Name.StartsWith("I"),
-    ///     implType => implType.IsClass && !implType.IsAbstract);
+    ///     serviceType => serviceType.IsInterface &amp;&amp; serviceType.Name.StartsWith("I"),
+    ///     implType => implType.IsClass &amp;&amp; !implType.IsAbstract);
     /// </code>
     /// </example>
     public static IEnumerable<ServiceDescriptor> DiscoverServices(

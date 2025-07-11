@@ -161,9 +161,9 @@ public class DeadLetterHandler : IDeadLetterHandler
                 StackTrace = _settings.IncludeErrorDetails ? context.Exception.StackTrace : null,
                 Source = context.Exception.Source
             },
-            Headers = context.Headers,
-            Properties = context.Properties,
-            OriginalMessage = context.MessageBody?.ToArray()
+            Headers = context.Headers?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, object>(),
+            Properties = context.Properties?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, object>(),
+            OriginalMessage = context.MessageBody?.ToArray() != null ? Convert.ToBase64String(context.MessageBody.Value.ToArray()) : string.Empty
         };
 
         var options = new JsonSerializerOptions

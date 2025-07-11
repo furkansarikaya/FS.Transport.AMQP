@@ -46,6 +46,15 @@ public class EventBus : IEventBus
     /// </summary>
     public event EventHandler<EventProcessingFailedEventArgs>? EventProcessingFailed;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EventBus"/> class
+    /// </summary>
+    /// <param name="rabbitMQClient">The RabbitMQ client for accessing infrastructure services</param>
+    /// <param name="producer">The message producer for publishing events</param>
+    /// <param name="consumer">The message consumer for receiving events</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when any required parameter is null
+    /// </exception>
     public EventBus(IRabbitMQClient rabbitMQClient, IMessageProducer producer, IMessageConsumer consumer)
     {
         _rabbitMQClient = rabbitMQClient ?? throw new ArgumentNullException(nameof(rabbitMQClient));
@@ -193,11 +202,18 @@ public class EventBus : IEventBus
     }
     
     /// <summary>
-    /// Publishes multiple events in a batch
+    /// Publishes multiple events in a batch for high-throughput scenarios
     /// </summary>
-    /// <param name="events">Events to publish</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the batch publish operation</returns>
+    /// <param name="events">Collection of events to publish</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous batch publish operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when events collection is null
+    /// </exception>
+    /// <remarks>
+    /// This method provides optimized batch publishing for scenarios where multiple events
+    /// need to be published simultaneously. Events are grouped by type and published efficiently.
+    /// </remarks>
     public async Task PublishBatchAsync(IEnumerable<IEvent> events, CancellationToken cancellationToken = default)
     {
         if (events == null) throw new ArgumentNullException(nameof(events));
@@ -234,12 +250,19 @@ public class EventBus : IEventBus
     }
     
     /// <summary>
-    /// Subscribes to domain events of a specific type
+    /// Subscribes to domain events of a specific type with automatic routing
     /// </summary>
-    /// <typeparam name="T">Domain event type</typeparam>
-    /// <param name="handler">Event handler</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the subscription operation</returns>
+    /// <typeparam name="T">The type of domain events to subscribe to</typeparam>
+    /// <param name="handler">Event handler implementation for processing domain events</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous subscription operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when handler is null
+    /// </exception>
+    /// <remarks>
+    /// Domain events are consumed from the domain-events exchange with automatic queue creation
+    /// and binding. The queue name follows the pattern: domain-events.{EventType}
+    /// </remarks>
     public async Task SubscribeToDomainEventAsync<T>(IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IDomainEvent
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
@@ -287,12 +310,19 @@ public class EventBus : IEventBus
     }
     
     /// <summary>
-    /// Subscribes to integration events of a specific type
+    /// Subscribes to integration events of a specific type with automatic routing
     /// </summary>
-    /// <typeparam name="T">Integration event type</typeparam>
-    /// <param name="handler">Event handler</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the subscription operation</returns>
+    /// <typeparam name="T">The type of integration events to subscribe to</typeparam>
+    /// <param name="handler">Event handler implementation for processing integration events</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous subscription operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when handler is null
+    /// </exception>
+    /// <remarks>
+    /// Integration events are consumed from the integration-events exchange with automatic queue creation
+    /// and binding. The queue name follows the pattern: integration-events.{EventType}
+    /// </remarks>
     public async Task SubscribeToIntegrationEventAsync<T>(IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
@@ -340,12 +370,19 @@ public class EventBus : IEventBus
     }
     
     /// <summary>
-    /// Subscribes to events with a custom handler function
+    /// Subscribes to events with a custom event handler function
     /// </summary>
-    /// <typeparam name="T">Event type</typeparam>
-    /// <param name="handler">Handler function</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the subscription operation</returns>
+    /// <typeparam name="T">The type of events to subscribe to</typeparam>
+    /// <param name="handler">Event handler function for processing events</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous subscription operation</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when handler is null
+    /// </exception>
+    /// <remarks>
+    /// This method allows for inline event handling without implementing the IAsyncEventHandler interface.
+    /// The handler function should return true for successful processing or false for failures.
+    /// </remarks>
     public async Task SubscribeAsync<T>(Func<T, FS.Transport.AMQP.EventHandlers.EventContext, Task<bool>> handler, CancellationToken cancellationToken = default) where T : class, IEvent
     {
         if (handler == null) throw new ArgumentNullException(nameof(handler));
@@ -370,9 +407,12 @@ public class EventBus : IEventBus
     /// <summary>
     /// Unsubscribes from events of a specific type
     /// </summary>
-    /// <typeparam name="T">Event type</typeparam>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the unsubscription operation</returns>
+    /// <typeparam name="T">The type of events to unsubscribe from</typeparam>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>A task that represents the asynchronous unsubscribe operation</returns>
+    /// <remarks>
+    /// This method removes all subscriptions for the specified event type and cleans up associated resources.
+    /// </remarks>
     public async Task UnsubscribeAsync<T>(CancellationToken cancellationToken = default) where T : class, IEvent
     {
         var eventType = typeof(T);
@@ -389,8 +429,12 @@ public class EventBus : IEventBus
     }
     
     /// <summary>
-    /// Releases all resources used by the EventBus
+    /// Releases all resources used by the <see cref="EventBus"/>
     /// </summary>
+    /// <remarks>
+    /// This method performs cleanup of all managed resources and stops the event bus if it's running.
+    /// After disposal, the event bus cannot be reused.
+    /// </remarks>
     public void Dispose()
     {
         Dispose(true);

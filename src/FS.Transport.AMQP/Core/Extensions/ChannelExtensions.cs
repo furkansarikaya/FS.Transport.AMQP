@@ -34,7 +34,7 @@ public static class ChannelExtensions
         }
         catch (Exception ex)
         {
-            throw new RabbitMQException($"Failed to publish message to exchange '{exchange}' with routing key '{routingKey}'", ex)
+            throw new RabbitMQException($"Failed to publish message to exchange '{exchange}' with routing key '{routingKey}'", ex, "PUBLISH_ERROR")
                 .WithContext("Exchange", exchange)
                 .WithContext("RoutingKey", routingKey)
                 .WithContext("MessageSize", body.Length);
@@ -106,7 +106,7 @@ public static class ChannelExtensions
         }
         catch (Exception ex)
         {
-            throw new RabbitMQException($"Failed to acknowledge message with delivery tag {deliveryTag}", ex)
+            throw new RabbitMQException($"Failed to acknowledge message with delivery tag {deliveryTag}", ex, "ACK_ERROR")
                 .WithContext("DeliveryTag", deliveryTag)
                 .WithContext("Multiple", multiple);
         }
@@ -129,7 +129,7 @@ public static class ChannelExtensions
         }
         catch (Exception ex)
         {
-            throw new RabbitMQException($"Failed to reject message with delivery tag {deliveryTag}", ex)
+            throw new RabbitMQException($"Failed to reject message with delivery tag {deliveryTag}", ex, "REJECT_ERROR")
                 .WithContext("DeliveryTag", deliveryTag)
                 .WithContext("Requeue", requeue);
         }
@@ -153,7 +153,7 @@ public static class ChannelExtensions
         }
         catch (Exception ex)
         {
-            throw new RabbitMQException($"Failed to nack message with delivery tag {deliveryTag}", ex)
+            throw new RabbitMQException($"Failed to nack message with delivery tag {deliveryTag}", ex, "NACK_ERROR")
                 .WithContext("DeliveryTag", deliveryTag)
                 .WithContext("Multiple", multiple)
                 .WithContext("Requeue", requeue);

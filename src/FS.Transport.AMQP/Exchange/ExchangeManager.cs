@@ -25,11 +25,37 @@ public class ExchangeManager : IExchangeManager
     private readonly ConcurrentDictionary<string, ExchangeDeclaration> _declaredExchanges;
     private readonly SemaphoreSlim _declarationSemaphore;
 
+    /// <summary>
+    /// Occurs when an exchange is successfully declared
+    /// </summary>
     public event EventHandler<ExchangeEventArgs>? ExchangeDeclared;
+    
+    /// <summary>
+    /// Occurs when an exchange is deleted
+    /// </summary>
     public event EventHandler<ExchangeEventArgs>? ExchangeDeleted;
+    
+    /// <summary>
+    /// Occurs when exchanges are being recreated during recovery
+    /// </summary>
     public event EventHandler<ExchangeEventArgs>? ExchangesRecreating;
+    
+    /// <summary>
+    /// Occurs when exchanges have been successfully recreated during recovery
+    /// </summary>
     public event EventHandler<ExchangeEventArgs>? ExchangesRecreated;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ExchangeManager"/> class
+    /// </summary>
+    /// <param name="configuration">RabbitMQ configuration settings</param>
+    /// <param name="connectionManager">Connection manager for RabbitMQ connectivity</param>
+    /// <param name="errorHandler">Error handler for processing failures</param>
+    /// <param name="retryPolicy">Retry policy for failed operations</param>
+    /// <param name="logger">Logger for exchange management activities</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when any required parameter is null
+    /// </exception>
     public ExchangeManager(
         IOptions<RabbitMQConfiguration> configuration,
         IConnectionManager connectionManager,
@@ -50,8 +76,23 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Declares an exchange using configuration settings
+    /// Declares an exchange using configuration settings with automatic retry and error handling
     /// </summary>
+    /// <param name="exchangeSettings">Exchange configuration settings</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous declaration operation.
+    /// The task result contains <c>true</c> if declaration was successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when exchangeSettings is null
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when exchange settings validation fails
+    /// </exception>
+    /// <exception cref="ExchangeDeclarationException">
+    /// Thrown when exchange declaration fails
+    /// </exception>
     public async Task<bool> DeclareAsync(ExchangeSettings exchangeSettings, CancellationToken cancellationToken = default)
     {
         if (exchangeSettings == null)
@@ -69,8 +110,24 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Declares an exchange with manual parameters
+    /// Declares an exchange with manual parameters and automatic retry logic
     /// </summary>
+    /// <param name="name">Exchange name</param>
+    /// <param name="type">Exchange type (topic, direct, fanout, headers)</param>
+    /// <param name="durable">Whether the exchange survives server restarts</param>
+    /// <param name="autoDelete">Whether the exchange is deleted when not in use</param>
+    /// <param name="arguments">Additional exchange arguments</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous declaration operation.
+    /// The task result contains <c>true</c> if declaration was successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when exchange name is null or empty
+    /// </exception>
+    /// <exception cref="ExchangeDeclarationException">
+    /// Thrown when exchange declaration fails
+    /// </exception>
     public async Task<bool> DeclareAsync(
         string name, 
         string type = ExchangeType.Topic, 
@@ -149,8 +206,21 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Deletes an exchange
+    /// Deletes an exchange with optional condition checking
     /// </summary>
+    /// <param name="name">Exchange name to delete</param>
+    /// <param name="ifUnused">Only delete if the exchange is unused</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous delete operation.
+    /// The task result contains <c>true</c> if deletion was successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when exchange name is null or empty
+    /// </exception>
+    /// <exception cref="ExchangeException">
+    /// Thrown when exchange deletion fails
+    /// </exception>
     public async Task<bool> DeleteAsync(string name, bool ifUnused = false, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -220,8 +290,23 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Binds one exchange to another
+    /// Binds an exchange to another exchange with routing key
     /// </summary>
+    /// <param name="destination">Destination exchange name</param>
+    /// <param name="source">Source exchange name</param>
+    /// <param name="routingKey">Routing key for the binding</param>
+    /// <param name="arguments">Additional binding arguments</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous bind operation.
+    /// The task result contains <c>true</c> if binding was successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when destination or source exchange name is null or empty
+    /// </exception>
+    /// <exception cref="ExchangeException">
+    /// Thrown when binding fails
+    /// </exception>
     public async Task<bool> BindAsync(
         string destination, 
         string source, 
@@ -294,8 +379,23 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Unbinds one exchange from another
+    /// Unbinds an exchange from another exchange
     /// </summary>
+    /// <param name="destination">Destination exchange name</param>
+    /// <param name="source">Source exchange name</param>
+    /// <param name="routingKey">Routing key for the binding</param>
+    /// <param name="arguments">Additional binding arguments</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous unbind operation.
+    /// The task result contains <c>true</c> if unbinding was successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when destination or source exchange name is null or empty
+    /// </exception>
+    /// <exception cref="ExchangeException">
+    /// Thrown when unbinding fails
+    /// </exception>
     public async Task<bool> UnbindAsync(
         string destination, 
         string source, 
@@ -370,6 +470,15 @@ public class ExchangeManager : IExchangeManager
     /// <summary>
     /// Checks if an exchange exists
     /// </summary>
+    /// <param name="name">Exchange name to check</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous check operation.
+    /// The task result contains <c>true</c> if the exchange exists; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when exchange name is null or empty
+    /// </exception>
     public async Task<bool> ExistsAsync(string name, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -406,8 +515,17 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Gets exchange information (basic implementation)
+    /// Gets detailed information about an exchange
     /// </summary>
+    /// <param name="name">Exchange name</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous get operation.
+    /// The task result contains exchange information if found; otherwise, <c>null</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when exchange name is null or empty
+    /// </exception>
     public async Task<ExchangeInfo?> GetInfoAsync(string name, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -450,8 +568,17 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Declares all configured exchanges
+    /// Declares all exchanges from a collection with batch processing
     /// </summary>
+    /// <param name="exchanges">Collection of exchanges to declare</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous batch declaration operation.
+    /// The task result contains <c>true</c> if all declarations were successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when exchanges collection is null
+    /// </exception>
     public async Task<bool> DeclareAllAsync(IEnumerable<ExchangeSettings> exchanges, CancellationToken cancellationToken = default)
     {
         if (exchanges == null)
@@ -509,8 +636,16 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Re-declares all registered exchanges (for auto-recovery)
+    /// Redeclares all previously declared exchanges (used for recovery)
     /// </summary>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous redeclaration operation.
+    /// The task result contains <c>true</c> if all redeclarations were successful; otherwise, <c>false</c>.
+    /// </returns>
+    /// <remarks>
+    /// This method is typically used during connection recovery to restore exchange topology.
+    /// </remarks>
     public async Task<bool> RedeclareAllAsync(CancellationToken cancellationToken = default)
     {
         var exchanges = _declaredExchanges.Values.ToList();
@@ -558,8 +693,11 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Gets exchange management statistics
+    /// Gets exchange manager statistics and performance metrics
     /// </summary>
+    /// <returns>
+    /// Exchange statistics containing operation counts, success rates, and performance metrics
+    /// </returns>
     public ExchangeStatistics GetStatistics()
     {
         return _statistics.Clone();
@@ -568,6 +706,15 @@ public class ExchangeManager : IExchangeManager
     /// <summary>
     /// Gets all bindings for a specific exchange
     /// </summary>
+    /// <param name="exchangeName">Exchange name to get bindings for</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous get operation.
+    /// The task result contains a collection of exchange binding information.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when exchangeName is null or empty
+    /// </exception>
     public async Task<IEnumerable<ExchangeBindingInfo>> GetBindingsAsync(string exchangeName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(exchangeName))
@@ -588,8 +735,15 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Lists all exchanges with optional filtering
+    /// Lists all exchanges with optional filtering and detailed information
     /// </summary>
+    /// <param name="filter">Optional filter string for exchange names</param>
+    /// <param name="includeDetails">Whether to include detailed exchange information</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous list operation.
+    /// The task result contains a collection of exchange information.
+    /// </returns>
     public async Task<IEnumerable<ExchangeInfo>> ListExchangesAsync(string? filter = null, bool includeDetails = false, CancellationToken cancellationToken = default)
     {
         try
@@ -643,8 +797,18 @@ public class ExchangeManager : IExchangeManager
     }
 
     /// <summary>
-    /// Gets the topology information for exchanges
+    /// Gets the complete topology information for exchanges
     /// </summary>
+    /// <param name="exchangeName">Optional specific exchange name to get topology for</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <returns>
+    /// A task that represents the asynchronous get operation.
+    /// The task result contains complete exchange topology information.
+    /// </returns>
+    /// <remarks>
+    /// This method provides a comprehensive view of the exchange topology including
+    /// all exchanges, their bindings, and relationships.
+    /// </remarks>
     public async Task<ExchangeTopology> GetTopologyAsync(string? exchangeName = null, CancellationToken cancellationToken = default)
     {
         try

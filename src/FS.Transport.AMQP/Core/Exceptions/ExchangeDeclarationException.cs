@@ -5,13 +5,23 @@ namespace FS.Transport.AMQP.Core.Exceptions;
 /// </summary>
 public class ExchangeDeclarationException : ExchangeException
 {
-    public ExchangeDeclarationException(string exchangeName, string reason) 
-        : base($"Failed to declare exchange '{exchangeName}': {reason}", exchangeName)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ExchangeDeclarationException"/> class with a specified message and exchange name
+    /// </summary>
+    /// <param name="message">The message that describes the error</param>
+    /// <param name="exchangeName">The name of the exchange that failed to be declared</param>
+    public ExchangeDeclarationException(string message, string exchangeName) 
+        : base(message, exchangeName)
     {
     }
 
-    public ExchangeDeclarationException(string exchangeName, Exception innerException) 
-        : base($"Failed to declare exchange '{exchangeName}'", innerException, exchangeName)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ExchangeDeclarationException"/> class with a specified message and inner exception
+    /// </summary>
+    /// <param name="message">The message that describes the error</param>
+    /// <param name="innerException">The exception that is the cause of the current exception</param>
+    public ExchangeDeclarationException(string message, Exception innerException) 
+        : base(message, innerException, null)
     {
     }
 }

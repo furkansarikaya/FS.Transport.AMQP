@@ -5,13 +5,23 @@ namespace FS.Transport.AMQP.Core.Exceptions;
 /// </summary>
 public class QueueDeclarationException : QueueException
 {
-    public QueueDeclarationException(string queueName, string reason) 
-        : base($"Failed to declare queue '{queueName}': {reason}", queueName)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="QueueDeclarationException"/> class with a specified message and queue name
+    /// </summary>
+    /// <param name="message">The message that describes the error</param>
+    /// <param name="queueName">The name of the queue that failed to be declared</param>
+    public QueueDeclarationException(string message, string queueName) 
+        : base(message, queueName)
     {
     }
 
-    public QueueDeclarationException(string queueName, Exception innerException) 
-        : base($"Failed to declare queue '{queueName}'", innerException, queueName)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="QueueDeclarationException"/> class with a specified message and inner exception
+    /// </summary>
+    /// <param name="message">The message that describes the error</param>
+    /// <param name="innerException">The exception that is the cause of the current exception</param>
+    public QueueDeclarationException(string message, Exception innerException) 
+        : base(message, innerException, null)
     {
     }
 }
