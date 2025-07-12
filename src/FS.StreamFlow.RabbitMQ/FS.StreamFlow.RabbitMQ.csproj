@@ -1,0 +1,146 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- Framework Configuration -->
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <!-- Build Configuration -->
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+
+        <!-- Version Configuration -->
+        <VersionPrefix>9.0.0</VersionPrefix>
+        <VersionSuffix>alpha</VersionSuffix>
+        <BuildNumber Condition="'$(BuildNumber)' == ''">$([System.DateTime]::Now.ToString('yyyyMMdd-HHmm'))</BuildNumber>
+        <PackageVersion>$(VersionPrefix)-$(VersionSuffix).$(BuildNumber)</PackageVersion>
+        <Version>$(PackageVersion)</Version>
+
+        <!-- Package Identity -->
+        <PackageId>FS.StreamFlow.RabbitMQ</PackageId>
+        <Title>FS.StreamFlow.RabbitMQ - High-Performance RabbitMQ Implementation</Title>
+        <Authors>Furkan Sarıkaya</Authors>
+        <Owners>Furkan Sarıkaya</Owners>
+        <Company>Furkan Sarıkaya</Company>
+        <Product>FS.StreamFlow</Product>
+        <Copyright>Copyright © 2025 Furkan Sarıkaya</Copyright>
+        <AssemblyTitle>FS.StreamFlow.RabbitMQ</AssemblyTitle>
+        <AssemblyDescription>Production-ready RabbitMQ implementation for FS.StreamFlow messaging framework</AssemblyDescription>
+        <AssemblyCompany>Furkan Sarıkaya</AssemblyCompany>
+        <AssemblyProduct>FS.StreamFlow</AssemblyProduct>
+        <AssemblyCopyright>Copyright © 2025 Furkan Sarıkaya</AssemblyCopyright>
+
+        <!-- Package Description -->
+        <Description>Production-ready RabbitMQ implementation for FS.StreamFlow messaging framework with enterprise-grade features including automatic recovery, event-driven architecture, event sourcing, saga orchestration, and high-performance messaging patterns for .NET 9.</Description>
+        <Summary>High-performance RabbitMQ implementation for FS.StreamFlow with enterprise features: automatic recovery, event sourcing, saga orchestration, and comprehensive error handling.</Summary>
+        <PackageTags>streamflow;rabbitmq;messagequeue;amqp;messaging;microservices;dotnet;csharp;event-driven;event-sourcing;saga;producer-consumer;enterprise;high-performance;net9</PackageTags>
+        <PackageReleaseNotes>
+            Alpha Release $(VersionPrefix)-$(VersionSuffix).$(BuildNumber)
+
+            🐰 RabbitMQ Implementation:
+            • High-performance RabbitMQ client for FS.StreamFlow
+            • Production-ready with automatic connection recovery
+            • Advanced error handling with retry policies and circuit breaker
+            • Publisher confirmations and transactional publishing
+            • Dead letter queue management
+
+            🎯 Enterprise Features:
+            • Event-driven architecture with domain and integration events
+            • Event sourcing with snapshot support
+            • Saga orchestration for distributed transactions
+            • Comprehensive monitoring and health checks
+            • Connection pooling and channel management
+
+            ⚡ Performance Optimized:
+            • Batch publishing for high throughput (50k+ msgs/sec)
+            • Async-first API design
+            • Memory-efficient serialization
+            • Connection recovery with exponential backoff
+
+            🔧 Configuration:
+            • Fluent configuration API
+            • SSL/TLS support
+            • Environment-specific settings
+            • Integration with Microsoft.Extensions.*
+
+            📚 Complete Documentation:
+            Comprehensive guides for producers, consumers, event-driven architecture, performance tuning, and production deployment.
+
+            ⚠️ Alpha Notice:
+            This is an alpha release for testing and feedback. Not recommended for production use.
+        </PackageReleaseNotes>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
+
+        <!-- Repository Information -->
+        <PackageProjectUrl>https://github.com/furkansarikaya/FS.StreamFlow</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/furkansarikaya/FS.StreamFlow</RepositoryUrl>
+        <RepositoryBranch>main</RepositoryBranch>
+        <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
+
+        <!-- License Configuration -->
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+        <!-- Package Content -->
+        <ContentTargetFolders>content</ContentTargetFolders>
+        <BuildOutputTargetFolder>lib</BuildOutputTargetFolder>
+        <PackageOutputPath>./nupkg</PackageOutputPath>
+
+        <!-- Symbol Configuration -->
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>embedded</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+
+        <!-- Warning Configuration -->
+        <NoWarn>1701;1702</NoWarn>
+        <WarningsAsErrors/>
+        <WarningsNotAsErrors/>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisLevel>latest</AnalysisLevel>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <!-- Content Files -->
+        <Content Include="..\..\README.md" Pack="true" PackagePath="\"/>
+        <Content Include="..\..\LICENSE" Pack="true" PackagePath="\"/>
+        <Content Include="icon.png" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- FS.StreamFlow Dependencies -->
+        <ProjectReference Include="..\FS.StreamFlow.Core\FS.StreamFlow.Core.csproj"/>
+
+        <!-- Core Dependencies -->
+        <PackageReference Include="RabbitMQ.Client" Version="7.1.2"/>
+
+        <!-- Microsoft Extensions - Configuration -->
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0"/>
+
+        <!-- Microsoft Extensions - Dependency Injection -->
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0"/>
+
+        <!-- Microsoft Extensions - Logging & Health -->
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0"/>
+
+        <!-- System Libraries -->
+        <PackageReference Include="System.Text.Json" Version="9.0.0"/>
+    </ItemGroup>
+
+</Project>
