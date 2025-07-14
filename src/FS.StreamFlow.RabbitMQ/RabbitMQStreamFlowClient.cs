@@ -3,6 +3,7 @@ using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.Core.Features.Events.Interfaces;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
 using FS.StreamFlow.RabbitMQ.Features.Producer;
+using FS.StreamFlow.RabbitMQ.Features.Consumer;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -45,12 +46,12 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     /// <summary>
     /// Gets the consumer interface.
     /// </summary>
-    public IConsumer Consumer => throw new NotImplementedException("Consumer not implemented yet");
+    public IConsumer Consumer { get; private set; } = null!;
 
     /// <summary>
     /// Gets the exchange manager interface.
     /// </summary>
-    public IExchangeManager ExchangeManager => throw new NotImplementedException("ExchangeManager not implemented yet");
+    public IExchangeManager ExchangeManager => throw new NotImplementedException("ExchangeManager implementation in progress");
 
     /// <summary>
     /// Gets the queue manager interface.
@@ -84,16 +85,23 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     /// <param name="producer">The producer.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="configuration">The client configuration.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
     public RabbitMQStreamFlowClient(
         IConnectionManager connectionManager,
         IProducer producer,
         ILogger<RabbitMQStreamFlowClient> logger,
-        IOptions<ClientConfiguration> configuration)
+        IOptions<ClientConfiguration> configuration,
+        ILoggerFactory loggerFactory)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _producer = producer ?? throw new ArgumentNullException(nameof(producer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration.Value ?? throw new ArgumentNullException(nameof(configuration));
+
+        // Initialize Consumer
+        var consumerSettings = new ConsumerSettings { ConsumerId = "default-consumer" };
+        var consumerLogger = loggerFactory.CreateLogger<RabbitMQConsumer>();
+        Consumer = new RabbitMQConsumer(connectionManager, consumerSettings, consumerLogger);
 
         // Subscribe to connection events
         _connectionManager.Connected += OnConnectionStateChanged;
@@ -113,6 +121,7 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
             
             await _connectionManager.ConnectAsync(cancellationToken);
             await _producer.InitializeAsync(cancellationToken);
+            await Consumer.StartAsync(cancellationToken);
             
             _logger.LogInformation("RabbitMQ StreamFlow client initialized successfully");
         }
