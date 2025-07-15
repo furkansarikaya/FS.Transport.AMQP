@@ -152,4 +152,12 @@ public interface IProducer : IDisposable
     /// <typeparam name="T">Message type</typeparam>
     /// <returns>Fluent producer API for method chaining</returns>
     IFluentProducerApi<T> Message<T>() where T : class;
+    
+    /// <summary>
+    /// Creates a fluent API for advanced message publishing configuration with pre-configured message
+    /// </summary>
+    /// <typeparam name="T">Message type</typeparam>
+    /// <param name="message">Message to configure for publishing</param>
+    /// <returns>Fluent producer API for method chaining</returns>
+    IFluentProducerApi<T> Message<T>(T message) where T : class;
 }

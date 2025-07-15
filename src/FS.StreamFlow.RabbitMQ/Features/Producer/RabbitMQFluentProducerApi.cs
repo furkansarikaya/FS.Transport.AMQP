@@ -38,6 +38,16 @@ public class RabbitMQFluentProducerApi<T> : IFluentProducerApi<T> where T : clas
     }
 
     /// <summary>
+    /// Configures the exchange to publish to (alternative syntax)
+    /// </summary>
+    /// <param name="exchangeName">Exchange name</param>
+    /// <returns>Fluent producer API for method chaining</returns>
+    public IFluentProducerApi<T> ToExchange(string exchangeName)
+    {
+        return WithExchange(exchangeName);
+    }
+
+    /// <summary>
     /// Configures the routing key for message routing
     /// </summary>
     /// <param name="routingKey">Routing key</param>

@@ -16,6 +16,13 @@ public interface IFluentProducerApi<T> where T : class
     IFluentProducerApi<T> WithExchange(string exchangeName);
     
     /// <summary>
+    /// Configures the exchange to publish to (alternative syntax)
+    /// </summary>
+    /// <param name="exchangeName">Exchange name</param>
+    /// <returns>Fluent producer API for method chaining</returns>
+    IFluentProducerApi<T> ToExchange(string exchangeName);
+    
+    /// <summary>
     /// Configures the routing key for message routing
     /// </summary>
     /// <param name="routingKey">Routing key</param>
