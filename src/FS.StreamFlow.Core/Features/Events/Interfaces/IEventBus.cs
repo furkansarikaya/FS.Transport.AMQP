@@ -106,4 +106,11 @@ public interface IEventBus : IDisposable
     /// Event raised when event processing fails
     /// </summary>
     event EventHandler<EventProcessingFailedEventArgs>? EventProcessingFailed;
+    
+    /// <summary>
+    /// Creates a fluent API for advanced event publishing configuration
+    /// </summary>
+    /// <typeparam name="T">Event type</typeparam>
+    /// <returns>Fluent event bus API for method chaining</returns>
+    IFluentEventBusApi<T> Event<T>() where T : class, IEvent;
 }

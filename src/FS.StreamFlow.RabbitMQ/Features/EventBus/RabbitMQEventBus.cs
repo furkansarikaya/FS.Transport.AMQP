@@ -745,4 +745,14 @@ public class RabbitMQEventBus : IEventBus
             }
         }
     }
+    
+    /// <summary>
+    /// Creates a fluent API for advanced event publishing configuration
+    /// </summary>
+    /// <typeparam name="T">Event type</typeparam>
+    /// <returns>Fluent event bus API for method chaining</returns>
+    public IFluentEventBusApi<T> Event<T>() where T : class, IEvent
+    {
+        return new RabbitMQFluentEventBusApi<T>(this);
+    }
 } 

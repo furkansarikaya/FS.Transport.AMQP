@@ -402,6 +402,17 @@ public class RabbitMQConsumer : IConsumer
     }
 
     /// <summary>
+    /// Creates a fluent API for queue-based consumer configuration
+    /// </summary>
+    /// <typeparam name="T">Message type</typeparam>
+    /// <param name="queueName">Queue name to consume from</param>
+    /// <returns>Fluent consumer API</returns>
+    public IFluentConsumerApi<T> Queue<T>(string queueName) where T : class
+    {
+        return new RabbitMQFluentConsumerApi<T>(this, queueName);
+    }
+
+    /// <summary>
     /// Acknowledges a message manually
     /// </summary>
     /// <param name="deliveryTag">Delivery tag of the message</param>

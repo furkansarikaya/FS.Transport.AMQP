@@ -110,6 +110,14 @@ public interface IConsumer : IDisposable
     IFluentConsumerApi<T> Fluent<T>(string queueName) where T : class;
     
     /// <summary>
+    /// Creates a fluent API for queue-based consumer configuration
+    /// </summary>
+    /// <typeparam name="T">Message type</typeparam>
+    /// <param name="queueName">Queue name to consume from</param>
+    /// <returns>Fluent consumer API</returns>
+    IFluentConsumerApi<T> Queue<T>(string queueName) where T : class;
+    
+    /// <summary>
     /// Acknowledges a message manually
     /// </summary>
     /// <param name="deliveryTag">Delivery tag of the message</param>
