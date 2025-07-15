@@ -878,7 +878,7 @@ public class XmlMessageSerializer : MessageSerializerBase
     /// <returns>Serialized byte array</returns>
     protected override byte[] SerializeInternal(object obj, SerializationSettings settings)
     {
-        // Real XML serialization using XmlSerializer
+        // XML serialization using XmlSerializer
         using var stream = new MemoryStream();
         var xmlSerializer = new System.Xml.Serialization.XmlSerializer(obj.GetType());
         xmlSerializer.Serialize(stream, obj);
@@ -894,7 +894,7 @@ public class XmlMessageSerializer : MessageSerializerBase
     /// <returns>Deserialized object</returns>
     protected override object DeserializeInternal(byte[] data, Type type, SerializationSettings settings)
     {
-        // Real XML deserialization using XmlSerializer
+        // XML deserialization using XmlSerializer
         using var stream = new MemoryStream(data);
         var xmlSerializer = new System.Xml.Serialization.XmlSerializer(type);
         return xmlSerializer.Deserialize(stream)!;

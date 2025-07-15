@@ -402,7 +402,7 @@ public class RabbitMQProducer : IProducer
     /// </summary>
     public async Task<bool> ScheduleAsync<T>(T message, TimeSpan delay, CancellationToken cancellationToken = default) where T : class
     {
-        // Real implementation using message scheduling with TTL and dead letter queue
+        // Implementation using message scheduling with TTL and dead letter queue
         var serializedMessage = JsonSerializer.SerializeToUtf8Bytes(message);
         var messageWithDelay = new
         {
