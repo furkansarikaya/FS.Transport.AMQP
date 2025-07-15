@@ -1,13 +1,13 @@
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
+using FS.StreamFlow.RabbitMQ.Features.ErrorHandling;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 using CoreBasicProperties = FS.StreamFlow.Core.Features.Messaging.Models.BasicProperties;
-using RabbitBasicProperties = RabbitMQ.Client.BasicProperties;
 
 namespace FS.StreamFlow.RabbitMQ.Features.Producer;
 
@@ -19,6 +19,7 @@ namespace FS.StreamFlow.RabbitMQ.Features.Producer;
 public class RabbitMQProducer : IProducer
 {
     private readonly IConnectionManager _connectionManager;
+    private readonly IMessageSerializerFactory _serializerFactory;
     private readonly ProducerSettings _settings;
     private readonly ILogger<RabbitMQProducer> _logger;
     private readonly SemaphoreSlim _operationLock = new(1, 1);
@@ -75,15 +76,18 @@ public class RabbitMQProducer : IProducer
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQProducer"/> class.
     /// </summary>
-    /// <param name="connectionManager">The connection manager for RabbitMQ connectivity.</param>
-    /// <param name="settings">The producer configuration settings.</param>
+    /// <param name="connectionManager">The connection manager for managing RabbitMQ connections.</param>
+    /// <param name="serializerFactory">The message serializer factory for creating serializers.</param>
+    /// <param name="settings">The producer settings configuration.</param>
     /// <param name="logger">The logger instance for diagnostic information.</param>
     public RabbitMQProducer(
         IConnectionManager connectionManager,
+        IMessageSerializerFactory serializerFactory,
         IOptions<ProducerSettings> settings,
         ILogger<RabbitMQProducer> logger)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
         _settings = settings.Value ?? throw new ArgumentNullException(nameof(settings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         
@@ -173,7 +177,7 @@ public class RabbitMQProducer : IProducer
             var messageBytes = await SerializeMessageAsync(message, cancellationToken);
 
             // Create basic properties
-            var basicProperties = CreateBasicProperties(properties);
+            var basicProperties = CreateBasicProperties(ConvertToBasicProperties(properties));
 
             // Get sequence number for publisher confirms
             ulong sequenceNumber = 0;
@@ -439,7 +443,7 @@ public class RabbitMQProducer : IProducer
     /// <summary>
     /// Publishes a message synchronously.
     /// </summary>
-    public bool Publish(string exchange, string routingKey, ReadOnlyMemory<byte> message, BasicProperties? properties = null, bool mandatory = false)
+    public bool Publish(string exchange, string routingKey, ReadOnlyMemory<byte> message, CoreBasicProperties? properties = null, bool mandatory = false)
     {
         try
         {
@@ -493,29 +497,45 @@ public class RabbitMQProducer : IProducer
 
     private async Task ConfigurePublisherConfirmsAsync(CancellationToken cancellationToken)
     {
-        // Publisher confirms configuration would go here
-        // This is a placeholder for RabbitMQ-specific implementation
-        await Task.CompletedTask;
+        try
+        {
+            // Publisher confirms are enabled at connection level in RabbitMQ.Client 7.x
+            // using CreateChannelOptions, not at the channel level
+            _logger.LogDebug("Publisher confirms configuration skipped - handled at connection level");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to configure publisher confirms");
+        }
     }
 
     private async Task<byte[]> SerializeMessageAsync(object message, CancellationToken cancellationToken)
     {
-        if (message is string stringMessage)
-        {
-            return Encoding.UTF8.GetBytes(stringMessage);
-        }
-
-        if (message is byte[] byteMessage)
-        {
-            return byteMessage;
-        }
-
-        // Use JSON serialization for objects
-        var json = JsonSerializer.Serialize(message);
-        return Encoding.UTF8.GetBytes(json);
+        var serializer = _serializerFactory.CreateSerializer(SerializationFormat.Json);
+        var result = await serializer.SerializeAsync(message, cancellationToken);
+        return result;
     }
 
-    private CoreBasicProperties CreateBasicProperties(MessageProperties? properties)
+    private CoreBasicProperties? ConvertToBasicProperties(MessageProperties? properties)
+    {
+        if (properties == null)
+            return null;
+
+        return new CoreBasicProperties
+        {
+            MessageId = properties.MessageId,
+            CorrelationId = properties.CorrelationId,
+            ContentType = properties.ContentType,
+            ContentEncoding = properties.ContentEncoding,
+            DeliveryMode = properties.DeliveryMode,
+            Priority = properties.Priority,
+            Timestamp = properties.Timestamp,
+            Expiration = properties.Expiration,
+            Headers = properties.Headers
+        };
+    }
+
+    private CoreBasicProperties CreateBasicProperties(CoreBasicProperties? properties = null)
     {
         return new CoreBasicProperties
         {
@@ -538,11 +558,49 @@ public class RabbitMQProducer : IProducer
         CoreBasicProperties basicProperties,
         CancellationToken cancellationToken)
     {
-        // This would use the native RabbitMQ channel to publish
-        // For now, it's a placeholder implementation
-        await Task.CompletedTask;
-        
-        _logger.LogDebug("Message published successfully to exchange {Exchange} with routing key {RoutingKey}",
-            exchange, routingKey);
+        try
+        {
+            if (!_connectionManager.IsConnected)
+            {
+                await _connectionManager.ConnectAsync(cancellationToken);
+            }
+
+            var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+            var rabbitChannel = ((RabbitMQChannel)channel).GetNativeChannel();
+
+            // Convert Core properties to RabbitMQ properties
+            var properties = rabbitChannel.CreateBasicProperties();
+            properties.MessageId = basicProperties.MessageId;
+            properties.CorrelationId = basicProperties.CorrelationId;
+            properties.ContentType = basicProperties.ContentType;
+            properties.ContentEncoding = basicProperties.ContentEncoding;
+            properties.DeliveryMode = (DeliveryModes)(byte)basicProperties.DeliveryMode;
+            properties.Priority = basicProperties.Priority;
+            if (basicProperties.Timestamp.HasValue)
+            {
+                properties.Timestamp = new AmqpTimestamp(basicProperties.Timestamp.Value.ToUnixTimeSeconds());
+            }
+            properties.Expiration = basicProperties.Expiration;
+            if (basicProperties.Headers != null)
+            {
+                properties.Headers = new Dictionary<string, object>(basicProperties.Headers);
+            }
+
+            // Publish the message using BasicPublishAsync
+            await rabbitChannel.BasicPublishAsync(
+                exchange: exchange,
+                routingKey: routingKey,
+                mandatory: false,
+                body: messageBytes);
+
+            _logger.LogDebug("Message published successfully to exchange {Exchange} with routing key {RoutingKey}",
+                exchange, routingKey);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish message to exchange {Exchange} with routing key {RoutingKey}",
+                exchange, routingKey);
+            throw;
+        }
     }
 } 

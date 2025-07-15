@@ -2,7 +2,6 @@ using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
 using Microsoft.Extensions.Logging;
-using RabbitMQ.Client;
 using System.Collections.Concurrent;
 using CoreExchangeType = FS.StreamFlow.Core.Features.Messaging.Models.ExchangeType;
 using CoreChannel = FS.StreamFlow.Core.Features.Messaging.Models.IChannel;

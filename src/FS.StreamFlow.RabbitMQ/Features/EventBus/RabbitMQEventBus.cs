@@ -4,7 +4,6 @@ using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Models;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using System.Text.Json;
 
 namespace FS.StreamFlow.RabbitMQ.Features.EventBus;
 

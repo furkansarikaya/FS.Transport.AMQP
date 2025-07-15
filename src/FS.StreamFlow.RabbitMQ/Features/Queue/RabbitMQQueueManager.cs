@@ -1,4 +1,3 @@
-using RabbitMQ.Client;
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Models;
 using Microsoft.Extensions.Logging;

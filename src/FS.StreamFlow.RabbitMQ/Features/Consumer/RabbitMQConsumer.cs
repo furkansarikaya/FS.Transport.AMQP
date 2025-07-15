@@ -2,7 +2,6 @@ using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.Core.Features.Events.Interfaces;
 using FS.StreamFlow.Core.Features.Events.Models;
-using FS.StreamFlow.RabbitMQ.Features.Connection;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Microsoft.Extensions.Logging;

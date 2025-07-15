@@ -1,19 +1,6 @@
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.Core.Features.Events.Interfaces;
-using FS.StreamFlow.RabbitMQ.Features.Connection;
-using FS.StreamFlow.RabbitMQ.Features.Producer;
-using FS.StreamFlow.RabbitMQ.Features.Consumer;
-using FS.StreamFlow.RabbitMQ.Features.Queue;
-using FS.StreamFlow.RabbitMQ.Features.Exchange;
-using FS.StreamFlow.RabbitMQ.Features.EventBus;
-using FS.StreamFlow.RabbitMQ.Features.EventStore;
-using FS.StreamFlow.RabbitMQ.Features.HealthCheck;
-using FS.StreamFlow.RabbitMQ.Features.Saga;
-using FS.StreamFlow.RabbitMQ.Features.RetryPolicies;
-using FS.StreamFlow.RabbitMQ.Features.Serialization;
-using FS.StreamFlow.RabbitMQ.Features.ErrorHandling;
-using FS.StreamFlow.RabbitMQ.Features.Metrics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace FS.StreamFlow.Core.Features.Messaging.Models;
 
 /// <summary>

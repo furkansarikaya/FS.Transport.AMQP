@@ -3,9 +3,7 @@ using FS.StreamFlow.Core.Features.Events.Models;
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
 using Microsoft.Extensions.Logging;
-using RabbitMQ.Client;
 using System.Collections.Concurrent;
-using System.Text.Json;
 
 namespace FS.StreamFlow.RabbitMQ.Features.EventStore;
 

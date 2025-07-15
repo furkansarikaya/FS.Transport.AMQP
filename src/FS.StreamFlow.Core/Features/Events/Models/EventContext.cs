@@ -1,5 +1,3 @@
-using FS.StreamFlow.Core.Features.Events.Interfaces;
-
 namespace FS.StreamFlow.Core.Features.Events.Models;
 
 /// <summary>

@@ -237,11 +237,14 @@ public static class ServiceCollectionExtensions
 
     private static void RegisterFeatureServices(IServiceCollection services)
     {
-        // Add feature-specific services here
-        // For example: serialization, error handling, monitoring, etc.
+        // Add RabbitMQ feature-specific services
+        // These services provide RabbitMQ-specific implementations for various features
         
-        // Placeholder for now
+        // RabbitMQ feature service for initialization and management
         services.TryAddSingleton<IRabbitMQFeatureService, RabbitMQFeatureService>();
+        
+        // Additional RabbitMQ-specific services can be added here as needed
+        // For example: custom message converters, specialized handlers, etc.
     }
 }
 

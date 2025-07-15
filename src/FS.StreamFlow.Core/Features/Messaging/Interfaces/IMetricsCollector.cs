@@ -1,5 +1,3 @@
-using FS.StreamFlow.Core.Features.Messaging.Models;
-
 namespace FS.StreamFlow.Core.Features.Messaging.Interfaces;
 
 /// <summary>

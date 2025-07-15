@@ -84,6 +84,6 @@ public static class RabbitMQChannelExtensions
     /// </summary>
     public static IBasicProperties CreateBasicProperties(this IChannel channel)
     {
-        return channel.CreateBasicProperties();
+        return new BasicProperties();
     }
 } 

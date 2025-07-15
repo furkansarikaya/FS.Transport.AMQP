@@ -4,7 +4,6 @@ using FS.StreamFlow.RabbitMQ.Features.Connection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 
 namespace FS.StreamFlow.RabbitMQ.Features.ErrorHandling;

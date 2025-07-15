@@ -1,5 +1,3 @@
-using System;
-
 namespace FS.StreamFlow.RabbitMQ.Features.Consumer;
 
 /// <summary>
