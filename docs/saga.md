@@ -1,6 +1,6 @@
 # Saga Orchestration Guide
 
-This guide explains how to implement saga pattern for distributed transactions using FS.RabbitMQ.
+This guide explains how to implement saga pattern for distributed transactions using FS.StreamFlow.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -13,7 +13,7 @@ This guide explains how to implement saga pattern for distributed transactions u
 
 ## Overview
 
-A saga is a sequence of local transactions that need to be coordinated across multiple services. FS.RabbitMQ provides built-in support for implementing sagas through its saga orchestration component.
+A saga is a sequence of local transactions that need to be coordinated across multiple services. FS.StreamFlow provides built-in support for implementing sagas through its saga orchestration component.
 
 ## Saga Configuration
 

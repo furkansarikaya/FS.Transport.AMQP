@@ -1,6 +1,6 @@
 # Event Sourcing Guide
 
-This guide explains how to implement event sourcing using FS.RabbitMQ.
+This guide explains how to implement event sourcing using FS.StreamFlow.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -12,7 +12,7 @@ This guide explains how to implement event sourcing using FS.RabbitMQ.
 
 ## Overview
 
-Event sourcing is a pattern where the state of your application is determined by a sequence of events rather than just the current state. FS.RabbitMQ provides a complete event sourcing implementation through its event store component.
+Event sourcing is a pattern where the state of your application is determined by a sequence of events rather than just the current state. FS.StreamFlow provides a complete event sourcing implementation through its event store component.
 
 ## Event Store
 

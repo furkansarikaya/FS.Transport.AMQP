@@ -1,6 +1,6 @@
 # Producer Guide
 
-This guide covers everything you need to know about producing messages with FS.RabbitMQ, from basic publishing to advanced enterprise patterns.
+This guide covers everything you need to know about producing messages with FS.StreamFlow, from basic publishing to advanced enterprise patterns.
 
 ## 📋 Table of Contents
 
@@ -22,11 +22,11 @@ This guide covers everything you need to know about producing messages with FS.R
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add FS.RabbitMQ with producer configuration
+// Add FS.StreamFlow with producer configuration
 builder.Services.AddRabbitMQ()
     .WithConnectionString("amqp://localhost")
     .WithProducer(config =>
@@ -1292,7 +1292,7 @@ public class ProducerHealthCheck : IHealthCheck
 
 ## 🎉 Summary
 
-You've now learned how to use the FS.RabbitMQ Producer effectively:
+You've now learned how to use the FS.StreamFlow Producer effectively:
 
 ✅ **Basic and advanced publishing patterns**  
 ✅ **Publisher confirmations for reliability**  
@@ -1306,7 +1306,7 @@ You've now learned how to use the FS.RabbitMQ Producer effectively:
 
 ## 🎯 Next Steps
 
-Continue learning about FS.RabbitMQ:
+Continue learning about FS.StreamFlow:
 
 - [Consumer Guide](consumer.md) - Master message consumption
 - [Event-Driven Architecture](event-driven.md) - Build event-driven systems

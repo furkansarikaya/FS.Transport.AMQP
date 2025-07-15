@@ -1,6 +1,6 @@
 # Consumer Guide
 
-This guide covers everything you need to know about consuming messages with FS.RabbitMQ, from basic consumption to advanced enterprise patterns.
+This guide covers everything you need to know about consuming messages with FS.StreamFlow, from basic consumption to advanced enterprise patterns.
 
 ## 📋 Table of Contents
 
@@ -22,11 +22,11 @@ This guide covers everything you need to know about consuming messages with FS.R
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add FS.RabbitMQ with consumer configuration
+// Add FS.StreamFlow with consumer configuration
 builder.Services.AddRabbitMQ()
     .WithConnectionString("amqp://localhost")
     .WithConsumer(config =>
@@ -1745,7 +1745,7 @@ public class ExternalServiceConsumer
 
 ## 🎉 Summary
 
-You've now mastered FS.RabbitMQ Consumer functionality:
+You've now mastered FS.StreamFlow Consumer functionality:
 
 ✅ **Basic and advanced consumption patterns**  
 ✅ **Message acknowledgment strategies**  
@@ -1759,7 +1759,7 @@ You've now mastered FS.RabbitMQ Consumer functionality:
 
 ## 🎯 Next Steps
 
-Continue your FS.RabbitMQ journey:
+Continue your FS.StreamFlow journey:
 
 - [Event-Driven Architecture](event-driven.md) - Build event-driven systems
 - [Error Handling](error-handling.md) - Master error handling patterns

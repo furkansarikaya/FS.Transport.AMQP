@@ -1,6 +1,6 @@
 # Monitoring Guide
 
-This guide covers comprehensive monitoring strategies for FS.RabbitMQ applications, from basic health checks to advanced observability patterns.
+This guide covers comprehensive monitoring strategies for FS.StreamFlow applications, from basic health checks to advanced observability patterns.
 
 ## 📋 Table of Contents
 
@@ -16,7 +16,7 @@ This guide covers comprehensive monitoring strategies for FS.RabbitMQ applicatio
 
 ## 🎯 Monitoring Overview
 
-Comprehensive monitoring is essential for production RabbitMQ applications. FS.RabbitMQ provides built-in monitoring capabilities that integrate with popular observability platforms.
+Comprehensive monitoring is essential for production RabbitMQ applications. FS.StreamFlow provides built-in monitoring capabilities that integrate with popular observability platforms.
 
 ### Key Monitoring Areas
 
@@ -1158,7 +1158,7 @@ public class RabbitMQTracer
     {
         _rabbitMQ = rabbitMQ;
         _logger = logger;
-        _activitySource = new ActivitySource("FS.RabbitMQ");
+        _activitySource = new ActivitySource("FS.StreamFlow");
     }
 
     public async Task<T> TraceOperationAsync<T>(string operationName, Func<Activity?, Task<T>> operation)
@@ -1324,7 +1324,7 @@ await _monitoringCircuitBreaker.ExecuteAsync(async () =>
 
 ## 🎉 Summary
 
-You've now learned comprehensive monitoring for FS.RabbitMQ:
+You've now learned comprehensive monitoring for FS.StreamFlow:
 
 ✅ **Health checks and probes**  
 ✅ **Metrics collection and custom metrics**  
@@ -1337,7 +1337,7 @@ You've now learned comprehensive monitoring for FS.RabbitMQ:
 
 ## 🎯 Next Steps
 
-Complete your FS.RabbitMQ journey:
+Complete your FS.StreamFlow journey:
 
 - [Examples](examples/) - See real-world examples
 - [Performance Tuning](performance.md) - Optimize for high throughput

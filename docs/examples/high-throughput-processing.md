@@ -4,7 +4,7 @@
 **Focus**: Optimized for performance  
 **Time**: 30 minutes
 
-This example demonstrates how to implement high-throughput message processing using FS.RabbitMQ. It covers batch publishing, consumer concurrency, error handling, and monitoring.
+This example demonstrates how to implement high-throughput message processing using FS.StreamFlow. It covers batch publishing, consumer concurrency, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 - Batch publishing for high throughput
@@ -35,7 +35,7 @@ HighThroughputProcessing/
 
 ```csharp
 // Services/BatchProducer.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class BatchProducer
@@ -63,7 +63,7 @@ public class BatchProducer
 
 ```csharp
 // Services/HighThroughputConsumer.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class HighThroughputConsumer
@@ -103,4 +103,4 @@ public class HighThroughputConsumer
 ## 🎯 Key Takeaways
 - Batch publishing and concurrency boost throughput.
 - Error handling and monitoring are essential for high-load scenarios.
-- FS.RabbitMQ enables high-performance messaging. 
+- FS.StreamFlow enables high-performance messaging. 

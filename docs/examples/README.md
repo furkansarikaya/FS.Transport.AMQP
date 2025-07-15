@@ -1,6 +1,6 @@
-# FS.RabbitMQ Examples
+# FS.StreamFlow Examples
 
-This directory contains comprehensive examples demonstrating various use cases and patterns with FS.RabbitMQ.
+This directory contains comprehensive examples demonstrating various use cases and patterns with FS.StreamFlow.
 
 ## 📁 Examples Overview
 

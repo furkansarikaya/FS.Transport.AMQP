@@ -1,6 +1,6 @@
-# Contributing to FS.RabbitMQ
+# Contributing to FS.StreamFlow
 
-First off, thank you for considering contributing to FS.RabbitMQ! It's people like you that make FS.RabbitMQ such a great tool.
+First off, thank you for considering contributing to FS.StreamFlow! It's people like you that make FS.StreamFlow such a great tool.
 
 ## Code of Conduct
 
@@ -120,7 +120,7 @@ public async Task PublishMessage_WithValidMessage_PublishesSuccessfully()
 ## Project Structure
 
 ```
-FS.RabbitMQ/
+FS.StreamFlow/
 ├── src/
 │   └── FS.Transport.AMQP/
 │       ├── Configuration/    # Configuration classes

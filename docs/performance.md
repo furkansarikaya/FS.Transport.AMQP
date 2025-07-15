@@ -1,6 +1,6 @@
 # Performance Tuning Guide
 
-This guide covers performance optimization strategies for FS.RabbitMQ, helping you achieve maximum throughput and minimal latency.
+This guide covers performance optimization strategies for FS.StreamFlow, helping you achieve maximum throughput and minimal latency.
 
 ## 📋 Table of Contents
 
@@ -17,7 +17,7 @@ This guide covers performance optimization strategies for FS.RabbitMQ, helping y
 
 ## 🎯 Performance Overview
 
-FS.RabbitMQ is designed for high-performance messaging scenarios. Key performance metrics include:
+FS.StreamFlow is designed for high-performance messaging scenarios. Key performance metrics include:
 
 - **Throughput**: Messages per second (msgs/sec)
 - **Latency**: Time from publish to consume (ms)
@@ -1355,7 +1355,7 @@ await _circuitBreaker.ExecuteAsync(async () =>
 
 ## 🎉 Summary
 
-You've now learned how to optimize FS.RabbitMQ performance:
+You've now learned how to optimize FS.StreamFlow performance:
 
 ✅ **Connection and channel optimization**  
 ✅ **High-throughput producer patterns**  
@@ -1369,7 +1369,7 @@ You've now learned how to optimize FS.RabbitMQ performance:
 
 ## 🎯 Next Steps
 
-Complete your FS.RabbitMQ mastery:
+Complete your FS.StreamFlow mastery:
 
 - [Monitoring](monitoring.md) - Monitor your messaging system
 - [Examples](examples/) - See real-world examples

@@ -4,7 +4,7 @@
 **Focus**: Basic publish/subscribe pattern  
 **Time**: 15 minutes  
 
-This example demonstrates the fundamental producer-consumer pattern using FS.RabbitMQ. Perfect for getting started with message-based communication.
+This example demonstrates the fundamental producer-consumer pattern using FS.StreamFlow. Perfect for getting started with message-based communication.
 
 ## 📋 What You'll Learn
 
@@ -49,7 +49,7 @@ SimpleProducerConsumer/
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FS.RabbitMQ" Version="9.0.0" />
+    <PackageReference Include="FS.StreamFlow.RabbitMQ" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
   </ItemGroup>
@@ -77,7 +77,7 @@ public class Message
 
 ```csharp
 // Services/MessageProducer.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core;
 using SimpleProducerConsumer.Models;
 
 namespace SimpleProducerConsumer.Services;
@@ -140,8 +140,8 @@ public class MessageProducer
 
 ```csharp
 // Services/MessageConsumer.cs
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.Producer;
+using FS.StreamFlow.Core;
+using FS.StreamFlow.RabbitMQ;
 using SimpleProducerConsumer.Models;
 
 namespace SimpleProducerConsumer.Services;
@@ -214,7 +214,7 @@ public class MessageConsumer
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 using SimpleProducerConsumer.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -226,7 +226,7 @@ builder.Services.AddLogging(config =>
     config.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add FS.RabbitMQ
+// Add FS.StreamFlow
 builder.Services.AddRabbitMQ()
     .WithConnectionString("amqp://localhost")
     .WithProducer(config =>
@@ -477,11 +477,11 @@ Once you've mastered this example, try:
 
 ## 🎯 Key Takeaways
 
-- ✅ Basic producer-consumer pattern with FS.RabbitMQ
+- ✅ Basic producer-consumer pattern with FS.StreamFlow
 - ✅ Infrastructure setup (exchanges, queues, bindings)
 - ✅ Message serialization and deserialization
 - ✅ Error handling and retry mechanisms
 - ✅ Graceful shutdown patterns
 - ✅ Monitoring and logging
 
-This example provides a solid foundation for building more complex messaging applications with FS.RabbitMQ! 🚀 
+This example provides a solid foundation for building more complex messaging applications with FS.StreamFlow! 🚀 

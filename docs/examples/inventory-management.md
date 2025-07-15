@@ -4,7 +4,7 @@
 **Focus**: Real-time inventory updates and reservations  
 **Time**: 30 minutes
 
-This example demonstrates how to implement real-time inventory management using FS.RabbitMQ. It covers inventory reservation, update flows, error handling, and monitoring.
+This example demonstrates how to implement real-time inventory management using FS.StreamFlow. It covers inventory reservation, update flows, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 - Inventory reservation and update patterns
@@ -48,7 +48,7 @@ public record InventoryUpdated(Guid ProductId, int NewStock);
 
 ```csharp
 // Services/InventoryService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class InventoryService
@@ -83,7 +83,7 @@ public class InventoryService
 
 ```csharp
 // Services/InventoryReservedHandler.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class InventoryReservedHandler : IEventHandler<InventoryReserved>
@@ -115,4 +115,4 @@ public class InventoryReservedHandler : IEventHandler<InventoryReserved>
 ## 🎯 Key Takeaways
 - Event-driven inventory management enables real-time updates.
 - Error handling and monitoring are essential for inventory flows.
-- FS.RabbitMQ simplifies inventory event workflows. 
+- FS.StreamFlow simplifies inventory event workflows. 

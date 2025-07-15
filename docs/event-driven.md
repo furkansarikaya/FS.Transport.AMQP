@@ -1,6 +1,6 @@
 # Event-Driven Architecture Guide
 
-This guide explains how to implement event-driven architecture using FS.RabbitMQ.
+This guide explains how to implement event-driven architecture using FS.StreamFlow.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -12,11 +12,11 @@ This guide explains how to implement event-driven architecture using FS.RabbitMQ
 
 ## Overview
 
-Event-driven architecture (EDA) is a software design pattern where components communicate through events. FS.RabbitMQ provides comprehensive support for implementing EDA through its event bus, event handlers, and event store features.
+Event-driven architecture (EDA) is a software design pattern where components communicate through events. FS.StreamFlow provides comprehensive support for implementing EDA through its event bus, event handlers, and event store features.
 
 ## Event Types
 
-FS.RabbitMQ supports three main types of events:
+FS.StreamFlow supports three main types of events:
 
 ### 1. Domain Events
 

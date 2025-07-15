@@ -4,7 +4,7 @@
 **Focus**: Synchronous communication  
 **Time**: 20 minutes
 
-This example demonstrates how to implement the request-reply messaging pattern using FS.RabbitMQ. It covers synchronous communication, correlation IDs, error handling, and monitoring.
+This example demonstrates how to implement the request-reply messaging pattern using FS.StreamFlow. It covers synchronous communication, correlation IDs, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 - Request-reply pattern for synchronous messaging
@@ -35,7 +35,7 @@ RequestReplyPattern/
 
 ```csharp
 // Services/RequesterService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class RequesterService
@@ -66,7 +66,7 @@ public class RequesterService
 
 ```csharp
 // Services/ResponderService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class ResponderService
@@ -111,4 +111,4 @@ public class ResponderService
 ## 🎯 Key Takeaways
 - Request-reply enables synchronous messaging over RabbitMQ.
 - Correlation IDs are essential for tracking responses.
-- FS.RabbitMQ simplifies request-reply flows. 
+- FS.StreamFlow simplifies request-reply flows. 
