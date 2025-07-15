@@ -13,18 +13,14 @@ public class DefaultServiceProvider : IServiceProvider
     public object? GetService(Type serviceType)
     {
         // For basic types, try to create instances
-        if (serviceType.IsClass && !serviceType.IsAbstract)
+        if (serviceType is not { IsClass: true, IsAbstract: false }) return null;
+        try
         {
-            try
-            {
-                return Activator.CreateInstance(serviceType);
-            }
-            catch
-            {
-                return null;
-            }
+            return Activator.CreateInstance(serviceType);
         }
-        
-        return null;
+        catch
+        {
+            return null;
+        }
     }
 } 
