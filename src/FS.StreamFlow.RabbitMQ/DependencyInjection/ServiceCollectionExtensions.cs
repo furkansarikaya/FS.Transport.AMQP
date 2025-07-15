@@ -4,6 +4,8 @@ using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
 using FS.StreamFlow.RabbitMQ.Features.Producer;
 using FS.StreamFlow.RabbitMQ.Features.Consumer;
+using FS.StreamFlow.RabbitMQ.Features.Queue;
+using FS.StreamFlow.RabbitMQ.Features.EventBus;
 // using FS.StreamFlow.RabbitMQ.Features.Exchange; // TODO: Re-enable after fixing interface compatibility
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -149,11 +151,15 @@ public static class ServiceCollectionExtensions
         {
             var connectionManager = provider.GetRequiredService<IConnectionManager>();
             var producer = provider.GetRequiredService<IProducer>();
+            var queueManager = provider.GetRequiredService<IQueueManager>();
+            var eventBus = provider.GetRequiredService<IEventBus>();
+            var eventStore = provider.GetRequiredService<IEventStore>();
+            var healthChecker = provider.GetRequiredService<IHealthChecker>();
             var logger = provider.GetRequiredService<ILogger<RabbitMQStreamFlowClient>>();
             var configuration = provider.GetRequiredService<IOptions<ClientConfiguration>>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             
-            return new RabbitMQStreamFlowClient(connectionManager, producer, logger, configuration, loggerFactory);
+            return new RabbitMQStreamFlowClient(connectionManager, producer, queueManager, eventBus, eventStore, healthChecker, logger, configuration, loggerFactory);
         });
 
         // Register options
@@ -188,13 +194,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IExchangeManager>(provider =>
             throw new NotImplementedException("RabbitMQ Exchange Manager implementation in progress"));
 
-        services.TryAddSingleton<IQueueManager>(provider =>
-            throw new NotImplementedException("RabbitMQ Queue Manager not yet implemented"));
+        services.TryAddSingleton<IQueueManager, RabbitMQQueueManager>();
 
         services.TryAddSingleton<IConsumer, RabbitMQConsumer>();
 
-        services.TryAddSingleton<IEventBus>(provider =>
-            throw new NotImplementedException("RabbitMQ Event Bus not yet implemented"));
+        services.TryAddSingleton<IEventBus, RabbitMQEventBus>();
 
         services.TryAddSingleton<IEventStore>(provider =>
             throw new NotImplementedException("RabbitMQ Event Store not yet implemented"));

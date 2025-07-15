@@ -17,6 +17,10 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
 {
     private readonly IConnectionManager _connectionManager;
     private readonly IProducer _producer;
+    private readonly IQueueManager _queueManager;
+    private readonly IEventBus _eventBus;
+    private readonly IEventStore _eventStore;
+    private readonly IHealthChecker _healthChecker;
     private readonly ILogger<RabbitMQStreamFlowClient> _logger;
     private readonly ClientConfiguration _configuration;
     private volatile bool _disposed;
@@ -56,22 +60,22 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     /// <summary>
     /// Gets the queue manager interface.
     /// </summary>
-    public IQueueManager QueueManager => throw new NotImplementedException("QueueManager not implemented yet");
+    public IQueueManager QueueManager => _queueManager;
 
     /// <summary>
     /// Gets the health checker interface.
     /// </summary>
-    public IHealthChecker HealthChecker => throw new NotImplementedException("HealthChecker not implemented yet");
+    public IHealthChecker HealthChecker => _healthChecker;
 
     /// <summary>
     /// Gets the event bus interface.
     /// </summary>
-    public IEventBus EventBus => throw new NotImplementedException("EventBus not implemented yet");
+    public IEventBus EventBus => _eventBus;
 
     /// <summary>
     /// Gets the event store interface.
     /// </summary>
-    public IEventStore EventStore => throw new NotImplementedException("EventStore not implemented yet");
+    public IEventStore EventStore => _eventStore;
 
     /// <summary>
     /// Occurs when the client status changes.
@@ -83,18 +87,30 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     /// </summary>
     /// <param name="connectionManager">The connection manager.</param>
     /// <param name="producer">The producer.</param>
+    /// <param name="queueManager">The queue manager.</param>
+    /// <param name="eventBus">The event bus.</param>
+    /// <param name="eventStore">The event store.</param>
+    /// <param name="healthChecker">The health checker.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="configuration">The client configuration.</param>
     /// <param name="loggerFactory">The logger factory.</param>
     public RabbitMQStreamFlowClient(
         IConnectionManager connectionManager,
         IProducer producer,
+        IQueueManager queueManager,
+        IEventBus eventBus,
+        IEventStore eventStore,
+        IHealthChecker healthChecker,
         ILogger<RabbitMQStreamFlowClient> logger,
         IOptions<ClientConfiguration> configuration,
         ILoggerFactory loggerFactory)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _producer = producer ?? throw new ArgumentNullException(nameof(producer));
+        _queueManager = queueManager ?? throw new ArgumentNullException(nameof(queueManager));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
+        _healthChecker = healthChecker ?? throw new ArgumentNullException(nameof(healthChecker));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration.Value ?? throw new ArgumentNullException(nameof(configuration));
 
