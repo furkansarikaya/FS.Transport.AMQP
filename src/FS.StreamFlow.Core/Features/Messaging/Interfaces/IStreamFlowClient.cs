@@ -49,6 +49,36 @@ public interface IStreamFlowClient : IDisposable
     IHealthChecker HealthChecker { get; }
     
     /// <summary>
+    /// Gets saga orchestrator for managing long-running workflow processes and compensation patterns
+    /// </summary>
+    ISagaOrchestrator SagaOrchestrator { get; }
+    
+    /// <summary>
+    /// Gets retry policy factory for creating and managing retry strategies
+    /// </summary>
+    IRetryPolicyFactory RetryPolicyFactory { get; }
+    
+    /// <summary>
+    /// Gets message serializer factory for creating serializers for different formats
+    /// </summary>
+    IMessageSerializerFactory SerializerFactory { get; }
+    
+    /// <summary>
+    /// Gets error handler for comprehensive error management and dead letter queue support
+    /// </summary>
+    IErrorHandler ErrorHandler { get; }
+    
+    /// <summary>
+    /// Gets dead letter handler for managing failed messages and reprocessing
+    /// </summary>
+    IDeadLetterHandler DeadLetterHandler { get; }
+    
+    /// <summary>
+    /// Gets metrics collector for monitoring and observability
+    /// </summary>
+    IMetricsCollector MetricsCollector { get; }
+    
+    /// <summary>
     /// Gets the current client status and connection state
     /// </summary>
     ClientStatus Status { get; }

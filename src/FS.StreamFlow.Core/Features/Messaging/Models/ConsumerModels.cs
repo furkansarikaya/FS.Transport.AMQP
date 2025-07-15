@@ -283,6 +283,21 @@ public class MessageContext
     public Dictionary<string, object>? Context { get; set; }
     
     /// <summary>
+    /// Gets or sets the message ID
+    /// </summary>
+    public string MessageId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Gets or sets the dead letter exchange
+    /// </summary>
+    public string? DeadLetterExchange { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the dead letter routing key
+    /// </summary>
+    public string? DeadLetterRoutingKey { get; set; }
+    
+    /// <summary>
     /// Creates a new MessageContext instance
     /// </summary>
     public MessageContext()

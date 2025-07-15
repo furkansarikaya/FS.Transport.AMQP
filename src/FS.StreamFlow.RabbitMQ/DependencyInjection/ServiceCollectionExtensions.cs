@@ -9,6 +9,11 @@ using FS.StreamFlow.RabbitMQ.Features.EventBus;
 using FS.StreamFlow.RabbitMQ.Features.Exchange;
 using FS.StreamFlow.RabbitMQ.Features.EventStore;
 using FS.StreamFlow.RabbitMQ.Features.HealthCheck;
+using FS.StreamFlow.RabbitMQ.Features.Saga;
+using FS.StreamFlow.RabbitMQ.Features.RetryPolicies;
+using FS.StreamFlow.RabbitMQ.Features.Serialization;
+using FS.StreamFlow.RabbitMQ.Features.ErrorHandling;
+using FS.StreamFlow.RabbitMQ.Features.Metrics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -153,16 +158,22 @@ public static class ServiceCollectionExtensions
         {
             var connectionManager = provider.GetRequiredService<IConnectionManager>();
             var producer = provider.GetRequiredService<IProducer>();
+            var consumer = provider.GetRequiredService<IConsumer>();
             var queueManager = provider.GetRequiredService<IQueueManager>();
             var exchangeManager = provider.GetRequiredService<IExchangeManager>();
             var eventBus = provider.GetRequiredService<IEventBus>();
             var eventStore = provider.GetRequiredService<IEventStore>();
             var healthChecker = provider.GetRequiredService<IHealthChecker>();
+            var sagaOrchestrator = provider.GetRequiredService<ISagaOrchestrator>();
+            var retryPolicyFactory = provider.GetRequiredService<IRetryPolicyFactory>();
+            var serializerFactory = provider.GetRequiredService<IMessageSerializerFactory>();
+            var errorHandler = provider.GetRequiredService<IErrorHandler>();
+            var deadLetterHandler = provider.GetRequiredService<IDeadLetterHandler>();
+            var metricsCollector = provider.GetRequiredService<IMetricsCollector>();
             var logger = provider.GetRequiredService<ILogger<RabbitMQStreamFlowClient>>();
             var configuration = provider.GetRequiredService<IOptions<ClientConfiguration>>();
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             
-            return new RabbitMQStreamFlowClient(connectionManager, producer, queueManager, exchangeManager, eventBus, eventStore, healthChecker, logger, configuration, loggerFactory);
+            return new RabbitMQStreamFlowClient(connectionManager, producer, consumer, queueManager, exchangeManager, eventBus, eventStore, healthChecker, sagaOrchestrator, retryPolicyFactory, serializerFactory, errorHandler, deadLetterHandler, metricsCollector, logger, configuration);
         });
 
         // Register options
@@ -206,6 +217,22 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IEventStore, RabbitMQEventStore>();
 
         services.TryAddSingleton<IHealthChecker, RabbitMQHealthChecker>();
+
+        // Saga orchestrator
+        services.TryAddSingleton<ISagaOrchestrator, RabbitMQSagaOrchestrator>();
+
+        // Retry policy factory
+        services.TryAddSingleton<IRetryPolicyFactory, RabbitMQRetryPolicyFactory>();
+
+        // Serialization factory
+        services.TryAddSingleton<IMessageSerializerFactory, RabbitMQSerializationFactory>();
+
+        // Error handling
+        services.TryAddSingleton<IErrorHandler, RabbitMQErrorHandler>();
+        services.TryAddSingleton<IDeadLetterHandler, RabbitMQDeadLetterHandler>();
+
+        // Metrics collector
+        services.TryAddSingleton<IMetricsCollector, RabbitMQMetricsCollector>();
     }
 
     private static void RegisterFeatureServices(IServiceCollection services)
