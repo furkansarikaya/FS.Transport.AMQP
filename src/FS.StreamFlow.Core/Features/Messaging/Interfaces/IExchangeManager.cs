@@ -108,4 +108,11 @@ public interface IExchangeManager : IDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Exchange statistics</returns>
     Task<ExchangeStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Creates a fluent API for exchange configuration and management
+    /// </summary>
+    /// <param name="exchangeName">Exchange name</param>
+    /// <returns>Fluent exchange API for method chaining</returns>
+    IFluentExchangeApi Exchange(string exchangeName);
 } 

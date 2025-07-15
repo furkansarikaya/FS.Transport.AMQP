@@ -181,13 +181,13 @@ public class RabbitMQQueueManager : IQueueManager
     /// Deletes a queue
     /// </summary>
     /// <param name="name">Queue name to delete</param>
-    /// <param name="ifUnused">Only delete if queue has no consumers</param>
-    /// <param name="ifEmpty">Only delete if queue has no messages</param>
+    /// <param name="ifUnused">Only delete if queue is unused</param>
+    /// <param name="ifEmpty">Only delete if queue is empty</param>
     /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
-    /// <returns>Number of messages deleted, or null if operation failed</returns>
+    /// <returns>True if deletion was successful, otherwise false</returns>
     /// <exception cref="ArgumentException">Thrown when name is null or empty</exception>
     /// <exception cref="ObjectDisposedException">Thrown when the queue manager has been disposed</exception>
-    public async Task<uint?> DeleteAsync(string name, bool ifUnused = false, bool ifEmpty = false, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(string name, bool ifUnused = false, bool ifEmpty = false, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Queue name cannot be null or empty", nameof(name));
@@ -200,7 +200,7 @@ public class RabbitMQQueueManager : IQueueManager
             if (channel == null)
             {
                 _logger.LogWarning("Failed to get channel for queue deletion: {QueueName}", name);
-                return null;
+                return false;
             }
 
             try
@@ -209,7 +209,7 @@ public class RabbitMQQueueManager : IQueueManager
                 if (rabbitChannel == null)
                 {
                     _logger.LogWarning("Failed to extract RabbitMQ channel for queue deletion: {QueueName}", name);
-                    return null;
+                    return false;
                 }
 
                 // Update queue state
@@ -228,13 +228,18 @@ public class RabbitMQQueueManager : IQueueManager
                 // Remove from tracking
                 _declaredQueues.TryRemove(name, out _);
 
-                _logger.LogInformation("Queue deleted successfully: {QueueName} (Messages deleted: {MessageCount})",
-                    name, deleteOk);
+                // Remove associated bindings
+                var bindingsToRemove = _queueBindings.Where(kvp => kvp.Value.QueueName == name).Select(kvp => kvp.Key).ToList();
+                foreach (var bindingKey in bindingsToRemove)
+                {
+                    _queueBindings.TryRemove(bindingKey, out _);
+                }
 
                 // Raise event
                 QueueDeleted?.Invoke(this, new QueueEventArgs(name, QueueState.Deleting));
 
-                return deleteOk;
+                _logger.LogInformation("Queue deleted successfully: {QueueName}", name);
+                return true;
             }
             finally
             {
@@ -244,8 +249,7 @@ public class RabbitMQQueueManager : IQueueManager
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to delete queue: {QueueName}", name);
-            QueueDeleted?.Invoke(this, new QueueEventArgs(name, QueueState.Error, ex.Message, ex));
-            return null;
+            return false;
         }
     }
 
@@ -677,6 +681,26 @@ public class RabbitMQQueueManager : IQueueManager
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(RabbitMQQueueManager));
+    }
+
+    /// <summary>
+    /// Creates a fluent API for queue configuration and management
+    /// </summary>
+    /// <param name="queueName">Queue name</param>
+    /// <returns>Fluent queue API for method chaining</returns>
+    /// <exception cref="ArgumentException">Thrown when queueName is null or empty</exception>
+    /// <exception cref="ObjectDisposedException">Thrown when the queue manager has been disposed</exception>
+    public IFluentQueueApi Queue(string queueName)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(RabbitMQQueueManager));
+        
+        if (string.IsNullOrEmpty(queueName))
+            throw new ArgumentException("Queue name cannot be null or empty", nameof(queueName));
+        
+        _logger.LogDebug("Creating fluent queue API for queue {QueueName}", queueName);
+        
+        return new RabbitMQFluentQueueApi(this, queueName, _logger);
     }
 
     /// <summary>

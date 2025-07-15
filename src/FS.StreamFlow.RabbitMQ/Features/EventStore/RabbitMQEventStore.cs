@@ -504,6 +504,24 @@ public class RabbitMQEventStore : IEventStore
     }
 
     /// <summary>
+    /// Gets a fluent API for event stream operations
+    /// </summary>
+    /// <param name="streamId">Stream identifier</param>
+    /// <returns>Fluent event stream API</returns>
+    public IFluentEventStreamApi Stream(string streamId)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(RabbitMQEventStore));
+        
+        if (string.IsNullOrEmpty(streamId))
+            throw new ArgumentException("Stream ID cannot be null or empty", nameof(streamId));
+        
+        _logger.LogDebug("Creating fluent event stream API for stream {StreamId}", streamId);
+        
+        return new RabbitMQFluentEventStreamApi(this, streamId, _logger);
+    }
+
+    /// <summary>
     /// Disposes the event store and releases all resources
     /// </summary>
     public void Dispose()

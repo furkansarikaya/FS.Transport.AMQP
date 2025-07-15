@@ -1,4 +1,5 @@
 using FS.StreamFlow.Core.Features.Events.Models;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 
 namespace FS.StreamFlow.Core.Features.Events.Interfaces;
 
@@ -107,6 +108,13 @@ public interface IEventStore : IDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Current version of the stream</returns>
     Task<long> GetStreamVersionAsync(string streamId, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Gets a fluent API for event stream operations
+    /// </summary>
+    /// <param name="streamId">Stream identifier</param>
+    /// <returns>Fluent event stream API</returns>
+    IFluentEventStreamApi Stream(string streamId);
 }
 
 /// <summary>

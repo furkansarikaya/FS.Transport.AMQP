@@ -552,6 +552,26 @@ public class RabbitMQExchangeManager : IExchangeManager
     }
 
     /// <summary>
+    /// Creates a fluent API for exchange configuration and management
+    /// </summary>
+    /// <param name="exchangeName">Exchange name</param>
+    /// <returns>Fluent exchange API for method chaining</returns>
+    /// <exception cref="ArgumentException">Thrown when exchangeName is null or empty</exception>
+    /// <exception cref="ObjectDisposedException">Thrown when the exchange manager has been disposed</exception>
+    public IFluentExchangeApi Exchange(string exchangeName)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(RabbitMQExchangeManager));
+        
+        if (string.IsNullOrEmpty(exchangeName))
+            throw new ArgumentException("Exchange name cannot be null or empty", nameof(exchangeName));
+        
+        _logger.LogDebug("Creating fluent exchange API for exchange {ExchangeName}", exchangeName);
+        
+        return new RabbitMQFluentExchangeApi(this, exchangeName, _logger);
+    }
+
+    /// <summary>
     /// Disposes the exchange manager and releases all resources
     /// </summary>
     public void Dispose()

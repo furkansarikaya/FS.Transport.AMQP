@@ -46,22 +46,26 @@ public interface IQueueManager : IDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Queue declaration result</returns>
     Task<QueueDeclareResult?> DeclareAsync(
-        string name, 
-        bool durable = true, 
-        bool exclusive = false, 
-        bool autoDelete = false, 
+        string name,
+        bool durable = true,
+        bool exclusive = false,
+        bool autoDelete = false,
         IDictionary<string, object>? arguments = null,
         CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Deletes a queue
     /// </summary>
-    /// <param name="name">Queue name</param>
+    /// <param name="queueName">Queue name</param>
     /// <param name="ifUnused">Only delete if unused</param>
     /// <param name="ifEmpty">Only delete if empty</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Number of messages deleted</returns>
-    Task<uint?> DeleteAsync(string name, bool ifUnused = false, bool ifEmpty = false, CancellationToken cancellationToken = default);
+    /// <returns>Task representing the deletion operation</returns>
+    Task<bool> DeleteAsync(
+        string queueName,
+        bool ifUnused = false,
+        bool ifEmpty = false,
+        CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Binds a queue to an exchange
@@ -73,9 +77,9 @@ public interface IQueueManager : IDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the binding operation</returns>
     Task<bool> BindAsync(
-        string queueName, 
-        string exchangeName, 
-        string routingKey, 
+        string queueName,
+        string exchangeName,
+        string routingKey,
         IDictionary<string, object>? arguments = null,
         CancellationToken cancellationToken = default);
     
@@ -117,4 +121,11 @@ public interface IQueueManager : IDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Queue statistics</returns>
     Task<QueueStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Creates a fluent API for queue configuration and management
+    /// </summary>
+    /// <param name="queueName">Queue name</param>
+    /// <returns>Fluent queue API for method chaining</returns>
+    IFluentQueueApi Queue(string queueName);
 } 
