@@ -348,11 +348,12 @@ public class RabbitMQEventBus : IEventBus
             new List<IAsyncEventHandler<IEvent>> { handler as IAsyncEventHandler<IEvent> }, 
             (key, existing) => { existing.Add(handler as IAsyncEventHandler<IEvent>); return existing; });
 
-        await _consumer.ConsumeAsync<T>(
-            async (evt, context) =>
+        await _consumer.ConsumeIntegrationEventAsync<T>(
+            "integration-service",
+            async (evt, eventContext) =>
             {
-                var eventContext = CreateEventContext(evt, context, false, true);
-                return await handler.HandleAsync(evt, eventContext);
+                await handler.HandleAsync(evt, eventContext, cancellationToken);
+                return true;
             },
             cancellationToken);
 
@@ -383,10 +384,11 @@ public class RabbitMQEventBus : IEventBus
             new List<Func<IEvent, EventContext, Task<bool>>> { (evt, ctx) => handler((T)evt, ctx) }, 
             (key, existing) => { existing.Add((evt, ctx) => handler((T)evt, ctx)); return existing; });
 
-        await _consumer.ConsumeAsync<T>(
-            async (evt, context) =>
+        await _consumer.ConsumeEventAsync<T>(
+            "custom-events",
+            "*",
+            async (evt, eventContext) =>
             {
-                var eventContext = CreateEventContext(evt, context, evt is IDomainEvent, evt is IIntegrationEvent);
                 return await handler(evt, eventContext);
             },
             cancellationToken);
