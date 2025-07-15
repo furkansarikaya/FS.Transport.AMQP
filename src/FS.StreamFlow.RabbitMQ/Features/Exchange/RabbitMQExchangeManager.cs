@@ -388,7 +388,7 @@ public class RabbitMQExchangeManager : IExchangeManager
     /// <param name="name">Exchange name</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Exchange information</returns>
-    public async Task<ExchangeInfo?> GetExchangeInfoAsync(string name, CancellationToken cancellationToken = default)
+    public Task<ExchangeInfo?> GetExchangeInfoAsync(string name, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Exchange name cannot be null or empty", nameof(name));
@@ -401,7 +401,7 @@ public class RabbitMQExchangeManager : IExchangeManager
             // Check if exchange is in our declared exchanges
             if (_declaredExchanges.TryGetValue(name, out var exchangeSettings))
             {
-                return new ExchangeInfo
+                return Task.FromResult(new ExchangeInfo
                 {
                     Name = name,
                     Type = exchangeSettings.Type,
@@ -409,16 +409,16 @@ public class RabbitMQExchangeManager : IExchangeManager
                     AutoDelete = exchangeSettings.AutoDelete,
                     Arguments = exchangeSettings.Arguments ?? new Dictionary<string, object>(),
                     Bindings = GetExchangeBindings(name)
-                };
+                });
             }
 
             _logger.LogWarning("Exchange not found in declared exchanges: {ExchangeName}", name);
-            return null;
+            return Task.FromResult<ExchangeInfo?>(null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get exchange info: {ExchangeName}", name);
-            return null;
+            return Task.FromResult<ExchangeInfo?>(null);
         }
     }
 

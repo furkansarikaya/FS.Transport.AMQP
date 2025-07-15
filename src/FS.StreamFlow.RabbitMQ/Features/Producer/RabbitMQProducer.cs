@@ -495,7 +495,7 @@ public class RabbitMQProducer : IProducer
         }
     }
 
-    private async Task ConfigurePublisherConfirmsAsync(CancellationToken cancellationToken)
+    private Task ConfigurePublisherConfirmsAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -507,6 +507,8 @@ public class RabbitMQProducer : IProducer
         {
             _logger.LogError(ex, "Failed to configure publisher confirms");
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task<byte[]> SerializeMessageAsync(object message, CancellationToken cancellationToken)

@@ -678,12 +678,22 @@ public class RabbitMQFluentConsumerApi<T> : IFluentConsumerApi<T> where T : clas
     private readonly IConsumer _consumer;
     private readonly string _queueName;
 
+    /// <summary>
+    /// Creates a fluent API for advanced consumer configuration
+    /// </summary>
+    /// <param name="consumer">Consumer to configure</param>
+    /// <param name="queueName">Queue name to consume from</param>
     public RabbitMQFluentConsumerApi(IConsumer consumer, string queueName)
     {
         _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
         _queueName = queueName ?? throw new ArgumentNullException(nameof(queueName));
     }
 
+    /// <summary>
+    /// Creates a fluent API for advanced consumer configuration
+    /// </summary>
+    /// <param name="exchangeName">Exchange name to consume from</param>
+    /// <returns>Fluent consumer API</returns>
     public IFluentConsumerApi<T> FromExchange(string exchangeName) => this;
     public IFluentConsumerApi<T> WithRoutingKey(string routingKey) => this;
     public IFluentConsumerApi<T> WithSettings(ConsumerSettings settings) => this;

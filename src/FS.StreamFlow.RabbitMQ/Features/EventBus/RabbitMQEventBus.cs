@@ -427,7 +427,7 @@ public class RabbitMQEventBus : IEventBus
     /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
     /// <returns>Task representing the unsubscription operation</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the event bus has been disposed</exception>
-    public async Task UnsubscribeAsync<T>(CancellationToken cancellationToken = default) where T : class, IEvent
+    public Task UnsubscribeAsync<T>(CancellationToken cancellationToken = default) where T : class, IEvent
     {
         ThrowIfDisposed();
 
@@ -446,6 +446,7 @@ public class RabbitMQEventBus : IEventBus
         }
 
         _logger.LogInformation("Unsubscribed from event: {EventType}", eventType.Name);
+        return Task.CompletedTask;
     }
 
     /// <summary>

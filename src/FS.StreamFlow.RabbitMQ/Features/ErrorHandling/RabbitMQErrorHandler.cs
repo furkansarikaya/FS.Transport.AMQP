@@ -284,19 +284,19 @@ public class RabbitMQErrorHandler : IErrorHandler
     /// <param name="attemptNumber">Current attempt number</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Error handling result</returns>
-    private async Task<ErrorHandlingResult> HandleAcknowledgeStrategy(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
+    private Task<ErrorHandlingResult> HandleAcknowledgeStrategy(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
         _logger.LogWarning("Acknowledging message {MessageId} with error: {Exception}", context.MessageId, exception.Message);
         
         // Additional error processing completed
         _logger.LogDebug("Error handling completed for message {MessageId}", context.MessageId);
         
-        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge, new Dictionary<string, object>
+        return Task.FromResult(ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge, new Dictionary<string, object>
         {
             ["AttemptNumber"] = attemptNumber,
             ["ExceptionType"] = exception.GetType().Name,
             ["Action"] = "Acknowledged despite error"
-        });
+        }));
     }
 
     /// <summary>

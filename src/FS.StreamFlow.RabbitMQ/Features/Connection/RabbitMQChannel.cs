@@ -100,20 +100,20 @@ public class RabbitMQChannel : FS.StreamFlow.Core.Features.Messaging.Models.ICha
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the channel is healthy, otherwise false.</returns>
-    public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
+    public Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed || _channel == null)
-            return false;
+            return Task.FromResult(false);
 
         try
         {
             // Simple health check - verify the channel is open and responsive
-            return _channel.IsOpen;
+            return Task.FromResult(_channel.IsOpen);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Health check failed for channel {ChannelId}", _statistics.ChannelId);
-            return false;
+            return Task.FromResult(false);
         }
     }
 

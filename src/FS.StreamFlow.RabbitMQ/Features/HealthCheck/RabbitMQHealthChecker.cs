@@ -108,12 +108,12 @@ public class RabbitMQHealthChecker : IHealthChecker
     /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
     /// <returns>Task representing the stop operation</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the health checker has been disposed</exception>
-    public async Task StopAsync(CancellationToken cancellationToken = default)
+    public Task StopAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         
         if (!_isRunning)
-            return;
+            return Task.CompletedTask;
 
         try
         {
@@ -132,6 +132,8 @@ public class RabbitMQHealthChecker : IHealthChecker
             _logger.LogError(ex, "Failed to stop RabbitMQ Health Checker");
             throw;
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -362,18 +364,18 @@ public class RabbitMQHealthChecker : IHealthChecker
     private void RegisterDefaultHealthChecks()
     {
         // Connection health check
-        RegisterHealthCheckAsync(
+        _ = RegisterHealthCheckAsync(
             "connection",
             async cancellationToken => await CheckConnectionHealth(cancellationToken),
             TimeSpan.FromSeconds(15),
-            new[] { "connection", "core" });
+            ["connection", "core"]);
 
         // Channel health check
-        RegisterHealthCheckAsync(
+        _ = RegisterHealthCheckAsync(
             "channel",
             async cancellationToken => await CheckChannelHealth(cancellationToken),
             TimeSpan.FromSeconds(30),
-            new[] { "channel", "core" });
+            ["channel", "core"]);
 
         _logger.LogDebug("Default health checks registered");
     }

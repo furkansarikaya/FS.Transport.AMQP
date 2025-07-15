@@ -549,7 +549,7 @@ public class RabbitMQQueueManager : IQueueManager
     /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
     /// <returns>Comprehensive queue statistics</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the queue manager has been disposed</exception>
-    public async Task<QueueStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+    public Task<QueueStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
 
@@ -580,12 +580,12 @@ public class RabbitMQQueueManager : IQueueManager
             _logger.LogDebug("Queue statistics calculated: {TotalQueues} queues, {TotalMessages} messages, {TotalConsumers} consumers",
                 statistics.TotalQueues, statistics.TotalMessages, statistics.TotalConsumers);
 
-            return statistics;
+            return Task.FromResult(statistics);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get queue statistics");
-            return new QueueStatistics { Timestamp = DateTimeOffset.UtcNow };
+            return Task.FromResult(new QueueStatistics { Timestamp = DateTimeOffset.UtcNow });
         }
     }
 
