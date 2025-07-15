@@ -37,6 +37,15 @@ public class EventPublishedEventArgs : EventArgs
     /// </summary>
     public string? ErrorMessage { get; }
 
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="event">The event that was published</param>
+    /// <param name="exchangeName">The exchange where the event was published</param>
+    /// <param name="routingKey">The routing key used</param>
+    /// <param name="success">True if the publish was successful</param>
+    /// <param name="errorMessage">The error message if the publish failed</param>
+    /// <exception cref="ArgumentNullException">Thrown when event, exchangeName, or routingKey is null</exception>
     public EventPublishedEventArgs(IEvent @event, string exchangeName, string routingKey, bool success, string? errorMessage = null)
     {
         Event = @event ?? throw new ArgumentNullException(nameof(@event));
@@ -78,6 +87,14 @@ public class EventReceivedEventArgs : EventArgs
     /// </summary>
     public string? ConsumerTag { get; }
 
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="event">The event that was received</param>
+    /// <param name="exchangeName">The exchange where the event came from</param>
+    /// <param name="routingKey">The routing key of the received event</param>
+    /// <param name="consumerTag">The consumer tag that received the event</param>
+    /// <exception cref="ArgumentNullException">Thrown when event, exchangeName, or routingKey is null</exception>
     public EventReceivedEventArgs(IEvent @event, string exchangeName, string routingKey, string? consumerTag = null)
     {
         Event = @event ?? throw new ArgumentNullException(nameof(@event));
@@ -128,6 +145,16 @@ public class EventProcessingFailedEventArgs : EventArgs
     /// </summary>
     public bool WillRetry { get; }
 
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="event">The event that failed processing</param>
+    /// <param name="exception">The exception that occurred</param>
+    /// <param name="exchangeName">The exchange where the event came from</param>
+    /// <param name="routingKey">The routing key of the failed event</param>
+    /// <param name="attemptCount">The number of retry attempts</param>
+    /// <param name="willRetry">True if the event will be retried</param>
+    /// <exception cref="ArgumentNullException">Thrown when event, exception, exchangeName, or routingKey is null</exception>
     public EventProcessingFailedEventArgs(IEvent @event, Exception exception, string exchangeName, string routingKey, int attemptCount, bool willRetry)
     {
         Event = @event ?? throw new ArgumentNullException(nameof(@event));
