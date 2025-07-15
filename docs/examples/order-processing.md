@@ -4,7 +4,7 @@
 **Focus**: Real-world e-commerce scenario with events  
 **Time**: 30 minutes  
 
-This example demonstrates a complete order processing workflow using FS.RabbitMQ, including event-driven architecture, error handling, and monitoring.
+This example demonstrates a complete order processing workflow using FS.StreamFlow, including event-driven architecture, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 
@@ -119,7 +119,7 @@ public enum OrderStatus
 
 ```csharp
 // Models/Events/OrderCreated.cs
-using FS.RabbitMQ.Events;
+using FS.StreamFlow.Core.Features.Events.Interfaces;
 
 namespace OrderProcessing.Models.Events;
 
@@ -174,7 +174,7 @@ public class OrderCompleted : IntegrationEventBase
 
 ```csharp
 // Services/OrderService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using OrderProcessing.Models;
 using OrderProcessing.Models.Events;
 
@@ -260,8 +260,8 @@ public class CreateOrderRequest
 
 ```csharp
 // Services/InventoryService.cs
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.EventHandlers;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+using FS.StreamFlow.Core.Features.Events.Interfaces;
 using OrderProcessing.Models;
 using OrderProcessing.Models.Events;
 
@@ -384,8 +384,8 @@ public class InventoryReservationFailed : IntegrationEventBase
 
 ```csharp
 // Services/PaymentService.cs
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.EventHandlers;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+using FS.StreamFlow.Core.Features.Events.Interfaces;
 using OrderProcessing.Models.Events;
 
 namespace OrderProcessing.Services;
@@ -472,7 +472,7 @@ public class PaymentFailed : IntegrationEventBase
 
 ```csharp
 // Services/NotificationService.cs
-using FS.RabbitMQ.EventHandlers;
+using FS.StreamFlow.Core.Features.Events.Interfaces;
 using OrderProcessing.Models.Events;
 
 namespace OrderProcessing.Services;
@@ -528,7 +528,7 @@ public class NotificationService :
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 using OrderProcessing.Services;
 using OrderProcessing.Models;
 using OrderProcessing.Models.Events;
@@ -542,7 +542,7 @@ builder.Services.AddLogging(config =>
     config.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add FS.RabbitMQ with event bus
+// Add FS.StreamFlow with event bus
 builder.Services.AddRabbitMQ()
     .WithConnectionString("amqp://localhost")
     .WithEventBus(config =>
@@ -787,4 +787,4 @@ View the RabbitMQ Management UI at http://localhost:15672 to see:
 
 ## 🎯 Key Takeaways
 
-This example demonstrates how to build a robust, event-driven order processing system using FS.RabbitMQ. The pattern can be extended to handle any complex business workflow! 🚀 
+This example demonstrates how to build a robust, event-driven order processing system using FS.StreamFlow. The pattern can be extended to handle any complex business workflow! 🚀 

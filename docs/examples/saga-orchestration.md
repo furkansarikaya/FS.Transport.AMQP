@@ -4,7 +4,7 @@
 **Focus**: Long-running workflow management, distributed transactions  
 **Time**: 45 minutes
 
-This example demonstrates how to implement saga orchestration using FS.RabbitMQ. It covers saga state, event handling, compensation, error handling, and monitoring in a distributed order processing scenario.
+This example demonstrates how to implement saga orchestration using FS.StreamFlow. It covers saga state, event handling, compensation, error handling, and monitoring in a distributed order processing scenario.
 
 ## 📋 What You'll Learn
 - Saga orchestration patterns
@@ -59,7 +59,7 @@ public class OrderProcessingSagaState
 
 ```csharp
 // Services/OrderProcessingSaga.cs
-using FS.RabbitMQ.Saga;
+using FS.StreamFlow.Core.Features.Events.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
@@ -126,7 +126,7 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -183,4 +183,4 @@ var host = builder.Build();
 ## 🎯 Key Takeaways
 - Saga orchestration enables reliable distributed transactions.
 - Compensation and error handling are essential for robust workflows.
-- FS.RabbitMQ simplifies saga management in .NET. 
+- FS.StreamFlow simplifies saga management in .NET. 

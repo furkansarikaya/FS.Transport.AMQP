@@ -1,6 +1,6 @@
 # Event Sourcing Guide
 
-This guide explains how to implement event sourcing using FS.RabbitMQ.
+This guide explains how to implement event sourcing using FS.StreamFlow.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -12,7 +12,7 @@ This guide explains how to implement event sourcing using FS.RabbitMQ.
 
 ## Overview
 
-Event sourcing is a pattern where the state of your application is determined by a sequence of events rather than just the current state. FS.RabbitMQ provides a complete event sourcing implementation through its event store component.
+Event sourcing is a pattern where the state of your application is determined by a sequence of events rather than just the current state. FS.StreamFlow provides a complete event sourcing implementation through its event store component.
 
 ## Event Store
 
@@ -32,23 +32,109 @@ builder.Services.AddRabbitMQ()
 ### Basic Operations
 
 ```csharp
-// Append events to a stream
-await _eventStore.AppendToStreamAsync(
-    streamName: $"order-{orderId}",
-    expectedVersion: 0,
-    events: new[] {
-        new OrderCreated(orderId, customerName, amount),
-        new OrderItemAdded(orderId, itemId, quantity)
-    });
+// Append events to a stream with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .AppendEvent(new OrderCreated(orderId, customerName, amount))
+    .AppendEvent(new OrderItemAdded(orderId, itemId, quantity))
+    .SaveAsync();
 
-// Read events from a stream
-var events = await _eventStore.ReadStreamAsync(
-    streamName: $"order-{orderId}",
-    fromVersion: 0);
+// Read events from a stream with fluent API
+var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .FromVersion(0)
+    .WithMaxCount(100)
+    .ReadAsync();
 
-// Get stream metadata
-var metadata = await _eventStore.GetStreamMetadataAsync(
-    streamName: $"order-{orderId}");
+// Get stream metadata with fluent API
+var metadata = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .GetMetadataAsync();
+    
+// Check if stream exists with fluent API
+var exists = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .ExistsAsync();
+    
+// Get stream version with fluent API
+var version = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .GetVersionAsync();
+```
+
+### Advanced Event Store Operations
+
+```csharp
+// Complex event store operations with fluent API
+public class OrderEventStore
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEvents(events)
+            .SaveAsync();
+    }
+    
+    public async Task<long> SaveOrderEventsWithExpectedVersionAsync(Guid orderId, IEnumerable<object> events, long expectedVersion)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEventsWithExpectedVersion(events, expectedVersion)
+            .SaveAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(fromVersion)
+            .WithMaxCount(100)
+            .ReadAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetRecentOrderEventsAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(-1)
+            .WithMaxCount(10)
+            .ReadBackwardAsync();
+    }
+    
+    public async Task<bool> TruncateOrderStreamAsync(Guid orderId, long version)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .TruncateAsync(version);
+    }
+    
+    public async Task<bool> DeleteOrderStreamAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .DeleteAsync();
+    }
+}
+```
+
+### Legacy Event Store API
+
+```csharp
+// Legacy API - still supported but fluent API is recommended
+public class LegacyEventStore
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task LegacyOperationsAsync()
+    {
+        // Append events to a stream (legacy)
+        await _streamFlow.EventStore.AppendToStreamAsync(
+            streamName: $"order-{orderId}",
+            expectedVersion: 0,
+            events: new[] { orderCreatedEvent, orderShippedEvent });
+
+        // Read events from a stream (legacy)
+        var events = await _streamFlow.EventStore.ReadStreamAsync(
+            streamName: $"order-{orderId}",
+            fromVersion: 0);
+
+        // Get stream metadata (legacy)
+        var metadata = await _streamFlow.EventStore.GetStreamMetadataAsync(
+            streamName: $"order-{orderId}");
+    }
+}
 ```
 
 ## Aggregates
@@ -89,14 +175,48 @@ public class OrderAggregate
 ### Loading Aggregates
 
 ```csharp
-// Load aggregate from event stream
-var order = await _eventStore.LoadAggregateAsync<OrderAggregate>(
-    streamName: $"order-{orderId}");
+// Load aggregate from event stream with fluent API
+public async Task<OrderAggregate> LoadOrderAggregateAsync(Guid orderId)
+{
+    var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+        .FromVersion(0)
+        .ReadAsync();
+    
+    var aggregate = new OrderAggregate();
+    foreach (var @event in events)
+    {
+        aggregate.Apply((dynamic)@event);
+    }
+    
+    return aggregate;
+}
 
-// Load aggregate with snapshot
-var order = await _eventStore.LoadAggregateAsync<OrderAggregate>(
-    streamName: $"order-{orderId}",
-    useSnapshot: true);
+// Load aggregate with snapshot using fluent API
+public async Task<OrderAggregate> LoadOrderAggregateWithSnapshotAsync(Guid orderId)
+{
+    var snapshot = await _streamFlow.EventStore.Stream($"order-{orderId}")
+        .GetSnapshotAsync();
+    
+    var aggregate = new OrderAggregate();
+    long fromVersion = 0;
+    
+    if (snapshot != null)
+    {
+        aggregate = (OrderAggregate)snapshot;
+        fromVersion = aggregate.Version + 1;
+    }
+    
+    var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+        .FromVersion(fromVersion)
+        .ReadAsync();
+    
+    foreach (var @event in events)
+    {
+        aggregate.Apply((dynamic)@event);
+    }
+    
+    return aggregate;
+}
 ```
 
 ## Snapshots
@@ -106,31 +226,86 @@ Snapshots improve performance by reducing the number of events that need to be r
 ### Configuration
 
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithEventStore(config =>
-    {
-        config.EnableSnapshots = true;
-        config.SnapshotInterval = 100; // Take snapshot every 100 events
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.EventStore.EnableSnapshots = true;
+    options.EventStore.SnapshotInterval = 100; // Take snapshot every 100 events
+    options.EventStore.StreamPrefix = "eventstore";
+});
 ```
 
-### Managing Snapshots
+### Managing Snapshots with Fluent API
 
 ```csharp
-// Create snapshot
-await _eventStore.CreateSnapshotAsync(
-    streamName: $"order-{orderId}",
-    snapshot: order);
+// Save snapshot with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .WithSnapshot(orderSnapshot, version: 100)
+    .SaveSnapshotAsync();
 
-// Get latest snapshot
-var snapshot = await _eventStore.GetLatestSnapshotAsync<OrderAggregate>(
-    streamName: $"order-{orderId}");
+// Get snapshot with fluent API
+var snapshot = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .GetSnapshotAsync();
 
-// Delete snapshot
-await _eventStore.DeleteSnapshotAsync(
-    streamName: $"order-{orderId}",
-    version: snapshotVersion);
+// Save events with snapshot in one operation
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .AppendEvents(newEvents)
+    .WithSnapshot(orderSnapshot, version: 100)
+    .SaveAsync();
+```
+
+### Advanced Snapshot Management
+
+```csharp
+public class OrderSnapshotManager
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task<bool> ShouldCreateSnapshotAsync(Guid orderId)
+    {
+        var version = await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .GetVersionAsync();
+            
+        return version > 0 && version % 100 == 0; // Create snapshot every 100 events
+    }
+    
+    public async Task CreateSnapshotAsync(Guid orderId)
+    {
+        // Load current aggregate
+        var aggregate = await LoadOrderAggregateAsync(orderId);
+        
+        // Save snapshot
+        await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .WithSnapshot(aggregate, aggregate.Version)
+            .SaveSnapshotAsync();
+    }
+    
+    public async Task<OrderAggregate> LoadAggregateWithSnapshotAsync(Guid orderId)
+    {
+        var snapshot = await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .GetSnapshotAsync();
+        
+        var aggregate = new OrderAggregate();
+        long fromVersion = 0;
+        
+        if (snapshot != null)
+        {
+            aggregate = (OrderAggregate)snapshot;
+            fromVersion = aggregate.Version + 1;
+        }
+        
+        var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(fromVersion)
+            .ReadAsync();
+        
+        foreach (var @event in events)
+        {
+            aggregate.Apply((dynamic)@event);
+        }
+        
+        return aggregate;
+    }
+}
 ```
 
 ## Best Practices

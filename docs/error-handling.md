@@ -1,6 +1,6 @@
 # Error Handling Guide
 
-This guide covers comprehensive error handling strategies in FS.RabbitMQ, from basic retry mechanisms to advanced resilience patterns.
+This guide covers comprehensive error handling strategies in FS.StreamFlow, from basic retry mechanisms to advanced resilience patterns.
 
 ## 📋 Table of Contents
 
@@ -15,7 +15,7 @@ This guide covers comprehensive error handling strategies in FS.RabbitMQ, from b
 
 ## 🎯 Error Handling Overview
 
-FS.RabbitMQ provides multiple layers of error handling to ensure message processing reliability:
+FS.StreamFlow provides multiple layers of error handling to ensure message processing reliability:
 
 ### Error Handling Layers
 
@@ -48,7 +48,7 @@ builder.Services.AddRabbitMQ()
 
 ### Built-in Retry Policies
 
-FS.RabbitMQ provides several built-in retry policies:
+FS.StreamFlow provides several built-in retry policies:
 
 #### 1. Linear Retry Policy
 
@@ -1467,7 +1467,7 @@ public class ErrorHandlingHealthCheck : IHealthCheck
 
 ## 🎉 Summary
 
-You've now mastered comprehensive error handling in FS.RabbitMQ:
+You've now mastered comprehensive error handling in FS.StreamFlow:
 
 ✅ **Retry policies and strategies**  
 ✅ **Circuit breaker pattern implementation**  
@@ -1479,7 +1479,7 @@ You've now mastered comprehensive error handling in FS.RabbitMQ:
 
 ## 🎯 Next Steps
 
-Continue your FS.RabbitMQ journey:
+Continue your FS.StreamFlow journey:
 
 - [Performance Tuning](performance.md) - Optimize for high throughput
 - [Monitoring](monitoring.md) - Monitor your messaging system

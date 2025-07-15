@@ -4,7 +4,7 @@
 **Focus**: Domain and integration events, decoupled services  
 **Time**: 30 minutes
 
-This example demonstrates how to implement an event-driven architecture using FS.RabbitMQ. It covers event publishing, subscribing, error handling, and monitoring in a decoupled microservices scenario.
+This example demonstrates how to implement an event-driven architecture using FS.StreamFlow. It covers event publishing, subscribing, error handling, and monitoring in a decoupled microservices scenario.
 
 ## 📋 What You'll Learn
 - Event-driven design patterns
@@ -49,7 +49,7 @@ public record EmailSent(Guid UserId, string Email, DateTime SentAt);
 
 ```csharp
 // Services/UserService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class UserService
@@ -79,7 +79,7 @@ public class UserService
 
 ```csharp
 // Services/EmailService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class EmailService : IEventHandler<UserRegistered>
@@ -107,7 +107,7 @@ public class EmailService : IEventHandler<UserRegistered>
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -164,4 +164,4 @@ var host = builder.Build();
 ## 🎯 Key Takeaways
 - Event-driven architecture enables decoupled, scalable systems.
 - Error handling and monitoring are essential for reliable event flows.
-- FS.RabbitMQ simplifies event-driven design in .NET. 
+- FS.StreamFlow simplifies event-driven design in .NET. 

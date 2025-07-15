@@ -4,7 +4,7 @@
 **Focus**: Production monitoring setup  
 **Time**: 20 minutes
 
-This example demonstrates how to implement monitoring and observability for FS.RabbitMQ-based systems. It covers health checks, metrics, and logging.
+This example demonstrates how to implement monitoring and observability for FS.StreamFlow-based systems. It covers health checks, metrics, and logging.
 
 ## 📋 What You'll Learn
 - Health check integration
@@ -84,4 +84,4 @@ builder.Services.AddLogging(config =>
 
 ## 🎯 Key Takeaways
 - Monitoring and observability are essential for production systems.
-- FS.RabbitMQ integrates with .NET health checks and logging. 
+- FS.StreamFlow integrates with .NET health checks and logging. 

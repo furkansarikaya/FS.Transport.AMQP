@@ -4,7 +4,7 @@
 **Focus**: Payment workflows with retry and error handling  
 **Time**: 30 minutes
 
-This example demonstrates how to implement payment processing workflows using FS.RabbitMQ. It covers payment request, confirmation, error handling, and monitoring.
+This example demonstrates how to implement payment processing workflows using FS.StreamFlow. It covers payment request, confirmation, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 - Payment request and confirmation patterns
@@ -48,7 +48,7 @@ public record PaymentProcessed(Guid OrderId, string TransactionId);
 
 ```csharp
 // Services/PaymentService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class PaymentService
@@ -83,7 +83,7 @@ public class PaymentService
 
 ```csharp
 // Services/PaymentProcessedHandler.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class PaymentProcessedHandler : IEventHandler<PaymentProcessed>
@@ -115,4 +115,4 @@ public class PaymentProcessedHandler : IEventHandler<PaymentProcessed>
 ## 🎯 Key Takeaways
 - Event-driven payment processing enables reliable workflows.
 - Error handling and monitoring are essential for payment flows.
-- FS.RabbitMQ simplifies payment event workflows. 
+- FS.StreamFlow simplifies payment event workflows. 

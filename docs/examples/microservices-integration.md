@@ -4,7 +4,7 @@
 **Focus**: Service-to-service communication  
 **Time**: 45 minutes
 
-This example demonstrates how to implement microservices integration using FS.RabbitMQ. It covers service-to-service event contracts, communication flows, error handling, and monitoring.
+This example demonstrates how to implement microservices integration using FS.StreamFlow. It covers service-to-service event contracts, communication flows, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 - Service-to-service event contracts
@@ -53,7 +53,7 @@ public record PaymentProcessed(Guid OrderId, string TransactionId);
 
 ```csharp
 // Services/OrderService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class OrderService
@@ -81,7 +81,7 @@ public class OrderService
 
 ```csharp
 // Services/InventoryService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class InventoryService
@@ -109,7 +109,7 @@ public class InventoryService
 
 ```csharp
 // Services/PaymentService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class PaymentService
@@ -144,4 +144,4 @@ public class PaymentService
 ## 🎯 Key Takeaways
 - Event-driven microservices enable scalable, decoupled systems.
 - Error handling and monitoring are essential for distributed flows.
-- FS.RabbitMQ simplifies microservices integration. 
+- FS.StreamFlow simplifies microservices integration. 

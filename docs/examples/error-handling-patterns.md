@@ -4,7 +4,7 @@
 **Focus**: Comprehensive error handling  
 **Time**: 25 minutes
 
-This example demonstrates how to implement robust error handling patterns using FS.RabbitMQ. It covers retry, dead letter, and circuit breaker patterns.
+This example demonstrates how to implement robust error handling patterns using FS.StreamFlow. It covers retry, dead letter, and circuit breaker patterns.
 
 ## 📋 What You'll Learn
 - Retry policies for transient errors
@@ -34,7 +34,7 @@ ErrorHandlingPatterns/
 
 ```csharp
 // Services/ErrorProneService.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class ErrorProneService
@@ -60,7 +60,7 @@ public class ErrorProneService
 
 ```csharp
 // Services/ErrorHandler.cs
-using FS.RabbitMQ.ErrorHandling;
+using FS.StreamFlow.RabbitMQ.Features.ErrorHandling;
 using Microsoft.Extensions.Logging;
 
 public class ErrorHandler : IErrorHandler
@@ -92,4 +92,4 @@ public class ErrorHandler : IErrorHandler
 
 ## 🎯 Key Takeaways
 - Robust error handling is critical for reliable messaging.
-- FS.RabbitMQ provides built-in support for common error handling patterns. 
+- FS.StreamFlow provides built-in support for common error handling patterns. 

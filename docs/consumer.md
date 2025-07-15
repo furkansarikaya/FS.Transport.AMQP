@@ -1,6 +1,6 @@
 # Consumer Guide
 
-This guide covers everything you need to know about consuming messages with FS.RabbitMQ, from basic consumption to advanced enterprise patterns.
+This guide covers everything you need to know about consuming messages with FS.StreamFlow, from basic consumption to advanced enterprise patterns.
 
 ## 📋 Table of Contents
 
@@ -22,21 +22,19 @@ This guide covers everything you need to know about consuming messages with FS.R
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add FS.RabbitMQ with consumer configuration
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 10;
-        config.ConcurrentConsumers = 2;
-        config.AutoAck = false;
-        config.RequeueOnFailure = true;
-    })
-    .Build();
+// Add FS.StreamFlow with consumer configuration
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.Consumer.PrefetchCount = 10;
+    options.Consumer.ConcurrentConsumers = 2;
+    options.Consumer.AutoAck = false;
+    options.Consumer.RequeueOnFailure = true;
+});
 
 var app = builder.Build();
 ```
@@ -46,21 +44,51 @@ var app = builder.Build();
 ```csharp
 public class OrderProcessor
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderProcessor> _logger;
 
-    public OrderProcessor(IRabbitMQClient rabbitMQ, ILogger<OrderProcessor> logger)
+    public OrderProcessor(IStreamFlowClient streamFlow, ILogger<OrderProcessor> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task StartProcessingAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: ProcessOrderAsync,
-            cancellationToken: cancellationToken);
+        // Setup infrastructure with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+            
+        // Consume with fluent API
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(5)
+            .WithPrefetchCount(100)
+            .WithAutoAck(false)
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Custom error handling
+                return exception is TransientException;
+            })
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .WithDeadLetterQueue(new DeadLetterSettings
+            {
+                DeadLetterExchange = "dlx",
+                DeadLetterQueue = "dlq"
+            })
+            .ConsumeAsync(ProcessOrderAsync, cancellationToken);
     }
 
     private async Task<bool> ProcessOrderAsync(Order order, MessageContext context)
@@ -77,24 +105,192 @@ public class OrderProcessor
 
 ## 📥 Basic Message Consumption
 
-### Simple Message Consumer
+### Simple Message Consumer with Fluent API
 
 ```csharp
 public class SimpleConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<SimpleConsumer> _logger;
 
-    public SimpleConsumer(IRabbitMQClient rabbitMQ, ILogger<SimpleConsumer> logger)
+    public SimpleConsumer(IStreamFlowClient streamFlow, ILogger<SimpleConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
-    // Consume typed messages
+    // Consume typed messages with fluent API
     public async Task ConsumeOrdersAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(3)
+            .WithPrefetchCount(50)
+            .WithAutoAck(false)
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Custom error handling
+                return exception is TransientException;
+            })
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.Linear,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .WithDeadLetterQueue(new DeadLetterSettings
+            {
+                DeadLetterExchange = "dlx",
+                DeadLetterQueue = "dlq"
+            })
+            .ConsumeAsync(async (order, context) =>
+            {
+                _logger.LogInformation("Received order {OrderId} from {CustomerName}", 
+                    order.Id, order.CustomerName);
+                
+                // Process the order
+                await ProcessOrderAsync(order);
+                
+                return true; // Acknowledge
+            }, cancellationToken);
+    }
+
+    // Raw message consumption with fluent API
+    public async Task ConsumeRawMessagesAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamFlow.Consumer.Queue<byte[]>("raw-data")
+            .WithConcurrency(5)
+            .WithPrefetchCount(100)
+            .WithAutoAck(false)
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Log error and don't requeue raw data
+                _logger.LogError(exception, "Error processing raw data");
+                return false;
+            })
+            .ConsumeAsync(async (data, context) =>
+            {
+                _logger.LogInformation("Received {Size} bytes from {Exchange}", 
+                    data.Length, context.Exchange);
+                
+                // Process raw data
+                await ProcessRawDataAsync(data);
+                
+                return true; // Acknowledge
+            }, cancellationToken);
+    }
+    
+    // Event consumption with fluent API
+    public async Task ConsumeEventsAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamFlow.Consumer.Queue<OrderCreated>()
+            .WithConcurrency(3)
+            .WithPrefetch(50)
+            .WithErrorHandling(ErrorHandlingStrategy.Retry)
+            .WithMetadataFilter(metadata => metadata.Source == "order-service")
+            .WithDeadLetterQueue("event-dlq")
+            .HandleAsync(async (orderCreated, context) =>
+            {
+                _logger.LogInformation("Received OrderCreated event for order {OrderId}", 
+                    orderCreated.OrderId);
+                
+                // Handle the event
+                await HandleOrderCreatedAsync(orderCreated, context);
+                
+                return true; // Acknowledge
+            }, cancellationToken);
+    }
+
+    private async Task ProcessOrderAsync(Order order)
+    {
+        // Business logic
+        await Task.Delay(1000);
+        
+        // Store in event store
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderProcessed(order.Id, DateTime.UtcNow))
+            .SaveAsync();
+    }
+    
+    private async Task ProcessRawDataAsync(byte[] data)
+    {
+        // Process raw data
+        await Task.Delay(500);
+    }
+    
+    private async Task HandleOrderCreatedAsync(OrderCreated orderCreated, EventContext context)
+    {
+        // Handle event
+        await Task.Delay(200);
+    }
+}
+```
+
+### Advanced Consumer Configuration
+
+```csharp
+public class AdvancedConsumer
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupAdvancedConsumerAsync()
+    {
+        // High-throughput consumer with advanced configuration
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(10)
+            .WithPrefetch(500)
+            .WithAutoAck(false)
+            .WithErrorHandling(ErrorHandlingStrategy.Retry)
+            .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+            .WithMaxRetries(5)
+            .WithRetryDelay(TimeSpan.FromSeconds(1))
+            .WithMaxRetryDelay(TimeSpan.FromMinutes(5))
+            .WithDeadLetterQueue("dlq")
+            .WithMessageFilter(order => order.Status == OrderStatus.Pending)
+            .WithTimeout(TimeSpan.FromMinutes(10))
+            .WithHealthCheck(enabled: true)
+            .WithMetrics(enabled: true)
+            .HandleAsync(async (order, context) =>
+            {
+                // Complex processing with error handling
+                try
+                {
+                    await ComplexOrderProcessingAsync(order);
+                    return true;
+                }
+                catch (BusinessException ex)
+                {
+                    // Log business exception and reject message
+                    _logger.LogError(ex, "Business error processing order {OrderId}", order.Id);
+                    return false; // This will trigger retry or dead letter
+                }
+                catch (Exception ex)
+                {
+                    // Log unexpected exception and reject message
+                    _logger.LogError(ex, "Unexpected error processing order {OrderId}", order.Id);
+                    return false;
+                }
+            });
+    }
+    
+    private async Task ComplexOrderProcessingAsync(Order order)
+    {
+        // Complex business logic
+        await Task.Delay(2000);
+    }
+}
+```
+
+### Legacy Consumer API
+
+```csharp
+// Legacy API - still supported but fluent API is recommended
+public class LegacyConsumer
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task ConsumeLegacyStyleAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "order-processing",
             messageHandler: async (order, context) =>
             {
@@ -108,122 +304,58 @@ public class SimpleConsumer
             },
             cancellationToken: cancellationToken);
     }
-
-    // Consume raw messages (byte arrays)
-    public async Task ConsumeRawMessagesAsync(CancellationToken cancellationToken = default)
-    {
-        await _rabbitMQ.Consumer.ConsumeAsync<byte[]>(
-            queueName: "raw-data",
-            messageHandler: async (data, context) =>
-            {
-                _logger.LogInformation("Received {Size} bytes from {Exchange}", 
-                    data.Length, context.Exchange);
-                
-                // Process raw data
-                await ProcessRawDataAsync(data);
-                
-                return true; // Acknowledge
-            },
-            cancellationToken: cancellationToken);
-    }
-
-    // Consume string messages
-    public async Task ConsumeStringMessagesAsync(CancellationToken cancellationToken = default)
-    {
-        await _rabbitMQ.Consumer.ConsumeAsync<string>(
-            queueName: "notifications",
-            messageHandler: async (message, context) =>
-            {
-                _logger.LogInformation("Received notification: {Message}", message);
-                
-                // Process notification
-                await ProcessNotificationAsync(message);
-                
-                return true; // Acknowledge
-            },
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task ProcessOrderAsync(Order order)
-    {
-        // Order processing logic
-        await Task.Delay(500);
-    }
-
-    private async Task ProcessRawDataAsync(byte[] data)
-    {
-        // Raw data processing logic
-        await Task.Delay(100);
-    }
-
-    private async Task ProcessNotificationAsync(string message)
-    {
-        // Notification processing logic
-        await Task.Delay(200);
-    }
 }
 ```
 
-### Message Context Information
+### Infrastructure Setup for Consumers
 
 ```csharp
-public class ContextAwareConsumer
+public class ConsumerInfrastructureSetup
 {
-    private readonly IRabbitMQClient _rabbitMQ;
-    private readonly ILogger<ContextAwareConsumer> _logger;
-
-    public ContextAwareConsumer(IRabbitMQClient rabbitMQ, ILogger<ContextAwareConsumer> logger)
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupConsumerInfrastructureAsync()
     {
-        _rabbitMQ = rabbitMQ;
-        _logger = logger;
-    }
-
-    public async Task ConsumeWithContextAsync(CancellationToken cancellationToken = default)
-    {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
-            {
-                // Access message context information
-                _logger.LogInformation("Processing order {OrderId} with context: " +
-                    "MessageId={MessageId}, " +
-                    "CorrelationId={CorrelationId}, " +
-                    "Exchange={Exchange}, " +
-                    "RoutingKey={RoutingKey}, " +
-                    "DeliveryTag={DeliveryTag}, " +
-                    "Redelivered={Redelivered}",
-                    order.Id,
-                    context.MessageId,
-                    context.CorrelationId,
-                    context.Exchange,
-                    context.RoutingKey,
-                    context.DeliveryTag,
-                    context.Redelivered);
-
-                // Access headers
-                if (context.Headers.TryGetValue("source", out var source))
-                {
-                    _logger.LogInformation("Message source: {Source}", source);
-                }
-
-                // Process based on context
-                if (context.Redelivered)
-                {
-                    _logger.LogWarning("Order {OrderId} is being redelivered", order.Id);
-                    // Handle redelivery logic
-                }
-
-                await ProcessOrderAsync(order);
-                
-                return true;
-            },
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task ProcessOrderAsync(Order order)
-    {
-        // Processing logic
-        await Task.Delay(1000);
+        // Create exchanges
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("dlx")
+            .AsDirect()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        // Create consumer queues
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.created")
+            .BindToExchange("orders", "order.updated")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("high-priority-orders")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("high-priority.failed")
+            .WithMessageTtl(TimeSpan.FromHours(12))
+            .WithMaxLength(1000)
+            .WithPriority(10)
+            .BindToExchange("orders", "order.priority.high")
+            .DeclareAsync();
+            
+        // Create dead letter queue
+        await _streamFlow.QueueManager.Queue("dlq")
+            .WithDurable(true)
+            .BindToExchange("dlx", "order.failed")
+            .BindToExchange("dlx", "high-priority.failed")
+            .DeclareAsync();
     }
 }
 ```
@@ -1745,7 +1877,7 @@ public class ExternalServiceConsumer
 
 ## 🎉 Summary
 
-You've now mastered FS.RabbitMQ Consumer functionality:
+You've now mastered FS.StreamFlow Consumer functionality:
 
 ✅ **Basic and advanced consumption patterns**  
 ✅ **Message acknowledgment strategies**  
@@ -1759,7 +1891,7 @@ You've now mastered FS.RabbitMQ Consumer functionality:
 
 ## 🎯 Next Steps
 
-Continue your FS.RabbitMQ journey:
+Continue your FS.StreamFlow journey:
 
 - [Event-Driven Architecture](event-driven.md) - Build event-driven systems
 - [Error Handling](error-handling.md) - Master error handling patterns

@@ -1,0 +1,121 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- Framework Configuration -->
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <!-- Build Configuration -->
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+
+        <!-- Version Configuration -->
+        <VersionPrefix>9.0.0</VersionPrefix>
+        <VersionSuffix>alpha</VersionSuffix>
+        <BuildNumber Condition="'$(BuildNumber)' == ''">$([System.DateTime]::Now.ToString('yyyyMMdd-HHmm'))</BuildNumber>
+        <PackageVersion>$(VersionPrefix)-$(VersionSuffix).$(BuildNumber)</PackageVersion>
+        <Version>$(PackageVersion)</Version>
+
+        <!-- Package Identity -->
+        <PackageId>FS.StreamFlow.Core</PackageId>
+        <Title>FS.StreamFlow.Core - Messaging Framework Abstractions</Title>
+        <Authors>Furkan Sarıkaya</Authors>
+        <Owners>Furkan Sarıkaya</Owners>
+        <Company>Furkan Sarıkaya</Company>
+        <Product>FS.StreamFlow</Product>
+        <Copyright>Copyright © 2025 Furkan Sarıkaya</Copyright>
+        <AssemblyTitle>FS.StreamFlow.Core</AssemblyTitle>
+        <AssemblyDescription>Core abstractions and interfaces for FS.StreamFlow messaging framework</AssemblyDescription>
+        <AssemblyCompany>Furkan Sarıkaya</AssemblyCompany>
+        <AssemblyProduct>FS.StreamFlow</AssemblyProduct>
+        <AssemblyCopyright>Copyright © 2025 Furkan Sarıkaya</AssemblyCopyright>
+
+        <!-- Package Description -->
+        <Description>Core abstractions, interfaces, and models for FS.StreamFlow messaging framework. Provides provider-agnostic APIs for messaging, event-driven architecture, and stream processing.</Description>
+        <Summary>Core abstractions for FS.StreamFlow messaging framework with provider-agnostic APIs for messaging, events, and stream processing.</Summary>
+        <PackageTags>streamflow;messaging;abstractions;interfaces;event-driven;streaming;microservices;dotnet;csharp;core</PackageTags>
+        <PackageReleaseNotes>
+            Alpha Release $(VersionPrefix)-$(VersionSuffix).$(BuildNumber)
+
+            🎯 Core Abstractions:
+            • IStreamFlowClient - Provider-agnostic client interface
+            • IProducer/IConsumer - Messaging abstractions
+            • IEventBus - Event-driven architecture support
+            • IConnectionManager - Connection management interface
+            • IErrorHandler - Error handling abstractions
+
+            📦 Models &amp; Enums:
+            • MessageContext - Platform-agnostic message context
+            • PublishResult - Operation result modeling
+            • Event interfaces (IDomainEvent, IIntegrationEvent)
+            • Configuration base classes
+            • Statistics and health check models
+
+            🔧 Extensions:
+            • ServiceCollection extensions for DI
+            • Configuration helpers
+
+            ⚠️ Alpha Notice:
+            This is an alpha release for testing and feedback. Not recommended for production use.
+        </PackageReleaseNotes>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
+
+        <!-- Repository Information -->
+        <PackageProjectUrl>https://github.com/furkansarikaya/FS.StreamFlow</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/furkansarikaya/FS.StreamFlow</RepositoryUrl>
+        <RepositoryBranch>main</RepositoryBranch>
+        <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
+
+        <!-- License Configuration -->
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+        <!-- Symbol Configuration -->
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>embedded</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+
+        <!-- Warning Configuration -->
+        <NoWarn>1701;1702</NoWarn>
+        <WarningsAsErrors/>
+        <WarningsNotAsErrors/>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisLevel>latest</AnalysisLevel>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Content Files -->
+        <Content Include="..\..\README.md" Pack="true" PackagePath="\"/>
+        <Content Include="..\..\LICENSE" Pack="true" PackagePath="\"/>
+        <Content Include="icon.png" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Core Dependencies -->
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0"/>
+
+        <!-- Serialization -->
+        <PackageReference Include="System.Text.Json" Version="9.0.0"/>
+
+        <!-- Health Checks -->
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0"/>
+    </ItemGroup>
+
+</Project>

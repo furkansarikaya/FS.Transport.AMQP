@@ -1,19 +1,28 @@
-# FS.RabbitMQ
+# FS.StreamFlow
 
-[![NuGet Version](https://img.shields.io/nuget/v/FS.RabbitMQ.svg)](https://www.nuget.org/packages/FS.RabbitMQ/)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/FS.RabbitMQ.svg)](https://www.nuget.org/packages/FS.RabbitMQ/)
-[![GitHub License](https://img.shields.io/github/license/furkansarikaya/FS.RabbitMQ)](https://github.com/furkansarikaya/FS.RabbitMQ/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/furkansarikaya/FS.RabbitMQ.svg)](https://github.com/furkansarikaya/FS.RabbitMQ/stargazers)
+[![Core NuGet Version](https://img.shields.io/nuget/v/FS.StreamFlow.Core.svg)](https://www.nuget.org/packages/FS.StreamFlow.Core/)
+[![RabbitMQ NuGet Version](https://img.shields.io/nuget/v/FS.StreamFlow.RabbitMQ.svg)](https://www.nuget.org/packages/FS.StreamFlow.RabbitMQ/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/FS.StreamFlow.RabbitMQ.svg)](https://www.nuget.org/packages/FS.StreamFlow.RabbitMQ/)
+[![GitHub License](https://img.shields.io/github/license/furkansarikaya/FS.StreamFlow)](https://github.com/furkansarikaya/FS.StreamFlow/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/furkansarikaya/FS.StreamFlow.svg)](https://github.com/furkansarikaya/FS.StreamFlow/stargazers)
 
-**A comprehensive, production-ready RabbitMQ client library for .NET 9 with enterprise-grade features, automatic recovery, and event-driven architecture support.**
+**A comprehensive, production-ready messaging framework for .NET 9 with enterprise-grade features, automatic recovery, and event-driven architecture support.**
 
-FS.RabbitMQ isn't just another RabbitMQ client wrapper. It's a complete messaging solution for building scalable, resilient applications with sophisticated event-driven capabilities. Whether you're building microservices, implementing CQRS patterns, or creating real-time applications, FS.RabbitMQ provides everything you need in one cohesive package.
+FS.StreamFlow isn't just another messaging client wrapper. It's a complete messaging solution for building scalable, resilient applications with sophisticated event-driven capabilities. Whether you're building microservices, implementing CQRS patterns, or creating real-time applications, FS.StreamFlow provides everything you need in one cohesive framework.
 
-## ✨ Why FS.RabbitMQ?
+## 🏗️ Architecture
 
-Imagine you're building a modern distributed application that needs to handle thousands of messages per second, process complex event flows, and remain resilient under pressure. Traditional RabbitMQ clients give you basic publish/subscribe functionality, but when you need enterprise-grade features like automatic recovery, event sourcing, saga orchestration, and comprehensive error handling, you're left building everything from scratch.
+FS.StreamFlow follows a layered architecture with clear separation of concerns:
 
-FS.RabbitMQ bridges this gap by providing **everything you need in one production-ready package**:
+- **FS.StreamFlow.Core**: Provider-agnostic abstractions, interfaces, and models
+- **FS.StreamFlow.RabbitMQ**: Production-ready RabbitMQ implementation
+- **Future Providers**: Extensible to other messaging providers (Azure Service Bus, Apache Kafka, etc.)
+
+## ✨ Why FS.StreamFlow?
+
+Imagine you're building a modern distributed application that needs to handle thousands of messages per second, process complex event flows, and remain resilient under pressure. Traditional messaging clients give you basic publish/subscribe functionality, but when you need enterprise-grade features like automatic recovery, event sourcing, saga orchestration, and comprehensive error handling, you're left building everything from scratch.
+
+FS.StreamFlow bridges this gap by providing **everything you need in one production-ready framework**:
 
 - 🔄 **Automatic Recovery**: Intelligent connection recovery with exponential backoff
 - 📨 **Enterprise Messaging**: Producer/Consumer patterns with confirmations and transactions
@@ -23,30 +32,38 @@ FS.RabbitMQ bridges this gap by providing **everything you need in one productio
 - 🛡️ **Comprehensive Error Handling**: Dead letter queues, retry policies, and circuit breakers
 - 📊 **Production Monitoring**: Health checks, metrics, and performance tracking
 - ⚡ **High Performance**: Async-first API with connection pooling
+- 🔌 **Provider Agnostic**: Extensible architecture for multiple messaging providers
 
 ## 🚀 Quick Start
 
 ### Installation
 
+Choose your messaging provider:
+
 ```bash
-dotnet add package FS.RabbitMQ
+# For RabbitMQ support
+dotnet add package FS.StreamFlow.RabbitMQ
+
+# Core abstractions (automatically included with providers)
+dotnet add package FS.StreamFlow.Core
 ```
 
 ### Basic Setup
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add FS.RabbitMQ with fluent configuration
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithHealthChecks()
-    .WithEventBus()
-    .WithMonitoring()
-    .Build();
+// Add FS.StreamFlow with RabbitMQ
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.EnableHealthChecks = true;
+    options.EnableEventBus = true;
+    options.EnableMonitoring = true;
+});
 
 var app = builder.Build();
 ```
@@ -54,37 +71,55 @@ var app = builder.Build();
 ### Your First Message
 
 ```csharp
-// Inject the RabbitMQ client
+// Inject the StreamFlow client
 public class OrderService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
-    public OrderService(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public OrderService(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
     
     public async Task CreateOrderAsync(Order order)
     {
-        // Publish a message
-        await _rabbitMQ.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.created",
-            message: order);
+        // Create exchange and queue with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+        
+        // Publish a message with fluent API
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(order);
     }
 }
 
-// Consume messages
+// Consume messages with fluent API
 public class OrderProcessor
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
-    public OrderProcessor(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public OrderProcessor(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
     
     public async Task StartProcessingAsync()
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(5)
+            .WithPrefetchCount(100)
+            .WithErrorHandler(async (exception, context) =>
             {
-                // Process the order
+                // Handle error and return true to requeue, false to reject
+                return exception is TransientException;
+            })
+            .ConsumeAsync(async (order, context) =>
+            {
                 await ProcessOrderAsync(order);
                 return true; // Acknowledge message
             });
@@ -101,16 +136,14 @@ That's it! You now have a production-ready messaging system with automatic recov
 Automatic connection recovery with intelligent backoff strategies:
 
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithConnection(config =>
-    {
-        config.AutomaticRecovery = true;
-        config.HeartbeatInterval = TimeSpan.FromSeconds(60);
-        config.MaxChannels = 100;
-        config.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.Connection.AutomaticRecovery = true;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.Connection.MaxChannels = 100;
+    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
+});
 ```
 
 ### 2. Event-Driven Architecture
@@ -125,7 +158,7 @@ public record OrderCreated(Guid OrderId, string CustomerName, decimal Amount) : 
 public record OrderShipped(Guid OrderId, string TrackingNumber) : IIntegrationEvent;
 
 // Event Handlers
-public class OrderCreatedHandler : IEventHandler<OrderCreated>
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
     public async Task HandleAsync(OrderCreated eventData, EventContext context)
     {
@@ -134,48 +167,60 @@ public class OrderCreatedHandler : IEventHandler<OrderCreated>
     }
 }
 
-// Publishing events
-await _rabbitMQ.EventBus.PublishDomainEventAsync(
-    new OrderCreated(orderId, customerName, amount));
+// Publishing events with fluent API
+await _streamFlow.EventBus.Event<OrderCreated>()
+    .WithMetadata(metadata =>
+    {
+        metadata.CorrelationId = correlationId;
+        metadata.Source = "order-service";
+        metadata.Version = "1.0";
+    })
+    .WithPriority(1)
+    .WithTtl(TimeSpan.FromMinutes(30))
+    .PublishAsync(new OrderCreated(orderId, customerName, amount));
 
-await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
-    new OrderShipped(orderId, trackingNumber));
+await _streamFlow.EventBus.Event<OrderShipped>()
+    .WithCorrelationId(correlationId)
+    .WithCausationId(causationId)
+    .WithAggregateId(orderId.ToString())
+    .WithAggregateType("Order")
+    .WithProperty("priority", "high")
+    .PublishAsync(new OrderShipped(orderId, trackingNumber));
 ```
 
 ### 3. Event Sourcing Support
 
-Complete event store implementation with snapshots:
+Complete event store implementation with fluent API and snapshots:
 
 ```csharp
-// Define an aggregate
-public class OrderAggregate
-{
-    public Guid Id { get; private set; }
-    public string Status { get; private set; }
-    public decimal Total { get; private set; }
-    
-    public void Apply(OrderCreated @event)
-    {
-        Id = @event.OrderId;
-        Status = "Created";
-        Total = @event.Amount;
-    }
-    
-    public void Apply(OrderShipped @event)
-    {
-        Status = "Shipped";
-    }
-}
+// Store events with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .AppendEvent(new OrderCreated(orderId, customerName, amount))
+    .AppendEvent(new OrderItemAdded(orderId, itemId, quantity))
+    .SaveAsync();
 
-// Store events
-await _rabbitMQ.EventStore.AppendToStreamAsync(
-    streamName: $"order-{orderId}",
-    expectedVersion: 0,
-    events: new[] { orderCreatedEvent, orderShippedEvent });
+// Read events with fluent API
+var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .FromVersion(0)
+    .WithMaxCount(100)
+    .ReadAsync();
 
-// Rebuild aggregate from events
-var aggregate = await _rabbitMQ.EventStore.LoadAggregateAsync<OrderAggregate>(
-    streamName: $"order-{orderId}");
+// Create snapshots with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .WithSnapshot(orderSnapshot, version: 50)
+    .SaveAsync();
+
+// Advanced event store operations
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .AppendEventsWithExpectedVersion(events, expectedVersion: 10)
+    .WithSnapshot(snapshot, version: 20)
+    .SaveAsync();
+
+// Read events backwards
+var recentEvents = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .FromVersion(-1)
+    .WithMaxCount(10)
+    .ReadBackwardAsync();
 ```
 
 ### 4. Saga Orchestration
@@ -183,9 +228,9 @@ var aggregate = await _rabbitMQ.EventStore.LoadAggregateAsync<OrderAggregate>(
 Long-running workflow management:
 
 ```csharp
-public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
+public class OrderProcessingSaga : ISaga<OrderProcessingSagaState>
 {
-    public async Task Handle(OrderCreated @event, SagaContext context)
+    public async Task HandleAsync(OrderCreated @event, SagaContext context)
     {
         State.OrderId = @event.OrderId;
         State.Status = "Processing";
@@ -194,7 +239,7 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
         await context.SendAsync(new ReserveInventory(@event.OrderId, @event.Items));
     }
     
-    public async Task Handle(InventoryReserved @event, SagaContext context)
+    public async Task HandleAsync(InventoryReserved @event, SagaContext context)
     {
         State.Status = "InventoryReserved";
         
@@ -202,7 +247,7 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
         await context.SendAsync(new ProcessPayment(@event.OrderId, State.Amount));
     }
     
-    public async Task Handle(PaymentProcessed @event, SagaContext context)
+    public async Task HandleAsync(PaymentProcessed @event, SagaContext context)
     {
         State.Status = "Completed";
         
@@ -217,20 +262,33 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
 Publisher confirms, transactions, and batch operations:
 
 ```csharp
-// Publisher confirms
-await _rabbitMQ.Producer.PublishAsync(
-    exchange: "orders",
-    routingKey: "order.created",
-    message: order,
-    waitForConfirmation: true);
+// Advanced producer with fluent API
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .WithDeliveryMode(DeliveryMode.Persistent)
+    .WithPriority(5)
+    .WithExpiration(TimeSpan.FromHours(24))
+    .WithHeaders(new Dictionary<string, object>
+    {
+        ["source"] = "order-service",
+        ["version"] = "1.0"
+    })
+    .WithHeader("priority", "high")
+    .WithContentType("application/json")
+    .WithContentEncoding("utf-8")
+    .WithCorrelationId(correlationId)
+    .WithMessageId(Guid.NewGuid().ToString())
+    .WithMandatory(true)
+    .WithConfirmationTimeout(TimeSpan.FromSeconds(5))
+    .PublishAsync(order);
 
-// Transactional publishing
-await _rabbitMQ.Producer.PublishTransactionalAsync(async () =>
-{
-    await _rabbitMQ.Producer.PublishAsync("orders", "order.created", order1);
-    await _rabbitMQ.Producer.PublishAsync("orders", "order.updated", order2);
-    await _rabbitMQ.Producer.PublishAsync("orders", "order.shipped", order3);
-});
+// Alternative syntax
+await _streamFlow.Producer.Message<Order>()
+    .ToExchange("orders")
+    .WithRoutingKey("order.created")
+    .WithDeliveryMode(DeliveryMode.Persistent)
+    .PublishAsync(order);
 
 // Batch operations
 var messages = new[]
@@ -240,26 +298,143 @@ var messages = new[]
     new MessageContext("orders", "order.shipped", order3)
 };
 
-await _rabbitMQ.Producer.PublishBatchAsync(messages);
+var batchResult = await _streamFlow.Producer.PublishBatchAsync(messages);
 ```
 
-### 6. Comprehensive Error Handling
+### 6. Advanced Consumer Features
+
+Consumer with comprehensive configuration:
+
+```csharp
+// Advanced consumer with fluent API
+await _streamFlow.Consumer.Queue<Order>("order-processing")
+    .FromExchange("orders")
+    .WithRoutingKey("order.*")
+    .WithSettings(settings =>
+    {
+        settings.PrefetchCount = 100;
+        settings.ConcurrentConsumers = 5;
+        settings.AutoAck = false;
+        settings.RequeueOnFailure = true;
+    })
+    .WithConsumerTag("order-processor-1")
+    .WithAutoAck(false)
+    .WithPrefetchCount(100)
+    .WithConcurrency(5)
+    .WithErrorHandler(async (exception, context) =>
+    {
+        if (exception is TransientException)
+            return true; // Requeue
+        
+        await _deadLetterService.SendAsync(context.Message);
+        return false; // Don't requeue
+    })
+    .WithRetryPolicy(new RetryPolicySettings
+    {
+        RetryPolicy = RetryPolicyType.ExponentialBackoff,
+        MaxRetryAttempts = 3,
+        RetryDelay = TimeSpan.FromSeconds(1)
+    })
+    .WithDeadLetterQueue(new DeadLetterSettings
+    {
+        DeadLetterExchange = "dlx",
+        DeadLetterQueue = "dlq"
+    })
+    .ConsumeAsync(async (order, context) =>
+    {
+        await ProcessOrderAsync(order);
+        return true;
+    });
+```
+
+### 7. Infrastructure Management
+
+Fluent APIs for queue, exchange, and event stream management:
+
+```csharp
+// Advanced Queue management with fluent API
+await _streamFlow.QueueManager.Queue("order-processing")
+    .WithDurable(true)
+    .WithExclusive(false)
+    .WithAutoDelete(false)
+    .WithArguments(new Dictionary<string, object>
+    {
+        ["x-message-ttl"] = 3600000,
+        ["x-max-length"] = 10000
+    })
+    .WithArgument("x-queue-mode", "lazy")
+    .WithDeadLetterExchange("dlx")
+    .WithDeadLetterRoutingKey("order.failed")
+    .WithMessageTtl(TimeSpan.FromHours(24))
+    .WithMaxLength(10000)
+    .WithMaxLengthBytes(1024 * 1024 * 100) // 100MB
+    .WithPriority(5)
+    .BindToExchange("orders", "order.created")
+    .BindToExchange("orders", "order.updated", new Dictionary<string, object>
+    {
+        ["x-match"] = "all"
+    })
+    .DeclareAsync();
+
+// Advanced Exchange management with fluent API
+await _streamFlow.ExchangeManager.Exchange("orders")
+    .WithType("topic")
+    .AsTopic() // Alternative syntax
+    .WithDurable(true)
+    .WithAutoDelete(false)
+    .WithArguments(new Dictionary<string, object>
+    {
+        ["alternate-exchange"] = "alt-orders"
+    })
+    .WithArgument("x-delayed-message", true)
+    .WithAlternateExchange("alt-orders")
+    .WithInternal(false)
+    .BindToExchange("master-orders", "order.*")
+    .BindToExchange("notifications", "order.created", new Dictionary<string, object>
+    {
+        ["x-match"] = "any"
+    })
+    .DeclareAsync();
+
+// Support for all exchange types
+await _streamFlow.ExchangeManager.Exchange("direct-orders").AsDirect().DeclareAsync();
+await _streamFlow.ExchangeManager.Exchange("fanout-orders").AsFanout().DeclareAsync();
+await _streamFlow.ExchangeManager.Exchange("header-orders").AsHeaders().DeclareAsync();
+
+// Event stream management with fluent API
+await _streamFlow.EventStore.Stream("order-events")
+    .AppendEvents(new[] { event1, event2, event3 })
+    .AppendEventsWithExpectedVersion(moreEvents, expectedVersion: 10)
+    .WithSnapshot(snapshot, version: 100)
+    .SaveAsync();
+
+// Stream operations
+await _streamFlow.EventStore.Stream("order-events").CreateAsync();
+await _streamFlow.EventStore.Stream("order-events").DeleteAsync();
+await _streamFlow.EventStore.Stream("order-events").TruncateAsync(version: 50);
+
+// Snapshot management
+var snapshot = await _streamFlow.EventStore.Stream("order-events").GetSnapshotAsync();
+await _streamFlow.EventStore.Stream("order-events")
+    .WithSnapshot(orderSnapshot, version: 100)
+    .SaveAsync();
+```
+
+### 8. Comprehensive Error Handling
 
 Built-in retry policies, circuit breakers, and dead letter queues:
 
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithErrorHandling(config =>
-    {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(1);
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.ErrorHandling.EnableDeadLetterQueue = true;
+    options.ErrorHandling.DeadLetterExchange = "dlx";
+    options.ErrorHandling.DeadLetterQueue = "dlq";
+    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
+    options.ErrorHandling.MaxRetryAttempts = 3;
+    options.ErrorHandling.RetryDelay = TimeSpan.FromSeconds(1);
+});
 ```
 
 ## 📋 Comprehensive Examples
@@ -267,42 +442,81 @@ builder.Services.AddRabbitMQ()
 ### Example 1: E-commerce Order Processing
 
 ```csharp
-// Complete order processing workflow
+// Complete order processing workflow with fluent APIs
 public class OrderProcessingService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
-    public OrderProcessingService(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public OrderProcessingService(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
     
     public async Task ProcessOrderAsync(Order order)
     {
-        // 1. Publish domain event
-        await _rabbitMQ.EventBus.PublishDomainEventAsync(
-            new OrderCreated(order.Id, order.CustomerName, order.Total));
+        // 1. Setup infrastructure with fluent APIs
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.*")
+            .DeclareAsync();
         
-        // 2. Store event in event store
-        await _rabbitMQ.EventStore.AppendToStreamAsync(
-            streamName: $"order-{order.Id}",
-            expectedVersion: 0,
-            events: new[] { new OrderCreated(order.Id, order.CustomerName, order.Total) });
+        // 2. Publish domain event with fluent API
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "order-service";
+                metadata.Version = "1.0";
+            })
+            .WithAggregateId(order.Id.ToString())
+            .WithAggregateType("Order")
+            .WithPriority(1)
+            .WithTtl(TimeSpan.FromMinutes(30))
+            .PublishAsync(new OrderCreated(order.Id, order.CustomerName, order.Total));
         
-        // 3. Start saga for order processing
-        await _rabbitMQ.Saga.StartSagaAsync<OrderProcessingSaga>(
+        // 3. Store event in event store with fluent API
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderCreated(order.Id, order.CustomerName, order.Total))
+            .AppendEvent(new OrderItemsAdded(order.Id, order.Items))
+            .SaveAsync();
+        
+        // 4. Start saga for order processing
+        await _streamFlow.SagaOrchestrator.StartSagaAsync<OrderProcessingSaga>(
             sagaId: order.Id,
             initialEvent: new OrderCreated(order.Id, order.CustomerName, order.Total));
     }
 }
 
 // Event handlers with automatic retry and error handling
-public class OrderCreatedHandler : IEventHandler<OrderCreated>
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
+    private readonly IStreamFlowClient _streamFlow;
+    
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
         try
         {
             // Business logic with automatic retry on failure
             await _inventoryService.ReserveItemsAsync(@event.OrderId);
-            await _emailService.SendOrderConfirmationAsync(@event);
+            
+            // Publish follow-up events
+            await _streamFlow.EventBus.Event<InventoryRequested>()
+                .WithMetadata(metadata =>
+                {
+                    metadata.CorrelationId = context.CorrelationId;
+                    metadata.CausationId = context.EventId;
+                    metadata.Source = "inventory-service";
+                })
+                .WithAggregateId(@event.OrderId.ToString())
+                .WithAggregateType("Order")
+                .PublishAsync(new InventoryRequested(@event.OrderId, @event.Items));
         }
         catch (Exception ex)
         {
@@ -319,7 +533,7 @@ public class OrderCreatedHandler : IEventHandler<OrderCreated>
 // Service A - Order Service
 public class OrderService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
     public async Task CreateOrderAsync(CreateOrderRequest request)
     {
@@ -329,29 +543,45 @@ public class OrderService
         await _orderRepository.SaveAsync(order);
         
         // Publish integration event for other services
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
-            new OrderCreated(order.Id, order.CustomerId, order.Items));
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithCorrelationId(Guid.NewGuid().ToString())
+            .WithSource("order-service")
+            .WithVersion("1.0")
+            .WithAggregateId(order.Id.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new OrderCreated(order.Id, order.CustomerId, order.Items));
     }
 }
 
 // Service B - Inventory Service
 public class InventoryService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
     public async Task StartAsync()
     {
         // Subscribe to order events
-        await _rabbitMQ.Consumer.ConsumeAsync<OrderCreated>(
-            queueName: "inventory-service",
-            messageHandler: async (orderCreated, context) =>
+        await _streamFlow.Consumer.Queue<OrderCreated>("inventory-service")
+            .WithConcurrency(3)
+            .WithPrefetchCount(50)
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Custom error handling
+                return exception is TransientException;
+            })
+            .ConsumeAsync(async (orderCreated, context) =>
             {
                 // Reserve inventory
                 var reserved = await ReserveInventoryAsync(orderCreated.Items);
                 
                 // Publish inventory reserved event
-                await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
-                    new InventoryReserved(orderCreated.OrderId, reserved));
+                await _streamFlow.EventBus.Event<InventoryReserved>()
+                    .WithCorrelationId(context.CorrelationId)
+                    .WithCausationId(context.MessageId)
+                    .WithSource("inventory-service")
+                    .WithAggregateId(orderCreated.OrderId.ToString())
+                    .WithAggregateType("Order")
+                    .PublishAsync(new InventoryReserved(orderCreated.OrderId, reserved));
                 
                 return true; // Acknowledge message
             });
@@ -361,20 +591,33 @@ public class InventoryService
 // Service C - Payment Service
 public class PaymentService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
     public async Task StartAsync()
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<InventoryReserved>(
-            queueName: "payment-service",
-            messageHandler: async (inventoryReserved, context) =>
+        await _streamFlow.Consumer.Queue<InventoryReserved>("payment-service")
+            .WithConcurrency(2)
+            .WithPrefetchCount(20)
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .ConsumeAsync(async (inventoryReserved, context) =>
             {
                 // Process payment
                 var payment = await ProcessPaymentAsync(inventoryReserved.OrderId);
                 
                 // Publish payment processed event
-                await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
-                    new PaymentProcessed(inventoryReserved.OrderId, payment.TransactionId));
+                await _streamFlow.EventBus.Event<PaymentProcessed>()
+                    .WithCorrelationId(context.CorrelationId)
+                    .WithCausationId(context.MessageId)
+                    .WithSource("payment-service")
+                    .WithAggregateId(inventoryReserved.OrderId.ToString())
+                    .WithAggregateType("Order")
+                    .WithProperty("transaction-id", payment.TransactionId)
+                    .PublishAsync(new PaymentProcessed(inventoryReserved.OrderId, payment.TransactionId));
                 
                 return true;
             });
@@ -388,14 +631,22 @@ public class PaymentService
 // High-throughput analytics processing
 public class AnalyticsProcessor
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     
     public async Task StartProcessingAsync()
     {
         // Process user events in real-time
-        await _rabbitMQ.Consumer.ConsumeAsync<UserEvent>(
-            queueName: "analytics-processing",
-            messageHandler: async (userEvent, context) =>
+        await _streamFlow.Consumer.Queue<UserEvent>("analytics-processing")
+            .WithConcurrency(10)
+            .WithPrefetchCount(1000)
+            .WithAutoAck(true) // High-throughput, less durability
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Log and continue processing
+                _logger.LogError(exception, "Error processing user event");
+                return false; // Don't requeue analytics events
+            })
+            .ConsumeAsync(async (userEvent, context) =>
             {
                 // Process analytics
                 await ProcessUserEventAsync(userEvent);
@@ -409,187 +660,132 @@ public class AnalyticsProcessor
 }
 
 // Configuration for high-throughput scenarios
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithConnection(config =>
-    {
-        config.MaxChannels = 200;
-        config.HeartbeatInterval = TimeSpan.FromSeconds(30);
-    })
-    .WithProducer(config =>
-    {
-        config.EnableConfirmations = true;
-        config.BatchSize = 1000;
-        config.MaxBatchWaitTime = TimeSpan.FromMilliseconds(100);
-    })
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 100;
-        config.ConcurrentConsumers = 10;
-        config.AutoAck = false;
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.Connection.MaxChannels = 200;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(30);
+    options.Producer.BatchSize = 1000;
+    options.Producer.MaxBatchWaitTime = TimeSpan.FromMilliseconds(100);
+    options.Consumer.PrefetchCount = 100;
+    options.Consumer.ConcurrentConsumers = 10;
+});
 ```
 
 ## ⚙️ Configuration Reference
 
 ### Fluent Configuration API
 
-Complete configuration with the fluent builder:
+Complete configuration with the options pattern:
 
 ```csharp
-builder.Services.AddRabbitMQ()
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
     // Connection settings
-    .WithConnectionString("amqp://localhost")
-    .WithConnection(config =>
-    {
-        config.AutomaticRecovery = true;
-        config.HeartbeatInterval = TimeSpan.FromSeconds(60);
-        config.MaxChannels = 100;
-        config.ConnectionTimeout = TimeSpan.FromSeconds(30);
-        config.RequestedConnectionTimeout = TimeSpan.FromSeconds(30);
-        config.ClientProvidedName = "MyApplication";
-    })
+    options.ConnectionString = "amqp://localhost";
+    options.Connection.AutomaticRecovery = true;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.Connection.MaxChannels = 100;
+    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    options.Connection.ClientProvidedName = "MyApplication";
     
     // SSL/TLS settings
-    .WithSsl(config =>
-    {
-        config.Enabled = true;
-        config.ServerName = "rabbitmq.example.com";
-        config.CertificatePath = "/path/to/certificate.pfx";
-        config.CertificatePassword = "password";
-    })
+    options.Ssl.Enabled = true;
+    options.Ssl.ServerName = "rabbitmq.example.com";
+    options.Ssl.CertificatePath = "/path/to/certificate.pfx";
+    options.Ssl.CertificatePassword = "password";
     
     // Producer settings
-    .WithProducer(config =>
-    {
-        config.EnableConfirmations = true;
-        config.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-        config.BatchSize = 100;
-        config.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
-        config.EnableTransactions = true;
-    })
+    options.Producer.EnableConfirmations = true;
+    options.Producer.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.Producer.BatchSize = 100;
+    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
     
     // Consumer settings
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 50;
-        config.ConcurrentConsumers = 5;
-        config.AutoAck = false;
-        config.RequeueOnFailure = true;
-        config.MaxConsumerConcurrency = 10;
-    })
+    options.Consumer.PrefetchCount = 50;
+    options.Consumer.ConcurrentConsumers = 5;
+    options.Consumer.AutoAck = false;
+    options.Consumer.RequeueOnFailure = true;
     
     // Error handling
-    .WithErrorHandling(config =>
-    {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(1);
-    })
+    options.ErrorHandling.EnableDeadLetterQueue = true;
+    options.ErrorHandling.DeadLetterExchange = "dlx";
+    options.ErrorHandling.DeadLetterQueue = "dlq";
+    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
+    options.ErrorHandling.MaxRetryAttempts = 3;
+    options.ErrorHandling.RetryDelay = TimeSpan.FromSeconds(1);
     
     // Serialization
-    .WithSerializer(SerializerType.Json)
-    .WithSerializationSettings(config =>
-    {
-        config.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        config.IgnoreNullValues = true;
-        config.WriteIndented = false;
-    })
+    options.Serialization.Format = SerializationFormat.Json;
+    options.Serialization.UseCompression = true;
     
     // Health checks
-    .WithHealthChecks(config =>
-    {
-        config.Enabled = true;
-        config.Interval = TimeSpan.FromSeconds(30);
-        config.Timeout = TimeSpan.FromSeconds(5);
-        config.FailureThreshold = 3;
-    })
+    options.HealthCheck.Enabled = true;
+    options.HealthCheck.Interval = TimeSpan.FromSeconds(30);
+    options.HealthCheck.Timeout = TimeSpan.FromSeconds(5);
     
     // Event bus
-    .WithEventBus(config =>
-    {
-        config.DomainEventExchange = "domain-events";
-        config.IntegrationEventExchange = "integration-events";
-        config.EventTypesAssembly = typeof(OrderCreated).Assembly;
-    })
+    options.EventBus.DomainEventExchange = "domain-events";
+    options.EventBus.IntegrationEventExchange = "integration-events";
     
     // Event store
-    .WithEventStore(config =>
-    {
-        config.StreamPrefix = "eventstore";
-        config.SnapshotInterval = 100;
-        config.EnableSnapshots = true;
-    })
-    
-    // Saga orchestration
-    .WithSaga(config =>
-    {
-        config.SagaStateExchange = "saga-state";
-        config.SagaTimeoutExchange = "saga-timeout";
-        config.SagaTypesAssembly = typeof(OrderProcessingSaga).Assembly;
-    })
+    options.EventStore.StreamPrefix = "eventstore";
+    options.EventStore.SnapshotInterval = 100;
+    options.EventStore.EnableSnapshots = true;
     
     // Monitoring
-    .WithMonitoring(config =>
-    {
-        config.EnableMetrics = true;
-        config.MetricsInterval = TimeSpan.FromSeconds(60);
-        config.EnableStatistics = true;
-    })
-    
-    // Build the configuration
-    .Build();
+    options.Monitoring.EnableMetrics = true;
+    options.Monitoring.MetricsInterval = TimeSpan.FromSeconds(60);
+});
 ```
 
 ### Configuration via appsettings.json
 
 ```json
 {
-  "RabbitMQ": {
-    "Connection": {
+  "StreamFlow": {
+    "RabbitMQ": {
       "ConnectionString": "amqp://localhost",
-      "AutomaticRecovery": true,
-      "HeartbeatInterval": "00:01:00",
-      "MaxChannels": 100,
-      "ConnectionTimeout": "00:00:30"
-    },
-    "Producer": {
-      "EnableConfirmations": true,
-      "ConfirmationTimeout": "00:00:05",
-      "BatchSize": 100,
-      "MaxBatchWaitTime": "00:00:01"
-    },
-    "Consumer": {
-      "PrefetchCount": 50,
-      "ConcurrentConsumers": 5,
-      "AutoAck": false,
-      "RequeueOnFailure": true
-    },
-    "ErrorHandling": {
-      "EnableDeadLetterQueue": true,
-      "DeadLetterExchange": "dlx",
-      "DeadLetterQueue": "dlq",
-      "RetryPolicy": "ExponentialBackoff",
-      "MaxRetryAttempts": 3,
-      "RetryDelay": "00:00:01"
-    },
-    "EventBus": {
-      "DomainEventExchange": "domain-events",
-      "IntegrationEventExchange": "integration-events"
-    },
-    "EventStore": {
-      "StreamPrefix": "eventstore",
-      "SnapshotInterval": 100,
-      "EnableSnapshots": true
-    },
-    "HealthCheck": {
-      "Enabled": true,
-      "Interval": "00:00:30",
-      "Timeout": "00:00:05"
+      "Connection": {
+        "AutomaticRecovery": true,
+        "HeartbeatInterval": "00:01:00",
+        "MaxChannels": 100,
+        "ConnectionTimeout": "00:00:30"
+      },
+      "Producer": {
+        "EnableConfirmations": true,
+        "ConfirmationTimeout": "00:00:05",
+        "BatchSize": 100,
+        "MaxBatchWaitTime": "00:00:01"
+      },
+      "Consumer": {
+        "PrefetchCount": 50,
+        "ConcurrentConsumers": 5,
+        "AutoAck": false,
+        "RequeueOnFailure": true
+      },
+      "ErrorHandling": {
+        "EnableDeadLetterQueue": true,
+        "DeadLetterExchange": "dlx",
+        "DeadLetterQueue": "dlq",
+        "RetryPolicy": "ExponentialBackoff",
+        "MaxRetryAttempts": 3,
+        "RetryDelay": "00:00:01"
+      },
+      "EventBus": {
+        "DomainEventExchange": "domain-events",
+        "IntegrationEventExchange": "integration-events"
+      },
+      "EventStore": {
+        "StreamPrefix": "eventstore",
+        "SnapshotInterval": 100,
+        "EnableSnapshots": true
+      },
+      "HealthCheck": {
+        "Enabled": true,
+        "Interval": "00:00:30",
+        "Timeout": "00:00:05"
+      }
     }
   }
 }
@@ -597,20 +793,71 @@ builder.Services.AddRabbitMQ()
 
 ```csharp
 // Use configuration from appsettings.json
-builder.Services.ConfigureRabbitMQ(configuration.GetSection("RabbitMQ"));
+builder.Services.Configure<RabbitMQStreamFlowOptions>(
+    builder.Configuration.GetSection("StreamFlow:RabbitMQ"));
 ```
 
 ## 🔧 Advanced Features
 
-### Fluent Producer API
+### Fluent Infrastructure Management
 
-Chain operations with the fluent API:
+Set up your messaging infrastructure with intuitive fluent APIs:
 
 ```csharp
-// Fluent message building
-await _rabbitMQ.Producer
-    .Message(order)
-    .ToExchange("orders")
+// Complete infrastructure setup
+public class InfrastructureSetup
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupAsync()
+    {
+        // Create exchanges with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("notifications")
+            .AsFanout()
+            .WithDurable(true)
+            .DeclareAsync();
+        
+        // Create queues with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.created")
+            .BindToExchange("orders", "order.updated")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("email-notifications")
+            .WithDurable(true)
+            .BindToExchange("notifications", "")
+            .DeclareAsync();
+            
+        // Create event streams with fluent API
+        await _streamFlow.EventStore.Stream("order-events")
+            .CreateAsync();
+            
+        await _streamFlow.EventStore.Stream("user-events")
+            .CreateAsync();
+    }
+}
+```
+
+### Fluent Producer API
+
+Chain operations with the comprehensive fluent API:
+
+```csharp
+// Advanced message publishing with fluent API
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
     .WithRoutingKey("order.created")
     .WithDeliveryMode(DeliveryMode.Persistent)
     .WithExpiration(TimeSpan.FromHours(24))
@@ -618,40 +865,200 @@ await _rabbitMQ.Producer
     .WithHeaders(new Dictionary<string, object>
     {
         ["source"] = "order-service",
-        ["version"] = "1.0"
+        ["version"] = "1.0",
+        ["correlation-id"] = Guid.NewGuid().ToString()
     })
-    .PublishAsync();
+    .WithHeader("priority", "high")
+    .WithContentType("application/json")
+    .WithContentEncoding("utf-8")
+    .WithCorrelationId(correlationId)
+    .WithMessageId(Guid.NewGuid().ToString())
+    .WithMandatory(true)
+    .WithConfirmationTimeout(TimeSpan.FromSeconds(5))
+    .PublishAsync(order);
 
-// Fluent event publishing
-await _rabbitMQ.EventBus
-    .Event(new OrderCreated(orderId, customerName, amount))
-    .WithMetadata(metadata =>
-    {
-        metadata.CorrelationId = correlationId;
-        metadata.CausationId = causationId;
-        metadata.Source = "order-service";
-    })
-    .PublishAsync();
+// Alternative syntax
+await _streamFlow.Producer.Message<Order>()
+    .ToExchange("orders")
+    .WithRoutingKey("order.created")
+    .WithDeliveryMode(DeliveryMode.Persistent)
+    .PublishAsync(order);
 ```
 
 ### Fluent Consumer API
 
-Configure consumers with fluent syntax:
+Configure consumers with comprehensive fluent syntax:
 
 ```csharp
-// Fluent consumer configuration
-await _rabbitMQ.Consumer
-    .FromQueue("order-processing")
+// Advanced consumer configuration with fluent API
+await _streamFlow.Consumer.Queue<Order>("order-processing")
+    .FromExchange("orders")
+    .WithRoutingKey("order.*")
+    .WithSettings(settings =>
+    {
+        settings.PrefetchCount = 100;
+        settings.ConcurrentConsumers = 5;
+        settings.AutoAck = false;
+        settings.RequeueOnFailure = true;
+    })
+    .WithConsumerTag("order-processor-1")
+    .WithAutoAck(false)
+    .WithPrefetchCount(100)
     .WithConcurrency(5)
-    .WithPrefetch(100)
-    .WithErrorHandling(ErrorHandlingStrategy.Retry)
-    .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-    .Handle<Order>(async (order, context) =>
+    .WithErrorHandler(async (exception, context) =>
+    {
+        if (exception is TransientException)
+            return true; // Requeue
+        
+        await _deadLetterService.SendAsync(context.Message);
+        return false; // Don't requeue
+    })
+    .WithRetryPolicy(new RetryPolicySettings
+    {
+        RetryPolicy = RetryPolicyType.ExponentialBackoff,
+        MaxRetryAttempts = 3,
+        RetryDelay = TimeSpan.FromSeconds(1)
+    })
+    .WithDeadLetterQueue(new DeadLetterSettings
+    {
+        DeadLetterExchange = "dlx",
+        DeadLetterQueue = "dlq"
+    })
+    .ConsumeAsync(async (order, context) =>
     {
         await ProcessOrderAsync(order);
         return true;
-    })
-    .StartAsync();
+    });
+```
+
+### Fluent Event Bus API
+
+Manage events with comprehensive fluent operations:
+
+```csharp
+// Advanced event publishing with fluent API
+public class EventPublisher
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task PublishOrderEventsAsync(Order order)
+    {
+        // Domain event with full metadata
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = order.CorrelationId;
+                metadata.Source = "order-service";
+                metadata.Version = "1.0";
+                metadata.Timestamp = DateTimeOffset.UtcNow;
+            })
+            .WithCorrelationId(order.CorrelationId)
+            .WithCausationId(order.CausationId)
+            .WithSource("order-service")
+            .WithVersion("1.0")
+            .WithAggregateId(order.Id.ToString())
+            .WithAggregateType("Order")
+            .WithPriority(1)
+            .WithTtl(TimeSpan.FromMinutes(30))
+            .WithProperties(new Dictionary<string, object>
+            {
+                ["business-unit"] = "sales",
+                ["region"] = "us-east-1"
+            })
+            .WithProperty("customer-tier", "premium")
+            .PublishAsync(new OrderCreated(order.Id, order.CustomerName, order.Total));
+        
+        // Integration event
+        await _streamFlow.EventBus.Event<OrderProcessingStarted>()
+            .WithCorrelationId(order.CorrelationId)
+            .WithSource("order-service")
+            .WithAggregateId(order.Id.ToString())
+            .WithAggregateType("Order")
+            .WithProperty("priority", "high")
+            .PublishAsync(new OrderProcessingStarted(order.Id, order.Items));
+    }
+}
+```
+
+### Fluent Event Store API
+
+Manage event streams with comprehensive fluent operations:
+
+```csharp
+// Advanced event store operations with fluent API
+public class OrderEventStore
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEvents(events)
+            .SaveAsync();
+    }
+    
+    public async Task<long> SaveOrderEventsWithVersionAsync(Guid orderId, IEnumerable<object> events, long expectedVersion)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEventsWithExpectedVersion(events, expectedVersion)
+            .SaveAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(fromVersion)
+            .WithMaxCount(100)
+            .ReadAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetRecentOrderEventsAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(-1)
+            .WithMaxCount(10)
+            .ReadBackwardAsync();
+    }
+    
+    public async Task<bool> CreateOrderStreamAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .CreateAsync();
+    }
+    
+    public async Task<bool> DeleteOrderStreamAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .DeleteAsync();
+    }
+    
+    public async Task<bool> TruncateOrderStreamAsync(Guid orderId, long version)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .TruncateAsync(version);
+    }
+    
+    public async Task<object?> GetOrderSnapshotAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .GetSnapshotAsync();
+    }
+    
+    public async Task SaveOrderSnapshotAsync(Guid orderId, object snapshot, long version)
+    {
+        await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .WithSnapshot(snapshot, version)
+            .SaveAsync();
+    }
+    
+    public async Task<long> SaveOrderWithSnapshotAsync(Guid orderId, IEnumerable<object> events, object snapshot, long snapshotVersion)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEvents(events)
+            .WithSnapshot(snapshot, snapshotVersion)
+            .SaveAsync();
+    }
+}
 ```
 
 ### Custom Retry Policies
@@ -706,7 +1113,7 @@ public class CustomErrorHandler : IErrorHandler
 
 ## 📊 Performance Characteristics
 
-FS.RabbitMQ is designed for high-performance scenarios:
+FS.StreamFlow is designed for high-performance scenarios:
 
 | Feature | Performance | Best For |
 |---------|-------------|----------|
@@ -750,14 +1157,12 @@ RabbitMQ.Client.Exceptions.BrokerUnreachableException
 ```
 **Solution**: Check connection string and network connectivity:
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://guest:guest@localhost:5672")
-    .WithConnection(config =>
-    {
-        config.ConnectionTimeout = TimeSpan.FromSeconds(30);
-        config.AutomaticRecovery = true;
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    options.Connection.AutomaticRecovery = true;
+});
 ```
 
 **Issue**: Messages not being consumed
@@ -766,14 +1171,11 @@ Messages accumulating in queue
 ```
 **Solution**: Increase consumer concurrency:
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 100;
-        config.ConcurrentConsumers = 10;
-        config.MaxConsumerConcurrency = 20;
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.Consumer.PrefetchCount = 100;
+    options.Consumer.ConcurrentConsumers = 10;
+});
 ```
 
 **Issue**: High memory usage
@@ -782,17 +1184,12 @@ Memory increasing during high load
 ```
 **Solution**: Configure appropriate batch sizes and prefetch counts:
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithProducer(config =>
-    {
-        config.BatchSize = 100;
-        config.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
-    })
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 50; // Reduce if memory is constrained
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.Producer.BatchSize = 100;
+    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
+    options.Consumer.PrefetchCount = 50; // Reduce if memory is constrained
+});
 ```
 
 ### Best Practices
@@ -837,8 +1234,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ### Development Setup
 
 ```bash
-git clone https://github.com/furkansarikaya/FS.RabbitMQ.git
-cd FS.RabbitMQ
+git clone https://github.com/furkansarikaya/FS.StreamFlow.git
+cd FS.StreamFlow
 dotnet restore
 dotnet build
 dotnet test
@@ -848,20 +1245,17 @@ dotnet test
 
 | Package | Description | Version |
 |---------|-------------|---------|
-| FS.RabbitMQ | Complete RabbitMQ client with all features | [![NuGet](https://img.shields.io/nuget/v/FS.RabbitMQ.svg)](https://www.nuget.org/packages/FS.RabbitMQ/) |
+| FS.StreamFlow.Core | Core abstractions and interfaces | [![NuGet](https://img.shields.io/nuget/v/FS.StreamFlow.Core.svg)](https://www.nuget.org/packages/FS.StreamFlow.Core/) |
+| FS.StreamFlow.RabbitMQ | RabbitMQ implementation | [![NuGet](https://img.shields.io/nuget/v/FS.StreamFlow.RabbitMQ.svg)](https://www.nuget.org/packages/FS.StreamFlow.RabbitMQ/) |
 
 **Dependencies:**
 - .NET 9.0
-- RabbitMQ.Client 7.1.2
-- Microsoft.Extensions.Hosting
-- Microsoft.Extensions.DependencyInjection
-- Microsoft.Extensions.Configuration
-- Microsoft.Extensions.Logging
-- Microsoft.Extensions.Options
+- RabbitMQ.Client 7.1.2 (for RabbitMQ provider)
+- Microsoft.Extensions.* (Hosting, DI, Configuration, Logging, Options)
 
 ## 🌟 Support
 
-If you find this library useful, please consider giving it a star on GitHub! It helps others discover the project.
+If you find this framework useful, please consider giving it a star on GitHub! It helps others discover the project.
 
 **Made with ❤️ by [Furkan Sarıkaya](https://github.com/furkansarikaya)**
 
@@ -876,7 +1270,7 @@ If you encounter any issues or have questions:
 
 1. Check the [troubleshooting section](#troubleshooting)
 2. Review the [documentation](docs/)
-3. Search existing [GitHub issues](https://github.com/furkansarikaya/FS.RabbitMQ/issues)
+3. Search existing [GitHub issues](https://github.com/furkansarikaya/FS.StreamFlow/issues)
 4. Create a new issue with detailed information
 
-**Happy messaging! 🚀**
+**Happy streaming! 🚀**

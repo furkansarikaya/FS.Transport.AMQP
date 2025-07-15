@@ -1,6 +1,6 @@
-# Contributing to FS.RabbitMQ
+# Contributing to FS.StreamFlow
 
-First off, thank you for considering contributing to FS.RabbitMQ! It's people like you that make FS.RabbitMQ such a great tool.
+First off, thank you for considering contributing to FS.StreamFlow! It's people like you that make FS.StreamFlow such a great tool.
 
 ## Code of Conduct
 
@@ -55,10 +55,10 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ```bash
 # Clone the repository
-git clone https://github.com/furkansarikaya/FS.RabbitMQ.git
+git clone https://github.com/furkansarikaya/FS.StreamFlow.git
 
 # Navigate to the directory
-cd FS.RabbitMQ
+cd FS.StreamFlow
 
 # Install dependencies
 dotnet restore
@@ -120,24 +120,28 @@ public async Task PublishMessage_WithValidMessage_PublishesSuccessfully()
 ## Project Structure
 
 ```
-FS.RabbitMQ/
+FS.StreamFlow/
 ├── src/
-│   └── FS.Transport.AMQP/
-│       ├── Configuration/    # Configuration classes
-│       ├── Connection/       # Connection management
-│       ├── Consumer/         # Message consumer
-│       ├── Core/            # Core interfaces and classes
-│       ├── ErrorHandling/   # Error handling and retry policies
-│       ├── EventBus/        # Event bus implementation
-│       ├── EventStore/      # Event sourcing
-│       ├── Producer/        # Message producer
-│       ├── Saga/           # Saga orchestration
-│       └── Serialization/   # Message serialization
-├── tests/
-│   └── FS.Transport.AMQP.Tests/
-│       ├── Integration/     # Integration tests
-│       └── Unit/           # Unit tests
-└── docs/                   # Documentation
+│   ├── FS.StreamFlow.Core/
+│   │   ├── Features/         # Core features and abstractions
+│   │   │   ├── Events/      # Event interfaces and models
+│   │   │   └── Messaging/   # Messaging interfaces and models
+│   │   └── FS.StreamFlow.Core.csproj
+│   └── FS.StreamFlow.RabbitMQ/
+│       ├── Features/        # RabbitMQ implementations
+│       │   ├── Connection/  # Connection management
+│       │   ├── Consumer/    # Message consumer
+│       │   ├── Producer/    # Message producer
+│       │   ├── EventBus/    # Event bus implementation
+│       │   ├── EventStore/  # Event sourcing
+│       │   ├── Exchange/    # Exchange management
+│       │   ├── Queue/       # Queue management
+│       │   ├── ErrorHandling/ # Error handling
+│       │   ├── Saga/        # Saga orchestration
+│       │   └── Serialization/ # Message serialization
+│       └── FS.StreamFlow.RabbitMQ.csproj
+├── docs/                    # Documentation
+└── FS.StreamFlow.sln
 ```
 
 ## Release Process
@@ -171,7 +175,7 @@ dotnet build -c Release
 dotnet pack -c Release
 
 # Publish to NuGet
-dotnet nuget push bin/Release/FS.Transport.AMQP.1.2.3.nupkg -k [API_KEY] -s https://api.nuget.org/v3/index.json
+dotnet nuget push bin/Release/FS.StreamFlow.Core.1.2.3.nupkg -k [API_KEY] -s https://api.nuget.org/v3/index.json
 ```
 
 ## License

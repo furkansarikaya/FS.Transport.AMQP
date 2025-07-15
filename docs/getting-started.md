@@ -1,701 +1,813 @@
-# Getting Started with FS.RabbitMQ
+# Getting Started with FS.StreamFlow
 
-Welcome to FS.RabbitMQ! This guide will take you from zero to hero, teaching you everything you need to know to build production-ready messaging applications.
+This guide will help you get started with FS.StreamFlow, a comprehensive messaging framework for .NET 9 applications.
 
-## 📚 What You'll Learn
+## What is FS.StreamFlow?
 
-By the end of this guide, you'll be able to:
-- Set up RabbitMQ and FS.RabbitMQ in your project
-- Publish and consume messages
-- Configure error handling and retries
-- Build event-driven applications
-- Monitor your messaging system
-- Deploy to production
+FS.StreamFlow is a production-ready messaging framework that provides:
 
-## 🎯 Prerequisites
+- **Provider-agnostic abstractions** - Work with any messaging provider
+- **Enterprise-grade features** - Automatic recovery, error handling, monitoring
+- **Event-driven architecture** - Built-in support for domain and integration events
+- **High performance** - Optimized for throughput and low latency
+- **Easy integration** - Simple configuration and dependency injection
 
-- Basic knowledge of C# and .NET
-- Visual Studio or Visual Studio Code
-- .NET 9 SDK installed
-- Docker (optional, for local RabbitMQ)
+## Architecture Overview
 
-## 🚀 Step 1: Setting Up RabbitMQ
+FS.StreamFlow follows a layered architecture:
 
-### Option 1: Using Docker (Recommended for Development)
+```
+┌─────────────────────────────────────┐
+│        Your Application             │
+├─────────────────────────────────────┤
+│      FS.StreamFlow.Core             │
+│   (Abstractions & Interfaces)      │
+├─────────────────────────────────────┤
+│    FS.StreamFlow.RabbitMQ           │
+│   (RabbitMQ Implementation)         │
+├─────────────────────────────────────┤
+│      RabbitMQ.Client                │
+│    (Native RabbitMQ Client)         │
+└─────────────────────────────────────┘
+```
+
+## Installation
+
+### Package Installation
+
+Install the RabbitMQ provider package (includes Core abstractions):
 
 ```bash
-# Run RabbitMQ with management UI
-docker run -d --name rabbitmq \
-  -p 5672:5672 \
-  -p 15672:15672 \
-  rabbitmq:3-management
+dotnet add package FS.StreamFlow.RabbitMQ
 ```
 
-Access the management UI at `http://localhost:15672` (guest/guest)
-
-### Option 2: Installing RabbitMQ Locally
-
-1. Download RabbitMQ from [https://www.rabbitmq.com/download.html](https://www.rabbitmq.com/download.html)
-2. Install following the platform-specific instructions
-3. Start the RabbitMQ service
-
-### Option 3: Using Cloud Services
-
-- **CloudAMQP**: Managed RabbitMQ service
-- **Amazon MQ**: AWS managed message broker
-- **Azure Service Bus**: Microsoft's messaging service
-
-## 🛠️ Step 2: Create Your First Project
-
-### 2.1 Create a New Project
+Or install packages separately:
 
 ```bash
-# Create a new console application
-dotnet new console -n MyFirstRabbitMQApp
-cd MyFirstRabbitMQApp
+# Core abstractions
+dotnet add package FS.StreamFlow.Core
 
-# Add FS.RabbitMQ package
-dotnet add package FS.RabbitMQ
-
-# Add additional packages for dependency injection
-dotnet add package Microsoft.Extensions.Hosting
-dotnet add package Microsoft.Extensions.DependencyInjection
-dotnet add package Microsoft.Extensions.Logging
+# RabbitMQ implementation
+dotnet add package FS.StreamFlow.RabbitMQ
 ```
 
-### 2.2 Basic Project Structure
+### Prerequisites
 
-```
-MyFirstRabbitMQApp/
-├── Program.cs
-├── Models/
-│   └── Order.cs
-├── Services/
-│   ├── OrderService.cs
-│   └── OrderProcessor.cs
-└── appsettings.json
-```
+- .NET 9.0 SDK or later
+- RabbitMQ server (local or remote)
 
-### 2.3 Create Your First Message Model
+## Basic Setup
 
-```csharp
-// Models/Order.cs
-namespace MyFirstRabbitMQApp.Models;
-
-public class Order
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string CustomerName { get; set; } = string.Empty;
-    public decimal Amount { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public List<OrderItem> Items { get; set; } = new();
-}
-
-public class OrderItem
-{
-    public string ProductName { get; set; } = string.Empty;
-    public int Quantity { get; set; }
-    public decimal Price { get; set; }
-}
-```
-
-## 📨 Step 3: Your First Message Publisher
-
-### 3.1 Create Order Service
-
-```csharp
-// Services/OrderService.cs
-using FS.RabbitMQ.Core;
-using MyFirstRabbitMQApp.Models;
-
-namespace MyFirstRabbitMQApp.Services;
-
-public class OrderService
-{
-    private readonly IRabbitMQClient _rabbitMQ;
-    private readonly ILogger<OrderService> _logger;
-
-    public OrderService(IRabbitMQClient rabbitMQ, ILogger<OrderService> logger)
-    {
-        _rabbitMQ = rabbitMQ;
-        _logger = logger;
-    }
-
-    public async Task CreateOrderAsync(Order order)
-    {
-        try
-        {
-            _logger.LogInformation("Creating order {OrderId} for customer {CustomerName}", 
-                order.Id, order.CustomerName);
-
-            // Publish the order to RabbitMQ
-            await _rabbitMQ.Producer.PublishAsync(
-                exchange: "orders",
-                routingKey: "order.created",
-                message: order);
-
-            _logger.LogInformation("Order {OrderId} published successfully", order.Id);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create order {OrderId}", order.Id);
-            throw;
-        }
-    }
-}
-```
-
-### 3.2 Setup Dependency Injection
+### 1. Add Services to DI Container
 
 ```csharp
 // Program.cs
-using FS.RabbitMQ.DependencyInjection;
-using MyFirstRabbitMQApp.Services;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
-// Add logging
-builder.Services.AddLogging(config =>
+// Add FS.StreamFlow with RabbitMQ
+builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    config.AddConsole();
-    config.SetMinimumLevel(LogLevel.Information);
+    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    options.EnableHealthChecks = true;
+    options.EnableEventBus = true;
+    options.EnableMonitoring = true;
 });
 
-// Add FS.RabbitMQ
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost") // Default RabbitMQ connection
-    .WithHealthChecks()
-    .WithMonitoring()
-    .Build();
-
-// Add your services
-builder.Services.AddScoped<OrderService>();
-builder.Services.AddScoped<OrderProcessor>();
-
-var host = builder.Build();
-
-// Example usage
-var orderService = host.Services.GetRequiredService<OrderService>();
-
-// Create a sample order
-var order = new Order
-{
-    CustomerName = "John Doe",
-    Amount = 99.99m,
-    Items = new List<OrderItem>
-    {
-        new() { ProductName = "Laptop", Quantity = 1, Price = 99.99m }
-    }
-};
-
-await orderService.CreateOrderAsync(order);
-
-Console.WriteLine("Order created and published!");
-Console.WriteLine("Press any key to exit...");
-Console.ReadKey();
+var app = builder.Build();
 ```
 
-## 📥 Step 4: Your First Message Consumer
+### 2. Configuration Options
 
-### 4.1 Create Order Processor
+You can configure options in multiple ways:
 
-```csharp
-// Services/OrderProcessor.cs
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.Producer;
-using MyFirstRabbitMQApp.Models;
-
-namespace MyFirstRabbitMQApp.Services;
-
-public class OrderProcessor
-{
-    private readonly IRabbitMQClient _rabbitMQ;
-    private readonly ILogger<OrderProcessor> _logger;
-
-    public OrderProcessor(IRabbitMQClient rabbitMQ, ILogger<OrderProcessor> logger)
-    {
-        _rabbitMQ = rabbitMQ;
-        _logger = logger;
-    }
-
-    public async Task StartProcessingAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Starting order processing...");
-
-        // Start consuming messages
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: ProcessOrderAsync,
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task<bool> ProcessOrderAsync(Order order, MessageContext context)
-    {
-        try
-        {
-            _logger.LogInformation("Processing order {OrderId} for customer {CustomerName}", 
-                order.Id, order.CustomerName);
-
-            // Simulate order processing
-            await Task.Delay(1000); // Simulate work
-
-            // Business logic here
-            await ValidateOrderAsync(order);
-            await ProcessPaymentAsync(order);
-            await UpdateInventoryAsync(order);
-
-            _logger.LogInformation("Order {OrderId} processed successfully", order.Id);
-            
-            return true; // Acknowledge the message
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to process order {OrderId}", order.Id);
-            return false; // Reject the message (will be retried or sent to dead letter queue)
-        }
-    }
-
-    private async Task ValidateOrderAsync(Order order)
-    {
-        // Validation logic
-        if (order.Amount <= 0)
-            throw new InvalidOperationException("Order amount must be greater than zero");
-        
-        await Task.Delay(100); // Simulate validation
-    }
-
-    private async Task ProcessPaymentAsync(Order order)
-    {
-        // Payment processing logic
-        _logger.LogInformation("Processing payment for order {OrderId}", order.Id);
-        await Task.Delay(500); // Simulate payment processing
-    }
-
-    private async Task UpdateInventoryAsync(Order order)
-    {
-        // Inventory update logic
-        _logger.LogInformation("Updating inventory for order {OrderId}", order.Id);
-        await Task.Delay(300); // Simulate inventory update
-    }
-}
-```
-
-### 4.2 Update Program.cs for Consumer
+#### Using Lambda Expression
 
 ```csharp
-// Program.cs - Updated version
-using FS.RabbitMQ.DependencyInjection;
-using MyFirstRabbitMQApp.Services;
-
-var builder = Host.CreateApplicationBuilder(args);
-
-// Add logging
-builder.Services.AddLogging(config =>
+builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    config.AddConsole();
-    config.SetMinimumLevel(LogLevel.Information);
+    options.ConnectionString = "amqp://localhost";
+    options.Connection.AutomaticRecovery = true;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.Producer.EnableConfirmations = true;
+    options.Consumer.PrefetchCount = 50;
+    options.ErrorHandling.EnableDeadLetterQueue = true;
 });
-
-// Add FS.RabbitMQ with error handling
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithErrorHandling(config =>
-    {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(2);
-    })
-    .WithHealthChecks()
-    .WithMonitoring()
-    .Build();
-
-// Add your services
-builder.Services.AddScoped<OrderService>();
-builder.Services.AddScoped<OrderProcessor>();
-
-var host = builder.Build();
-
-// Setup cancellation token for graceful shutdown
-var cancellationTokenSource = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;
-    cancellationTokenSource.Cancel();
-};
-
-try
-{
-    // Start the consumer
-    var orderProcessor = host.Services.GetRequiredService<OrderProcessor>();
-    var processingTask = orderProcessor.StartProcessingAsync(cancellationTokenSource.Token);
-
-    // Create and send a sample order
-    var orderService = host.Services.GetRequiredService<OrderService>();
-    var order = new Order
-    {
-        CustomerName = "John Doe",
-        Amount = 99.99m,
-        Items = new List<OrderItem>
-        {
-            new() { ProductName = "Laptop", Quantity = 1, Price = 99.99m }
-        }
-    };
-
-    await orderService.CreateOrderAsync(order);
-
-    Console.WriteLine("Order created and consumer started!");
-    Console.WriteLine("Press Ctrl+C to stop...");
-
-    // Wait for cancellation
-    await Task.Delay(Timeout.Infinite, cancellationTokenSource.Token);
-}
-catch (OperationCanceledException)
-{
-    Console.WriteLine("Shutting down...");
-}
-finally
-{
-    await host.StopAsync();
-}
 ```
 
-## ⚙️ Step 5: Configuration
-
-### 5.1 Add Configuration File
+#### Using Configuration File
 
 ```json
 // appsettings.json
 {
-  "RabbitMQ": {
-    "Connection": {
+  "StreamFlow": {
+    "RabbitMQ": {
       "ConnectionString": "amqp://localhost",
-      "AutomaticRecovery": true,
-      "HeartbeatInterval": "00:01:00",
-      "MaxChannels": 100,
-      "ConnectionTimeout": "00:00:30"
-    },
-    "Producer": {
-      "EnableConfirmations": true,
-      "ConfirmationTimeout": "00:00:05",
-      "BatchSize": 100,
-      "MaxBatchWaitTime": "00:00:01"
-    },
-    "Consumer": {
-      "PrefetchCount": 10,
-      "ConcurrentConsumers": 2,
-      "AutoAck": false,
-      "RequeueOnFailure": true
-    },
-    "ErrorHandling": {
-      "EnableDeadLetterQueue": true,
-      "DeadLetterExchange": "dlx",
-      "DeadLetterQueue": "dlq",
-      "MaxRetryAttempts": 3,
-      "RetryDelay": "00:00:02"
-    },
-    "HealthCheck": {
-      "Enabled": true,
-      "Interval": "00:00:30",
-      "Timeout": "00:00:05"
-    }
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "FS.RabbitMQ": "Information",
-      "Microsoft": "Warning"
+      "Connection": {
+        "AutomaticRecovery": true,
+        "HeartbeatInterval": "00:01:00",
+        "MaxChannels": 100
+      },
+      "Producer": {
+        "EnableConfirmations": true,
+        "BatchSize": 100
+      },
+      "Consumer": {
+        "PrefetchCount": 50,
+        "ConcurrentConsumers": 5
+      },
+      "ErrorHandling": {
+        "EnableDeadLetterQueue": true,
+        "RetryPolicy": "ExponentialBackoff",
+        "MaxRetryAttempts": 3
+      }
     }
   }
 }
 ```
 
-### 5.2 Use Configuration in Code
+```csharp
+// Program.cs
+builder.Services.Configure<RabbitMQStreamFlowOptions>(
+    builder.Configuration.GetSection("StreamFlow:RabbitMQ"));
+```
+
+### 3. Inject and Use Client
 
 ```csharp
-// Program.cs - Configuration version
-using FS.RabbitMQ.DependencyInjection;
-using MyFirstRabbitMQApp.Services;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+
+public class OrderService
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public OrderService(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
+    
+    public async Task ProcessOrderAsync(Order order)
+    {
+        // Setup infrastructure with fluent APIs
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+        
+        // Publish a message with fluent API
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(order);
+            
+        // Store event in event store with fluent API
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderCreated(order.Id, order.CustomerName, order.Amount))
+            .SaveAsync();
+    }
+}
+```
+
+## Your First Message
+
+### 1. Define Your Message Model
+
+```csharp
+public record Order(
+    Guid Id,
+    string CustomerName,
+    decimal Amount,
+    DateTime CreatedAt);
+    
+public record OrderCreated(
+    Guid OrderId,
+    string CustomerName,
+    decimal Amount) : IDomainEvent;
+```
+
+### 2. Publisher Service
+
+```csharp
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+
+public class OrderPublisher
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public OrderPublisher(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
+    
+    public async Task PublishOrderAsync(Order order)
+    {
+        // Setup infrastructure first
+        await SetupInfrastructureAsync();
+        
+        // Publish with fluent API
+        var result = await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .WithExpiration(TimeSpan.FromHours(24))
+            .WithPriority(5)
+            .PublishAsync(order);
+        
+        if (result.IsSuccess)
+        {
+            Console.WriteLine($"Order {order.Id} published successfully!");
+        }
+        else
+        {
+            Console.WriteLine($"Failed to publish order {order.Id}");
+        }
+    }
+    
+    private async Task SetupInfrastructureAsync()
+    {
+        // Create exchange with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        // Create queue with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+    }
+}
+```
+
+### 3. Consumer Service
+
+```csharp
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+
+public class OrderConsumer
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public OrderConsumer(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
+    
+    public async Task StartConsumingAsync()
+    {
+        // Consume with fluent API
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(5)
+            .WithPrefetch(100)
+            .WithAutoAck(false)
+            .WithErrorHandling(ErrorHandlingStrategy.Retry)
+            .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+            .WithMaxRetries(3)
+            .WithDeadLetterQueue("dlq")
+            .HandleAsync(async (order, context) =>
+            {
+                Console.WriteLine($"Processing order {order.Id}");
+                
+                // Process the order
+                await ProcessOrderAsync(order);
+                
+                Console.WriteLine($"Order {order.Id} processed successfully!");
+                return true; // Acknowledge message
+            });
+    }
+    
+    private async Task ProcessOrderAsync(Order order)
+    {
+        // Simulate processing
+        await Task.Delay(1000);
+        
+        // Store event in event store with fluent API
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderCreated(order.Id, order.CustomerName, order.Amount))
+            .SaveAsync();
+    }
+}
+```
+
+### 4. Event-Driven Processing
+
+```csharp
+// Event publisher
+public class OrderEventPublisher
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task PublishOrderCreatedAsync(OrderCreated orderCreated)
+    {
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "order-service";
+                metadata.Version = "1.0";
+            })
+            .WithRetryPolicy(RetryPolicyType.Linear)
+            .WithDeadLetterHandling(enabled: true)
+            .PublishAsync(orderCreated);
+    }
+}
+
+// Event handler
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task HandleAsync(OrderCreated orderCreated, EventContext context)
+    {
+        Console.WriteLine($"Handling OrderCreated event for order {orderCreated.OrderId}");
+        
+        // Business logic
+        await ProcessOrderCreatedAsync(orderCreated);
+        
+        // Publish follow-up events
+        await _streamFlow.EventBus.Event<InventoryRequested>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = context.CorrelationId;
+                metadata.CausationId = context.EventId;
+                metadata.Source = "order-service";
+            })
+            .PublishAsync(new InventoryRequested(orderCreated.OrderId, items));
+    }
+}
+```
+
+### 5. Infrastructure Management
+
+```csharp
+// Complete infrastructure setup
+public class InfrastructureSetup
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupAsync()
+    {
+        // Create exchanges with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("notifications")
+            .AsFanout()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("dlx")
+            .AsDirect()
+            .WithDurable(true)
+            .DeclareAsync();
+        
+        // Create queues with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.created")
+            .BindToExchange("orders", "order.updated")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("email-notifications")
+            .WithDurable(true)
+            .BindToExchange("notifications", "")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("dlq")
+            .WithDurable(true)
+            .BindToExchange("dlx", "order.failed")
+            .DeclareAsync();
+        
+        // Create event streams with fluent API
+        await _streamFlow.EventStore.Stream("order-events")
+            .CreateAsync();
+            
+        await _streamFlow.EventStore.Stream("user-events")
+            .CreateAsync();
+    }
+}
+```
+
+### 6. Event Sourcing
+
+```csharp
+// Event store operations
+public class OrderEventStore
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEvents(events)
+            .SaveAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(0)
+            .ReadAsync();
+    }
+    
+    public async Task<object?> GetOrderSnapshotAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .GetSnapshotAsync();
+    }
+    
+    public async Task SaveOrderSnapshotAsync(Guid orderId, object snapshot, long version)
+    {
+        await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .WithSnapshot(snapshot, version)
+            .SaveSnapshotAsync();
+    }
+}
+```
+
+## Running Your Application
+
+### 1. Complete Example
+
+```csharp
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
-
-// Add configuration
-builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddEnvironmentVariables();
 
 // Add logging
 builder.Services.AddLogging(config =>
 {
     config.AddConsole();
-    config.AddConfiguration(builder.Configuration.GetSection("Logging"));
+    config.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add FS.RabbitMQ with configuration
-builder.Services.ConfigureRabbitMQ(builder.Configuration.GetSection("RabbitMQ"));
+// Add FS.StreamFlow
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    options.Connection.AutomaticRecovery = true;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.Producer.EnableConfirmations = true;
+    options.Consumer.PrefetchCount = 50;
+    options.ErrorHandling.EnableDeadLetterQueue = true;
+    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
+    options.ErrorHandling.MaxRetryAttempts = 3;
+    options.EnableHealthChecks = true;
+    options.EnableEventBus = true;
+    options.EnableMonitoring = true;
+});
 
 // Add your services
-builder.Services.AddScoped<OrderService>();
-builder.Services.AddScoped<OrderProcessor>();
+builder.Services.AddSingleton<OrderPublisher>();
+builder.Services.AddSingleton<OrderConsumer>();
+builder.Services.AddSingleton<InfrastructureSetup>();
 
-var host = builder.Build();
-
-// Rest of your code...
-```
-
-## 🔧 Step 6: Exchange and Queue Setup
-
-### 6.1 Declare Exchanges and Queues
-
-```csharp
-// Services/InfrastructureService.cs
-using FS.RabbitMQ.Core;
-using FS.RabbitMQ.Configuration;
-
-namespace MyFirstRabbitMQApp.Services;
-
-public class InfrastructureService
-{
-    private readonly IRabbitMQClient _rabbitMQ;
-    private readonly ILogger<InfrastructureService> _logger;
-
-    public InfrastructureService(IRabbitMQClient rabbitMQ, ILogger<InfrastructureService> logger)
-    {
-        _rabbitMQ = rabbitMQ;
-        _logger = logger;
-    }
-
-    public async Task SetupInfrastructureAsync()
-    {
-        _logger.LogInformation("Setting up RabbitMQ infrastructure...");
-
-        try
-        {
-            // Declare exchanges
-            await _rabbitMQ.ExchangeManager.DeclareExchangeAsync(
-                exchange: "orders",
-                type: "topic",
-                durable: true,
-                autoDelete: false);
-
-            await _rabbitMQ.ExchangeManager.DeclareExchangeAsync(
-                exchange: "dlx",
-                type: "topic",
-                durable: true,
-                autoDelete: false);
-
-            // Declare queues
-            await _rabbitMQ.QueueManager.DeclareQueueAsync(
-                queue: "order-processing",
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                arguments: new Dictionary<string, object>
-                {
-                    {"x-dead-letter-exchange", "dlx"},
-                    {"x-dead-letter-routing-key", "order.failed"}
-                });
-
-            await _rabbitMQ.QueueManager.DeclareQueueAsync(
-                queue: "dlq",
-                durable: true,
-                exclusive: false,
-                autoDelete: false);
-
-            // Bind queues to exchanges
-            await _rabbitMQ.QueueManager.BindQueueAsync(
-                queue: "order-processing",
-                exchange: "orders",
-                routingKey: "order.created");
-
-            await _rabbitMQ.QueueManager.BindQueueAsync(
-                queue: "dlq",
-                exchange: "dlx",
-                routingKey: "order.failed");
-
-            _logger.LogInformation("RabbitMQ infrastructure setup completed successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to setup RabbitMQ infrastructure");
-            throw;
-        }
-    }
-}
-```
-
-### 6.2 Initialize Infrastructure on Startup
-
-```csharp
-// Program.cs - Add infrastructure setup
 var host = builder.Build();
 
 // Setup infrastructure
-var infrastructureService = host.Services.GetRequiredService<InfrastructureService>();
-await infrastructureService.SetupInfrastructureAsync();
+var infrastructureSetup = host.Services.GetRequiredService<InfrastructureSetup>();
+await infrastructureSetup.SetupAsync();
 
-// Rest of your code...
-```
+// Start consumer
+var consumer = host.Services.GetRequiredService<OrderConsumer>();
+_ = Task.Run(async () => await consumer.StartConsumingAsync());
 
-## 🎯 Step 7: Running Your Application
-
-### 7.1 Build and Run
-
-```bash
-# Build the application
-dotnet build
-
-# Run the application
-dotnet run
-```
-
-### 7.2 What You Should See
-
-```
-info: MyFirstRabbitMQApp.Services.InfrastructureService[0]
-      Setting up RabbitMQ infrastructure...
-info: MyFirstRabbitMQApp.Services.InfrastructureService[0]
-      RabbitMQ infrastructure setup completed successfully
-info: MyFirstRabbitMQApp.Services.OrderService[0]
-      Creating order a1b2c3d4-e5f6-7890-abcd-ef1234567890 for customer John Doe
-info: MyFirstRabbitMQApp.Services.OrderService[0]
-      Order a1b2c3d4-e5f6-7890-abcd-ef1234567890 published successfully
-info: MyFirstRabbitMQApp.Services.OrderProcessor[0]
-      Starting order processing...
-info: MyFirstRabbitMQApp.Services.OrderProcessor[0]
-      Processing order a1b2c3d4-e5f6-7890-abcd-ef1234567890 for customer John Doe
-info: MyFirstRabbitMQApp.Services.OrderProcessor[0]
-      Processing payment for order a1b2c3d4-e5f6-7890-abcd-ef1234567890
-info: MyFirstRabbitMQApp.Services.OrderProcessor[0]
-      Updating inventory for order a1b2c3d4-e5f6-7890-abcd-ef1234567890
-info: MyFirstRabbitMQApp.Services.OrderProcessor[0]
-      Order a1b2c3d4-e5f6-7890-abcd-ef1234567890 processed successfully
-Order created and consumer started!
-Press Ctrl+C to stop...
-```
-
-## 🔍 Step 8: Monitoring and Debugging
-
-### 8.1 View Messages in RabbitMQ Management UI
-
-1. Open `http://localhost:15672` in your browser
-2. Login with `guest/guest`
-3. Go to the "Queues" tab
-4. Click on your queue to see messages
-
-### 8.2 Add Health Checks
-
-```csharp
-// Program.cs - Add health checks
-builder.Services.AddHealthChecks()
-    .AddCheck<RabbitMQHealthCheck>("rabbitmq");
-
-var app = builder.Build();
-
-// Add health check endpoint
-app.MapHealthChecks("/health");
-```
-
-## 🚀 Step 9: Next Steps
-
-Congratulations! You've successfully created your first RabbitMQ application with FS.RabbitMQ. Here's what you can explore next:
-
-1. **[Producer Guide](producer.md)** - Learn advanced publishing techniques
-2. **[Consumer Guide](consumer.md)** - Master message consumption patterns
-3. **[Event-Driven Architecture](event-driven.md)** - Build event-driven applications
-4. **[Error Handling](error-handling.md)** - Implement robust error handling
-5. **[Performance Tuning](performance.md)** - Optimize for high throughput
-6. **[Examples](examples/)** - See real-world examples
-
-## 📝 Common Patterns
-
-### Pattern 1: Request-Reply
-
-```csharp
-// Publisher
-var correlationId = Guid.NewGuid().ToString();
-await _rabbitMQ.Producer.PublishAsync(
-    exchange: "requests",
-    routingKey: "calculate.sum",
-    message: new { Numbers = new[] { 1, 2, 3, 4, 5 } },
-    properties: new BasicProperties { CorrelationId = correlationId, ReplyTo = "responses" });
-
-// Consumer
-await _rabbitMQ.Consumer.ConsumeAsync<CalculateRequest>(
-    queueName: "calculate-requests",
-    messageHandler: async (request, context) =>
-    {
-        var result = request.Numbers.Sum();
-        
-        await _rabbitMQ.Producer.PublishAsync(
-            exchange: "",
-            routingKey: context.ReplyTo,
-            message: new { Result = result },
-            properties: new BasicProperties { CorrelationId = context.CorrelationId });
-        
-        return true;
-    });
-```
-
-### Pattern 2: Publish-Subscribe
-
-```csharp
-// Publisher
-await _rabbitMQ.Producer.PublishAsync(
-    exchange: "notifications",
-    routingKey: "user.registered",
-    message: new UserRegistered { UserId = userId, Email = email });
-
-// Multiple subscribers
-await _rabbitMQ.Consumer.ConsumeAsync<UserRegistered>(
-    queueName: "email-service",
-    messageHandler: async (user, context) =>
-    {
-        await _emailService.SendWelcomeEmailAsync(user.Email);
-        return true;
-    });
-
-await _rabbitMQ.Consumer.ConsumeAsync<UserRegistered>(
-    queueName: "analytics-service",
-    messageHandler: async (user, context) =>
-    {
-        await _analyticsService.TrackUserRegistrationAsync(user.UserId);
-        return true;
-    });
-```
-
-### Pattern 3: Work Queues
-
-```csharp
-// Producer
-for (int i = 0; i < 1000; i++)
+// Publish some test messages
+var publisher = host.Services.GetRequiredService<OrderPublisher>();
+for (int i = 0; i < 10; i++)
 {
-    await _rabbitMQ.Producer.PublishAsync(
-        exchange: "",
-        routingKey: "work-queue",
-        message: new WorkItem { Id = i, Data = $"Work item {i}" });
+    var order = new Order(
+        Guid.NewGuid(),
+        $"Customer {i}",
+        Random.Shared.Next(100, 1000),
+        DateTime.UtcNow);
+        
+    await publisher.PublishOrderAsync(order);
+    await Task.Delay(1000);
 }
 
-// Multiple workers
-await _rabbitMQ.Consumer.ConsumeAsync<WorkItem>(
-    queueName: "work-queue",
-    messageHandler: async (item, context) =>
-    {
-        await ProcessWorkItemAsync(item);
-        return true;
-    });
+await host.RunAsync();
 ```
 
-## 🎉 Congratulations!
+## Basic Patterns
 
-You've successfully learned the basics of FS.RabbitMQ! You can now:
+### Request-Response Pattern
 
-✅ Set up RabbitMQ infrastructure  
-✅ Publish messages to exchanges  
-✅ Consume messages from queues  
-✅ Handle errors and retries  
-✅ Monitor your messaging system  
-✅ Build scalable messaging applications  
+```csharp
+public class OrderProcessor
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public OrderProcessor(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
+    
+    public async Task<OrderResponse> ProcessOrderAsync(OrderRequest request)
+    {
+        // Publish request
+        var result = await _streamFlow.Producer.PublishAsync(
+            exchange: "orders",
+            routingKey: "order.process",
+            message: request);
+        
+        // In a real scenario, you would implement a correlation mechanism
+        // to wait for the response
+        
+        return new OrderResponse { Success = result.IsSuccess };
+    }
+}
+```
 
-Ready to dive deeper? Check out our [advanced guides](../README.md#-documentation) to master enterprise-grade messaging patterns! 
+### Event Publishing
+
+```csharp
+using FS.StreamFlow.Core.Features.Events.Interfaces;
+
+public record OrderCreatedEvent(Guid OrderId, string CustomerName, decimal Amount) : IDomainEvent;
+
+public class OrderService
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public OrderService(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
+    
+    public async Task CreateOrderAsync(Order order)
+    {
+        // Save order to database
+        await SaveOrderAsync(order);
+        
+        // Publish domain event
+        await _streamFlow.EventBus.PublishAsync(
+            new OrderCreatedEvent(order.Id, order.CustomerName, order.Amount));
+    }
+}
+```
+
+### Error Handling
+
+```csharp
+public class OrderConsumerWithErrorHandling
+{
+    private readonly IStreamFlowClient _streamFlow;
+    private readonly ILogger<OrderConsumerWithErrorHandling> _logger;
+    
+    public OrderConsumerWithErrorHandling(
+        IStreamFlowClient streamFlow,
+        ILogger<OrderConsumerWithErrorHandling> logger)
+    {
+        _streamFlow = streamFlow;
+        _logger = logger;
+    }
+    
+    public async Task StartConsumingAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
+            queueName: "order-processing",
+            messageHandler: async (order, context) =>
+            {
+                try
+                {
+                    await ProcessOrderAsync(order);
+                    return true;
+                }
+                catch (TemporaryException ex)
+                {
+                    _logger.LogWarning(ex, "Temporary error processing order {OrderId}, will retry", order.Id);
+                    return false; // Will be retried
+                }
+                catch (PermanentException ex)
+                {
+                    _logger.LogError(ex, "Permanent error processing order {OrderId}, sending to DLQ", order.Id);
+                    return false; // Will be sent to dead letter queue after max retries
+                }
+            },
+            cancellationToken);
+    }
+}
+```
+
+## Configuration Examples
+
+### Production Configuration
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = builder.Configuration.GetConnectionString("RabbitMQ");
+    
+    // Connection settings
+    options.Connection.AutomaticRecovery = true;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.Connection.MaxChannels = 100;
+    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.Producer.EnableConfirmations = true;
+    options.Producer.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.Producer.BatchSize = 100;
+    
+    // Consumer settings
+    options.Consumer.PrefetchCount = 50;
+    options.Consumer.ConcurrentConsumers = 5;
+    options.Consumer.AutoAck = false;
+    
+    // Error handling
+    options.ErrorHandling.EnableDeadLetterQueue = true;
+    options.ErrorHandling.DeadLetterExchange = "dlx";
+    options.ErrorHandling.DeadLetterQueue = "dlq";
+    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
+    options.ErrorHandling.MaxRetryAttempts = 3;
+    
+    // SSL/TLS for production
+    options.Ssl.Enabled = true;
+    options.Ssl.ServerName = "rabbitmq.production.com";
+    options.Ssl.CertificatePath = "/path/to/certificate.pfx";
+    
+    // Monitoring
+    options.EnableHealthChecks = true;
+    options.EnableMonitoring = true;
+});
+```
+
+### Development Configuration
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    
+    // Simplified settings for development
+    options.Connection.AutomaticRecovery = true;
+    options.Producer.EnableConfirmations = false; // Faster for development
+    options.Consumer.PrefetchCount = 10;
+    options.ErrorHandling.EnableDeadLetterQueue = false;
+    
+    // Enable health checks for development monitoring
+    options.EnableHealthChecks = true;
+});
+```
+
+## Health Checks
+
+FS.StreamFlow includes built-in health checks:
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.EnableHealthChecks = true;
+    options.HealthCheck.Interval = TimeSpan.FromSeconds(30);
+    options.HealthCheck.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// Add health check middleware
+app.UseHealthChecks("/health");
+```
+
+## Testing
+
+### Unit Testing
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+
+public class OrderServiceTests
+{
+    [Test]
+    public async Task ProcessOrderAsync_ShouldPublishMessage()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddRabbitMQStreamFlow(options =>
+        {
+            options.ConnectionString = "amqp://localhost";
+        });
+        
+        var provider = services.BuildServiceProvider();
+        var streamFlow = provider.GetRequiredService<IStreamFlowClient>();
+        
+        var service = new OrderService(streamFlow);
+        var order = new Order(Guid.NewGuid(), "John Doe", 100.00m, DateTime.UtcNow);
+        
+        // Act
+        await service.ProcessOrderAsync(order);
+        
+        // Assert
+        // Verify message was published (implementation depends on your testing approach)
+    }
+}
+```
+
+### Integration Testing
+
+```csharp
+public class OrderIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly WebApplicationFactory<Program> _factory;
+    
+    public OrderIntegrationTests(WebApplicationFactory<Program> factory)
+    {
+        _factory = factory;
+    }
+    
+    [Test]
+    public async Task CreateOrder_ShouldPublishEvent()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        var streamFlow = _factory.Services.GetRequiredService<IStreamFlowClient>();
+        
+        // Act
+        var response = await client.PostAsync("/orders", 
+            new StringContent(JsonSerializer.Serialize(new { CustomerName = "John", Amount = 100 })));
+        
+        // Assert
+        response.EnsureSuccessStatusCode();
+        // Verify event was published
+    }
+}
+```
+
+## Next Steps
+
+Now that you have the basics working, explore these advanced features:
+
+1. **[Event-Driven Architecture](event-driven.md)** - Build event-driven systems
+2. **[Event Sourcing](event-sourcing.md)** - Implement event sourcing patterns
+3. **[Saga Orchestration](saga.md)** - Handle distributed transactions
+4. **[Error Handling](error-handling.md)** - Implement comprehensive error handling
+5. **[Performance Tuning](performance.md)** - Optimize for high throughput
+6. **[Monitoring](monitoring.md)** - Set up monitoring and observability
+
+## Common Issues
+
+### Connection Issues
+
+If you're having connection problems:
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    options.Connection.AutomaticRecovery = true;
+});
+```
+
+### Queue Declaration
+
+To automatically declare queues:
+
+```csharp
+// This will be handled automatically by the framework
+await _streamFlow.Consumer.ConsumeAsync<Order>(
+    queueName: "order-processing",
+    messageHandler: async (order, context) => { /* ... */ });
+```
+
+### Serialization Issues
+
+By default, JSON serialization is used. For custom serialization:
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.Serialization.Format = SerializationFormat.Json;
+    options.Serialization.UseCompression = true;
+});
+```
+
+## Support
+
+For additional help:
+
+- Check the [Configuration Reference](configuration.md)
+- Review [Examples](examples/)
+- Visit the [GitHub repository](https://github.com/furkansarikaya/FS.StreamFlow)
+- Report issues on [GitHub Issues](https://github.com/furkansarikaya/FS.StreamFlow/issues) 

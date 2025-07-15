@@ -4,7 +4,7 @@
 **Focus**: Task distribution patterns  
 **Time**: 15 minutes
 
-This example demonstrates how to implement work queues using FS.RabbitMQ. It covers task distribution, worker scaling, error handling, and monitoring.
+This example demonstrates how to implement work queues using FS.StreamFlow. It covers task distribution, worker scaling, error handling, and monitoring.
 
 ## 📋 What You'll Learn
 - Work queue pattern for task distribution
@@ -35,7 +35,7 @@ WorkQueues/
 
 ```csharp
 // Services/TaskProducer.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class TaskProducer
@@ -64,7 +64,7 @@ public class TaskProducer
 
 ```csharp
 // Services/TaskWorker.cs
-using FS.RabbitMQ.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
 public class TaskWorker
@@ -104,4 +104,4 @@ public class TaskWorker
 ## 🎯 Key Takeaways
 - Work queues enable scalable task distribution.
 - Error handling and monitoring are essential for reliable processing.
-- FS.RabbitMQ simplifies work queue implementation. 
+- FS.StreamFlow simplifies work queue implementation. 
