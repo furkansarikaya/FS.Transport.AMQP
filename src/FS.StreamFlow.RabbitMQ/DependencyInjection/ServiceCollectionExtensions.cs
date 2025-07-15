@@ -6,6 +6,8 @@ using FS.StreamFlow.RabbitMQ.Features.Producer;
 using FS.StreamFlow.RabbitMQ.Features.Consumer;
 using FS.StreamFlow.RabbitMQ.Features.Queue;
 using FS.StreamFlow.RabbitMQ.Features.EventBus;
+using FS.StreamFlow.RabbitMQ.Features.Exchange;
+using FS.StreamFlow.RabbitMQ.Features.EventStore;
 using FS.StreamFlow.RabbitMQ.Features.HealthCheck;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -191,9 +193,8 @@ public static class ServiceCollectionExtensions
         // Message production
         services.TryAddSingleton<IProducer, RabbitMQProducer>();
 
-        // Exchange management - TODO: Complete RabbitMQExchangeManager implementation
-        services.TryAddSingleton<IExchangeManager>(provider =>
-            throw new NotImplementedException("RabbitMQ Exchange Manager implementation in progress"));
+        // Exchange management
+        services.TryAddSingleton<IExchangeManager, RabbitMQExchangeManager>();
 
         services.TryAddSingleton<IQueueManager, RabbitMQQueueManager>();
 
@@ -201,8 +202,8 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<IEventBus, RabbitMQEventBus>();
 
-        services.TryAddSingleton<IEventStore>(provider =>
-            throw new NotImplementedException("RabbitMQ Event Store implementation needs interface compatibility fixes"));
+        // Event store
+        services.TryAddSingleton<IEventStore, RabbitMQEventStore>();
 
         services.TryAddSingleton<IHealthChecker, RabbitMQHealthChecker>();
     }
