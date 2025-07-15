@@ -162,10 +162,21 @@ public class MessageConsumer
     {
         _logger.LogInformation("Starting message consumer...");
 
-        await _rabbitMQ.Consumer.ConsumeAsync<Message>(
-            queueName: "simple-message-queue",
-            messageHandler: ProcessMessageAsync,
-            cancellationToken: cancellationToken);
+        // Start consuming messages with fluent API
+        await _rabbitMQ.Consumer.Queue<SimpleMessage>("simple-queue")
+            .WithConcurrency(3)
+            .WithPrefetchCount(10)
+            .WithAutoAck(false)
+            .WithErrorHandler(async (exception, context) =>
+            {
+                _logger.LogError(exception, "Error processing message");
+                return exception is TransientException;
+            })
+            .ConsumeAsync(async (message, context) =>
+            {
+                await ProcessMessageAsync(message);
+                return true; // Acknowledge
+            });
     }
 
     private async Task<bool> ProcessMessageAsync(Message message, MessageContext context)

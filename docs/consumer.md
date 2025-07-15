@@ -70,13 +70,25 @@ public class OrderProcessor
         // Consume with fluent API
         await _streamFlow.Consumer.Queue<Order>("order-processing")
             .WithConcurrency(5)
-            .WithPrefetch(100)
+            .WithPrefetchCount(100)
             .WithAutoAck(false)
-            .WithErrorHandling(ErrorHandlingStrategy.Retry)
-            .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-            .WithMaxRetries(3)
-            .WithDeadLetterQueue("dlq")
-            .HandleAsync(ProcessOrderAsync, cancellationToken);
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Custom error handling
+                return exception is TransientException;
+            })
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .WithDeadLetterQueue(new DeadLetterSettings
+            {
+                DeadLetterExchange = "dlx",
+                DeadLetterQueue = "dlq"
+            })
+            .ConsumeAsync(ProcessOrderAsync, cancellationToken);
     }
 
     private async Task<bool> ProcessOrderAsync(Order order, MessageContext context)
@@ -112,15 +124,25 @@ public class SimpleConsumer
     {
         await _streamFlow.Consumer.Queue<Order>("order-processing")
             .WithConcurrency(3)
-            .WithPrefetch(50)
+            .WithPrefetchCount(50)
             .WithAutoAck(false)
-            .WithErrorHandling(ErrorHandlingStrategy.Retry)
-            .WithRetryPolicy(RetryPolicyType.Linear)
-            .WithMaxRetries(3)
-            .WithRetryDelay(TimeSpan.FromSeconds(1))
-            .WithDeadLetterQueue("dlq")
-            .WithTimeout(TimeSpan.FromMinutes(5))
-            .HandleAsync(async (order, context) =>
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Custom error handling
+                return exception is TransientException;
+            })
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.Linear,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .WithDeadLetterQueue(new DeadLetterSettings
+            {
+                DeadLetterExchange = "dlx",
+                DeadLetterQueue = "dlq"
+            })
+            .ConsumeAsync(async (order, context) =>
             {
                 _logger.LogInformation("Received order {OrderId} from {CustomerName}", 
                     order.Id, order.CustomerName);
@@ -132,16 +154,20 @@ public class SimpleConsumer
             }, cancellationToken);
     }
 
-    // Consume raw messages (byte arrays) with fluent API
+    // Raw message consumption with fluent API
     public async Task ConsumeRawMessagesAsync(CancellationToken cancellationToken = default)
     {
         await _streamFlow.Consumer.Queue<byte[]>("raw-data")
             .WithConcurrency(5)
-            .WithPrefetch(100)
+            .WithPrefetchCount(100)
             .WithAutoAck(false)
-            .WithErrorHandling(ErrorHandlingStrategy.DeadLetter)
-            .WithTimeout(TimeSpan.FromMinutes(2))
-            .HandleAsync(async (data, context) =>
+            .WithErrorHandler(async (exception, context) =>
+            {
+                // Log error and don't requeue raw data
+                _logger.LogError(exception, "Error processing raw data");
+                return false;
+            })
+            .ConsumeAsync(async (data, context) =>
             {
                 _logger.LogInformation("Received {Size} bytes from {Exchange}", 
                     data.Length, context.Exchange);
@@ -156,7 +182,7 @@ public class SimpleConsumer
     // Event consumption with fluent API
     public async Task ConsumeEventsAsync(CancellationToken cancellationToken = default)
     {
-        await _streamFlow.Consumer.Event<OrderCreated>()
+        await _streamFlow.Consumer.Queue<OrderCreated>()
             .WithConcurrency(3)
             .WithPrefetch(50)
             .WithErrorHandling(ErrorHandlingStrategy.Retry)

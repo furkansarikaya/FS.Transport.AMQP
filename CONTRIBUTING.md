@@ -175,7 +175,7 @@ dotnet build -c Release
 dotnet pack -c Release
 
 # Publish to NuGet
-dotnet nuget push bin/Release/FS.Transport.AMQP.1.2.3.nupkg -k [API_KEY] -s https://api.nuget.org/v3/index.json
+dotnet nuget push bin/Release/FS.StreamFlow.Core.1.2.3.nupkg -k [API_KEY] -s https://api.nuget.org/v3/index.json
 ```
 
 ## License

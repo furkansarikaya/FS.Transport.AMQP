@@ -110,48 +110,56 @@ await _streamFlow.EventBus.Event<PaymentProcessed>()
     .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
     .PublishAsync(new PaymentProcessed(orderId, transactionId, amount));
 
-// Batch event publishing with fluent API
-await _streamFlow.EventBus.Batch()
-    .AddEvent(new OrderCreated(orderId1, customerName1, amount1))
-    .AddEvent(new OrderCreated(orderId2, customerName2, amount2))
-    .AddEvent(new OrderCreated(orderId3, customerName3, amount3))
-    .WithBatchSize(100)
-    .WithMaxWaitTime(TimeSpan.FromMilliseconds(100))
-    .WithMetadata(metadata =>
-    {
-        metadata.Source = "order-service";
-        metadata.Version = "1.0";
-    })
-    .PublishAsync();
+// Batch event publishing
+var events = new IEvent[]
+{
+    new OrderCreated(orderId1, customerName1, amount1),
+    new OrderCreated(orderId2, customerName2, amount2),
+    new OrderCreated(orderId3, customerName3, amount3)
+};
+
+await _streamFlow.EventBus.PublishBatchAsync(events);
 ```
 
 ### Subscribing to Events with Fluent API
 
 ```csharp
-// Subscribe to domain events with fluent API
-await _streamFlow.Consumer.Event<OrderCreated>()
+// Subscribe to domain events using dedicated queues
+await _streamFlow.Consumer.Queue<OrderCreated>("order-created-events")
     .WithConcurrency(3)
-    .WithPrefetch(50)
-    .WithErrorHandling(ErrorHandlingStrategy.Retry)
-    .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-    .WithMaxRetries(3)
-    .WithDeadLetterQueue("event-dlq")
-    .WithMetadataFilter(metadata => metadata.Source == "order-service")
-    .WithTimeout(TimeSpan.FromMinutes(5))
-    .HandleAsync(async (orderCreated, context) =>
+    .WithPrefetchCount(50)
+    .WithErrorHandler(async (exception, context) =>
+    {
+        // Custom error handling
+        return exception is TransientException;
+    })
+    .WithRetryPolicy(new RetryPolicySettings
+    {
+        RetryPolicy = RetryPolicyType.ExponentialBackoff,
+        MaxRetryAttempts = 3,
+        RetryDelay = TimeSpan.FromSeconds(1)
+    })
+    .WithDeadLetterQueue(new DeadLetterSettings
+    {
+        DeadLetterExchange = "event-dlx",
+        DeadLetterQueue = "event-dlq"
+    })
+    .ConsumeAsync(async (orderCreated, context) =>
     {
         await ProcessOrderCreatedEventAsync(orderCreated, context);
         return true;
     });
 
-// Subscribe to integration events with fluent API
-await _streamFlow.Consumer.Event<PaymentProcessed>()
+// Subscribe to integration events using dedicated queues
+await _streamFlow.Consumer.Queue<PaymentProcessed>("payment-processed-events")
     .WithConcurrency(5)
-    .WithPrefetch(100)
-    .WithErrorHandling(ErrorHandlingStrategy.DeadLetter)
-    .WithMetadataFilter(metadata => metadata.Source == "payment-service")
-    .WithDeadLetterQueue("payment-dlq")
-    .HandleAsync(async (paymentProcessed, context) =>
+    .WithPrefetchCount(100)
+    .WithErrorHandler(async (exception, context) =>
+    {
+        // Custom error handling for payment events
+        return exception is TransientException;
+    })
+    .ConsumeAsync(async (paymentProcessed, context) =>
     {
         await UpdateOrderPaymentStatusAsync(paymentProcessed, context);
         return true;
