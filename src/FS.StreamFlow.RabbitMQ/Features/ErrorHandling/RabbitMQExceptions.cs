@@ -1,5 +1,3 @@
-using System.Runtime.Serialization;
-
 namespace FS.StreamFlow.RabbitMQ.Features.ErrorHandling;
 
 /// <summary>
@@ -22,16 +20,9 @@ public class RabbitMQClientException : Exception
     /// <summary>
     /// Initializes a new instance of the RabbitMQClientException class with a specified error message and inner exception
     /// </summary>
-    /// <param name="message">The message that describes the error</param>
+    /// <param name="message">The error message that explains the reason for the exception</param>
     /// <param name="innerException">The exception that is the cause of the current exception</param>
     public RabbitMQClientException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>
-    /// Initializes a new instance of the RabbitMQClientException class with serialized data
-    /// </summary>
-    /// <param name="info">The SerializationInfo that holds the serialized object data about the exception being thrown</param>
-    /// <param name="context">The StreamingContext that contains contextual information about the source or destination</param>
-    protected RabbitMQClientException(SerializationInfo info, StreamingContext context) : base(info, context) { }
 }
 
 /// <summary>
@@ -54,20 +45,13 @@ public class AlreadyClosedException : RabbitMQClientException
     /// <summary>
     /// Initializes a new instance of the AlreadyClosedException class with a specified error message and inner exception
     /// </summary>
-    /// <param name="message">The message that describes the error</param>
+    /// <param name="message">The error message that explains the reason for the exception</param>
     /// <param name="innerException">The exception that is the cause of the current exception</param>
     public AlreadyClosedException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>
-    /// Initializes a new instance of the AlreadyClosedException class with serialized data
-    /// </summary>
-    /// <param name="info">The SerializationInfo that holds the serialized object data about the exception being thrown</param>
-    /// <param name="context">The StreamingContext that contains contextual information about the source or destination</param>
-    protected AlreadyClosedException(SerializationInfo info, StreamingContext context) : base(info, context) { }
 }
 
 /// <summary>
-/// Exception thrown when RabbitMQ broker is unreachable
+/// Exception thrown when broker is unreachable
 /// </summary>
 [Serializable]
 public class BrokerUnreachableException : RabbitMQClientException
@@ -86,20 +70,13 @@ public class BrokerUnreachableException : RabbitMQClientException
     /// <summary>
     /// Initializes a new instance of the BrokerUnreachableException class with a specified error message and inner exception
     /// </summary>
-    /// <param name="message">The message that describes the error</param>
+    /// <param name="message">The error message that explains the reason for the exception</param>
     /// <param name="innerException">The exception that is the cause of the current exception</param>
     public BrokerUnreachableException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>
-    /// Initializes a new instance of the BrokerUnreachableException class with serialized data
-    /// </summary>
-    /// <param name="info">The SerializationInfo that holds the serialized object data about the exception being thrown</param>
-    /// <param name="context">The StreamingContext that contains contextual information about the source or destination</param>
-    protected BrokerUnreachableException(SerializationInfo info, StreamingContext context) : base(info, context) { }
 }
 
 /// <summary>
-/// Exception thrown when connection to RabbitMQ fails
+/// Exception thrown when connection fails
 /// </summary>
 [Serializable]
 public class ConnectFailureException : RabbitMQClientException
@@ -118,16 +95,9 @@ public class ConnectFailureException : RabbitMQClientException
     /// <summary>
     /// Initializes a new instance of the ConnectFailureException class with a specified error message and inner exception
     /// </summary>
-    /// <param name="message">The message that describes the error</param>
+    /// <param name="message">The error message that explains the reason for the exception</param>
     /// <param name="innerException">The exception that is the cause of the current exception</param>
     public ConnectFailureException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>
-    /// Initializes a new instance of the ConnectFailureException class with serialized data
-    /// </summary>
-    /// <param name="info">The SerializationInfo that holds the serialized object data about the exception being thrown</param>
-    /// <param name="context">The StreamingContext that contains contextual information about the source or destination</param>
-    protected ConnectFailureException(SerializationInfo info, StreamingContext context) : base(info, context) { }
 }
 
 /// <summary>
@@ -150,23 +120,16 @@ public class OperationInterruptedException : RabbitMQClientException
     /// <summary>
     /// Initializes a new instance of the OperationInterruptedException class with a specified error message and inner exception
     /// </summary>
-    /// <param name="message">The message that describes the error</param>
+    /// <param name="message">The error message that explains the reason for the exception</param>
     /// <param name="innerException">The exception that is the cause of the current exception</param>
     public OperationInterruptedException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>
-    /// Initializes a new instance of the OperationInterruptedException class with serialized data
-    /// </summary>
-    /// <param name="info">The SerializationInfo that holds the serialized object data about the exception being thrown</param>
-    /// <param name="context">The StreamingContext that contains contextual information about the source or destination</param>
-    protected OperationInterruptedException(SerializationInfo info, StreamingContext context) : base(info, context) { }
 }
 
 /// <summary>
-/// Exception thrown when message serialization fails
+/// Exception thrown when serialization fails
 /// </summary>
 [Serializable]
-public class SerializationException : Exception
+public class SerializationException : RabbitMQClientException
 {
     /// <summary>
     /// Initializes a new instance of the SerializationException class
@@ -182,14 +145,7 @@ public class SerializationException : Exception
     /// <summary>
     /// Initializes a new instance of the SerializationException class with a specified error message and inner exception
     /// </summary>
-    /// <param name="message">The message that describes the error</param>
+    /// <param name="message">The error message that explains the reason for the exception</param>
     /// <param name="innerException">The exception that is the cause of the current exception</param>
     public SerializationException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>
-    /// Initializes a new instance of the SerializationException class with serialized data
-    /// </summary>
-    /// <param name="info">The SerializationInfo that holds the serialized object data about the exception being thrown</param>
-    /// <param name="context">The StreamingContext that contains contextual information about the source or destination</param>
-    protected SerializationException(SerializationInfo info, StreamingContext context) : base(info, context) { }
 } 

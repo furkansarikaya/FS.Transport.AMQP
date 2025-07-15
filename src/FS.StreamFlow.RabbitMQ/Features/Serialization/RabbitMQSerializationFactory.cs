@@ -618,7 +618,10 @@ public class BinaryMessageSerializer : MessageSerializerBase
     /// <returns>True if the type can be serialized, otherwise false</returns>
     public override bool CanSerialize(Type type)
     {
-        return type.IsSerializable;
+        return type.IsDefined(typeof(SerializableAttribute), inherit: false) || 
+               type.IsValueType || 
+               type == typeof(string) || 
+               type.IsArray;
     }
 
     /// <summary>
@@ -844,7 +847,7 @@ public class XmlMessageSerializer : MessageSerializerBase
     /// <returns>True if the type can be serialized, otherwise false</returns>
     public override bool CanSerialize(Type type)
     {
-        return type.IsSerializable;
+        return type.IsDefined(typeof(SerializableAttribute), inherit: false);
     }
 
     /// <summary>
