@@ -55,10 +55,10 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ```bash
 # Clone the repository
-git clone https://github.com/furkansarikaya/FS.RabbitMQ.git
+git clone https://github.com/furkansarikaya/FS.StreamFlow.git
 
 # Navigate to the directory
-cd FS.RabbitMQ
+cd FS.StreamFlow
 
 # Install dependencies
 dotnet restore
@@ -122,22 +122,26 @@ public async Task PublishMessage_WithValidMessage_PublishesSuccessfully()
 ```
 FS.StreamFlow/
 ├── src/
-│   └── FS.Transport.AMQP/
-│       ├── Configuration/    # Configuration classes
-│       ├── Connection/       # Connection management
-│       ├── Consumer/         # Message consumer
-│       ├── Core/            # Core interfaces and classes
-│       ├── ErrorHandling/   # Error handling and retry policies
-│       ├── EventBus/        # Event bus implementation
-│       ├── EventStore/      # Event sourcing
-│       ├── Producer/        # Message producer
-│       ├── Saga/           # Saga orchestration
-│       └── Serialization/   # Message serialization
-├── tests/
-│   └── FS.Transport.AMQP.Tests/
-│       ├── Integration/     # Integration tests
-│       └── Unit/           # Unit tests
-└── docs/                   # Documentation
+│   ├── FS.StreamFlow.Core/
+│   │   ├── Features/         # Core features and abstractions
+│   │   │   ├── Events/      # Event interfaces and models
+│   │   │   └── Messaging/   # Messaging interfaces and models
+│   │   └── FS.StreamFlow.Core.csproj
+│   └── FS.StreamFlow.RabbitMQ/
+│       ├── Features/        # RabbitMQ implementations
+│       │   ├── Connection/  # Connection management
+│       │   ├── Consumer/    # Message consumer
+│       │   ├── Producer/    # Message producer
+│       │   ├── EventBus/    # Event bus implementation
+│       │   ├── EventStore/  # Event sourcing
+│       │   ├── Exchange/    # Exchange management
+│       │   ├── Queue/       # Queue management
+│       │   ├── ErrorHandling/ # Error handling
+│       │   ├── Saga/        # Saga orchestration
+│       │   └── Serialization/ # Message serialization
+│       └── FS.StreamFlow.RabbitMQ.csproj
+├── docs/                    # Documentation
+└── FS.StreamFlow.sln
 ```
 
 ## Release Process

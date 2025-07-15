@@ -80,15 +80,28 @@ public class OrderService
     
     public async Task CreateOrderAsync(Order order)
     {
-        // Publish a message
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.created",
-            message: order);
+        // Create exchange and queue with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+        
+        // Publish a message with fluent API
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(order);
     }
 }
 
-// Consume messages
+// Consume messages with fluent API
 public class OrderProcessor
 {
     private readonly IStreamFlowClient _streamFlow;
@@ -97,11 +110,12 @@ public class OrderProcessor
     
     public async Task StartProcessingAsync()
     {
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(5)
+            .WithPrefetch(100)
+            .WithErrorHandling(ErrorHandlingStrategy.Retry)
+            .HandleAsync(async (order, context) =>
             {
-                // Process the order
                 await ProcessOrderAsync(order);
                 return true; // Acknowledge message
             });
@@ -159,18 +173,25 @@ await _streamFlow.EventBus.PublishAsync(
 
 ### 3. Event Sourcing Support
 
-Complete event store implementation with snapshots:
+Complete event store implementation with fluent API and snapshots:
 
 ```csharp
-// Store events
-await _streamFlow.EventStore.AppendToStreamAsync(
-    streamName: $"order-{orderId}",
-    expectedVersion: 0,
-    events: new[] { orderCreatedEvent, orderShippedEvent });
+// Store events with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .AppendEvent(new OrderCreated(orderId, customerName, amount))
+    .AppendEvent(new OrderItemAdded(orderId, itemId, quantity))
+    .SaveAsync();
 
-// Rebuild aggregate from events
-var events = await _streamFlow.EventStore.ReadStreamAsync(
-    streamName: $"order-{orderId}");
+// Read events with fluent API
+var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .FromVersion(0)
+    .WithMaxCount(100)
+    .ReadAsync();
+
+// Create snapshots with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .WithSnapshot(orderSnapshot, version: 50)
+    .SaveSnapshotAsync();
 ```
 
 ### 4. Saga Orchestration
@@ -235,7 +256,42 @@ var messages = new[]
 var batchResult = await _streamFlow.Producer.PublishBatchAsync(messages);
 ```
 
-### 6. Comprehensive Error Handling
+### 6. Infrastructure Management
+
+Fluent APIs for queue, exchange, and event stream management:
+
+```csharp
+// Queue management with fluent API
+await _streamFlow.QueueManager.Queue("order-processing")
+    .WithDurable(true)
+    .WithExclusive(false)
+    .WithAutoDelete(false)
+    .WithDeadLetterExchange("dlx")
+    .WithDeadLetterRoutingKey("order.failed")
+    .WithMessageTtl(TimeSpan.FromHours(24))
+    .WithMaxLength(10000)
+    .WithPriority(5)
+    .BindToExchange("orders", "order.created")
+    .DeclareAsync();
+
+// Exchange management with fluent API
+await _streamFlow.ExchangeManager.Exchange("orders")
+    .AsTopic()
+    .WithDurable(true)
+    .WithAutoDelete(false)
+    .WithAlternateExchange("alt-orders")
+    .WithInternal(false)
+    .BindToExchange("master-orders", "order.*")
+    .DeclareAsync();
+
+// Event stream management with fluent API
+await _streamFlow.EventStore.Stream("order-events")
+    .AppendEvents(new[] { event1, event2, event3 })
+    .WithSnapshot(snapshot, version: 100)
+    .SaveAsync();
+```
+
+### 7. Comprehensive Error Handling
 
 Built-in retry policies, circuit breakers, and dead letter queues:
 
@@ -257,7 +313,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ### Example 1: E-commerce Order Processing
 
 ```csharp
-// Complete order processing workflow
+// Complete order processing workflow with fluent APIs
 public class OrderProcessingService
 {
     private readonly IStreamFlowClient _streamFlow;
@@ -266,18 +322,35 @@ public class OrderProcessingService
     
     public async Task ProcessOrderAsync(Order order)
     {
-        // 1. Publish domain event
-        await _streamFlow.EventBus.PublishAsync(
-            new OrderCreated(order.Id, order.CustomerName, order.Total));
+        // 1. Setup infrastructure with fluent APIs
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.*")
+            .DeclareAsync();
         
-        // 2. Store event in event store
-        await _streamFlow.EventStore.AppendToStreamAsync(
-            streamName: $"order-{order.Id}",
-            expectedVersion: 0,
-            events: new[] { new OrderCreated(order.Id, order.CustomerName, order.Total) });
+        // 2. Publish domain event with fluent API
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "order-service";
+            })
+            .PublishAsync(new OrderCreated(order.Id, order.CustomerName, order.Total));
         
-        // 3. Start saga for order processing
-        await _streamFlow.Saga.StartSagaAsync<OrderProcessingSaga>(
+        // 3. Store event in event store with fluent API
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderCreated(order.Id, order.CustomerName, order.Total))
+            .AppendEvent(new OrderItemsAdded(order.Id, order.Items))
+            .SaveAsync();
+        
+        // 4. Start saga for order processing
+        await _streamFlow.SagaOrchestrator.StartSagaAsync<OrderProcessingSaga>(
             sagaId: order.Id,
             initialEvent: new OrderCreated(order.Id, order.CustomerName, order.Total));
     }
@@ -286,13 +359,23 @@ public class OrderProcessingService
 // Event handlers with automatic retry and error handling
 public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
+    private readonly IStreamFlowClient _streamFlow;
+    
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
         try
         {
             // Business logic with automatic retry on failure
             await _inventoryService.ReserveItemsAsync(@event.OrderId);
-            await _emailService.SendOrderConfirmationAsync(@event);
+            
+            // Publish follow-up events
+            await _streamFlow.EventBus.Event<InventoryRequested>()
+                .WithMetadata(metadata =>
+                {
+                    metadata.CorrelationId = context.CorrelationId;
+                    metadata.CausationId = context.EventId;
+                })
+                .PublishAsync(new InventoryRequested(@event.OrderId, @event.Items));
         }
         catch (Exception ex)
         {
@@ -538,12 +621,63 @@ builder.Services.Configure<RabbitMQStreamFlowOptions>(
 
 ## 🔧 Advanced Features
 
-### Fluent Producer API
+### Fluent Infrastructure Management
 
-Chain operations with the fluent API:
+Set up your messaging infrastructure with intuitive fluent APIs:
 
 ```csharp
-// Fluent message building
+// Complete infrastructure setup
+public class InfrastructureSetup
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupAsync()
+    {
+        // Create exchanges with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("notifications")
+            .AsFanout()
+            .WithDurable(true)
+            .DeclareAsync();
+        
+        // Create queues with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.created")
+            .BindToExchange("orders", "order.updated")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("email-notifications")
+            .WithDurable(true)
+            .BindToExchange("notifications", "")
+            .DeclareAsync();
+            
+        // Create event streams with fluent API
+        await _streamFlow.EventStore.Stream("order-events")
+            .CreateAsync();
+            
+        await _streamFlow.EventStore.Stream("user-events")
+            .CreateAsync();
+    }
+}
+```
+
+### Fluent Producer API
+
+Chain operations with the comprehensive fluent API:
+
+```csharp
+// Advanced message publishing with fluent API
 await _streamFlow.Producer.Message<Order>()
     .WithExchange("orders")
     .WithRoutingKey("order.created")
@@ -553,37 +687,126 @@ await _streamFlow.Producer.Message<Order>()
     .WithHeaders(new Dictionary<string, object>
     {
         ["source"] = "order-service",
-        ["version"] = "1.0"
+        ["version"] = "1.0",
+        ["correlation-id"] = Guid.NewGuid().ToString()
     })
+    .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+    .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
     .PublishAsync(order);
 
-// Fluent event publishing
+// Batch publishing with fluent API
+await _streamFlow.Producer.Batch()
+    .AddMessage<Order>("orders", "order.created", order1)
+    .AddMessage<Order>("orders", "order.updated", order2)
+    .AddMessage<Order>("orders", "order.shipped", order3)
+    .WithBatchSize(100)
+    .WithMaxWaitTime(TimeSpan.FromMilliseconds(100))
+    .WithConfirmation()
+    .PublishAsync();
+
+// Event publishing with fluent API
 await _streamFlow.EventBus.Event<OrderCreated>()
     .WithMetadata(metadata =>
     {
         metadata.CorrelationId = correlationId;
         metadata.CausationId = causationId;
         metadata.Source = "order-service";
+        metadata.Version = "1.0";
     })
+    .WithRetryPolicy(RetryPolicyType.Linear)
+    .WithDeadLetterHandling(enabled: true)
     .PublishAsync(new OrderCreated(orderId, customerName, amount));
 ```
 
 ### Fluent Consumer API
 
-Configure consumers with fluent syntax:
+Configure consumers with comprehensive fluent syntax:
 
 ```csharp
-// Fluent consumer configuration
+// Advanced consumer configuration with fluent API
 await _streamFlow.Consumer.Queue<Order>("order-processing")
     .WithConcurrency(5)
     .WithPrefetch(100)
+    .WithAutoAck(false)
     .WithErrorHandling(ErrorHandlingStrategy.Retry)
     .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+    .WithMaxRetries(3)
+    .WithRetryDelay(TimeSpan.FromSeconds(1))
+    .WithDeadLetterQueue("dlq")
+    .WithMessageFilter(order => order.Status == OrderStatus.Pending)
+    .WithTimeout(TimeSpan.FromMinutes(5))
     .HandleAsync(async (order, context) =>
     {
         await ProcessOrderAsync(order);
         return true;
     });
+
+// Event consumption with fluent API
+await _streamFlow.Consumer.Event<OrderCreated>()
+    .WithConcurrency(3)
+    .WithPrefetch(50)
+    .WithErrorHandling(ErrorHandlingStrategy.DeadLetter)
+    .WithMetadataFilter(metadata => metadata.Source == "order-service")
+    .HandleAsync(async (orderCreated, context) =>
+    {
+        await HandleOrderCreatedAsync(orderCreated, context);
+        return true;
+    });
+```
+
+### Fluent Event Store API
+
+Manage event streams with comprehensive fluent operations:
+
+```csharp
+// Advanced event store operations with fluent API
+public class OrderEventStore
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEvents(events)
+            .AppendEventsWithExpectedVersion(events, expectedVersion: 5)
+            .WithSnapshot(orderSnapshot, version: 10)
+            .SaveAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(fromVersion)
+            .WithMaxCount(100)
+            .ReadAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetRecentOrderEventsAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(-1)
+            .WithMaxCount(10)
+            .ReadBackwardAsync();
+    }
+    
+    public async Task<bool> CreateOrderStreamAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .CreateAsync();
+    }
+    
+    public async Task<bool> TruncateOrderStreamAsync(Guid orderId, long version)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .TruncateAsync(version);
+    }
+    
+    public async Task<object?> GetOrderSnapshotAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .GetSnapshotAsync();
+    }
+}
 ```
 
 ### Custom Retry Policies

@@ -57,6 +57,15 @@ builder.Services.AddRabbitMQStreamFlow(options =>
         "RetryPolicy": "ExponentialBackoff",
         "MaxRetryAttempts": 3
       },
+      "EventBus": {
+        "DomainEventExchange": "domain-events",
+        "IntegrationEventExchange": "integration-events"
+      },
+      "EventStore": {
+        "EnableSnapshots": true,
+        "SnapshotInterval": 100,
+        "StreamPrefix": "eventstore"
+      },
       "EnableHealthChecks": true,
       "EnableEventBus": true,
       "EnableMonitoring": true
@@ -71,6 +80,87 @@ builder.Services.Configure<RabbitMQStreamFlowOptions>(
     builder.Configuration.GetSection("StreamFlow:RabbitMQ"));
 
 builder.Services.AddRabbitMQStreamFlow();
+```
+
+### Using Fluent APIs After Configuration
+
+Once configured, you can use the fluent APIs to manage infrastructure and messaging:
+
+```csharp
+public class StartupService
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public StartupService(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
+    
+    public async Task InitializeAsync()
+    {
+        // Setup infrastructure with fluent APIs
+        await SetupExchangesAsync();
+        await SetupQueuesAsync();
+        await SetupEventStreamsAsync();
+        
+        // Start consuming messages
+        await StartConsumersAsync();
+    }
+    
+    private async Task SetupExchangesAsync()
+    {
+        // Create exchanges with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("notifications")
+            .AsFanout()
+            .WithDurable(true)
+            .DeclareAsync();
+    }
+    
+    private async Task SetupQueuesAsync()
+    {
+        // Create queues with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+    }
+    
+    private async Task SetupEventStreamsAsync()
+    {
+        // Create event streams with fluent API
+        await _streamFlow.EventStore.Stream("order-events")
+            .CreateAsync();
+            
+        await _streamFlow.EventStore.Stream("user-events")
+            .CreateAsync();
+    }
+    
+    private async Task StartConsumersAsync()
+    {
+        // Start consuming with fluent API
+        _ = Task.Run(async () =>
+        {
+            await _streamFlow.Consumer.Queue<Order>("order-processing")
+                .WithConcurrency(5)
+                .WithPrefetch(100)
+                .WithErrorHandling(ErrorHandlingStrategy.Retry)
+                .HandleAsync(async (order, context) =>
+                {
+                    await ProcessOrderAsync(order);
+                    return true;
+                });
+        });
+    }
+}
 ```
 
 ## Connection Configuration

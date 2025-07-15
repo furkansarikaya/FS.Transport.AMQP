@@ -66,7 +66,7 @@ using FS.StreamFlow.RabbitMQ.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add StreamFlow with RabbitMQ
+// Add FS.StreamFlow with RabbitMQ
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
     options.ConnectionString = "amqp://guest:guest@localhost:5672";
@@ -149,11 +149,29 @@ public class OrderService
     
     public async Task ProcessOrderAsync(Order order)
     {
-        // Publish a message
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.created",
-            message: order);
+        // Setup infrastructure with fluent APIs
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+        
+        // Publish a message with fluent API
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(order);
+            
+        // Store event in event store with fluent API
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderCreated(order.Id, order.CustomerName, order.Amount))
+            .SaveAsync();
     }
 }
 ```
@@ -168,6 +186,11 @@ public record Order(
     string CustomerName,
     decimal Amount,
     DateTime CreatedAt);
+    
+public record OrderCreated(
+    Guid OrderId,
+    string CustomerName,
+    decimal Amount) : IDomainEvent;
 ```
 
 ### 2. Publisher Service
@@ -186,10 +209,17 @@ public class OrderPublisher
     
     public async Task PublishOrderAsync(Order order)
     {
-        var result = await _streamFlow.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.created",
-            message: order);
+        // Setup infrastructure first
+        await SetupInfrastructureAsync();
+        
+        // Publish with fluent API
+        var result = await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .WithExpiration(TimeSpan.FromHours(24))
+            .WithPriority(5)
+            .PublishAsync(order);
         
         if (result.IsSuccess)
         {
@@ -199,6 +229,22 @@ public class OrderPublisher
         {
             Console.WriteLine($"Failed to publish order {order.Id}");
         }
+    }
+    
+    private async Task SetupInfrastructureAsync()
+    {
+        // Create exchange with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        // Create queue with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
     }
 }
 ```
@@ -211,98 +257,256 @@ using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 public class OrderConsumer
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<OrderConsumer> _logger;
     
-    public OrderConsumer(IStreamFlowClient streamFlow, ILogger<OrderConsumer> logger)
+    public OrderConsumer(IStreamFlowClient streamFlow)
     {
         _streamFlow = streamFlow;
-        _logger = logger;
     }
     
-    public async Task StartConsumingAsync(CancellationToken cancellationToken = default)
+    public async Task StartConsumingAsync()
     {
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
+        // Consume with fluent API
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(5)
+            .WithPrefetch(100)
+            .WithAutoAck(false)
+            .WithErrorHandling(ErrorHandlingStrategy.Retry)
+            .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+            .WithMaxRetries(3)
+            .WithDeadLetterQueue("dlq")
+            .HandleAsync(async (order, context) =>
             {
-                try
-                {
-                    _logger.LogInformation("Processing order {OrderId}", order.Id);
-                    
-                    // Process the order
-                    await ProcessOrderAsync(order);
-                    
-                    _logger.LogInformation("Order {OrderId} processed successfully", order.Id);
-                    
-                    return true; // Acknowledge message
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to process order {OrderId}", order.Id);
-                    
-                    // Return false to reject message (will be requeued or sent to DLQ)
-                    return false;
-                }
-            },
-            cancellationToken);
+                Console.WriteLine($"Processing order {order.Id}");
+                
+                // Process the order
+                await ProcessOrderAsync(order);
+                
+                Console.WriteLine($"Order {order.Id} processed successfully!");
+                return true; // Acknowledge message
+            });
     }
     
     private async Task ProcessOrderAsync(Order order)
     {
-        // Your business logic here
-        await Task.Delay(1000); // Simulate processing
-    }
-}
-```
-
-### 4. Background Service for Consuming
-
-```csharp
-public class OrderConsumerBackgroundService : BackgroundService
-{
-    private readonly OrderConsumer _orderConsumer;
-    private readonly ILogger<OrderConsumerBackgroundService> _logger;
-    
-    public OrderConsumerBackgroundService(
-        OrderConsumer orderConsumer,
-        ILogger<OrderConsumerBackgroundService> logger)
-    {
-        _orderConsumer = orderConsumer;
-        _logger = logger;
-    }
-    
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("Order consumer background service started");
+        // Simulate processing
+        await Task.Delay(1000);
         
-        try
-        {
-            await _orderConsumer.StartConsumingAsync(stoppingToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in order consumer background service");
-        }
+        // Store event in event store with fluent API
+        await _streamFlow.EventStore.Stream($"order-{order.Id}")
+            .AppendEvent(new OrderCreated(order.Id, order.CustomerName, order.Amount))
+            .SaveAsync();
     }
 }
 ```
 
-### 5. Register Services
+### 4. Event-Driven Processing
 
 ```csharp
-// Program.cs
-builder.Services.AddRabbitMQStreamFlow(options =>
+// Event publisher
+public class OrderEventPublisher
 {
-    options.ConnectionString = "amqp://localhost";
-    options.EnableHealthChecks = true;
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task PublishOrderCreatedAsync(OrderCreated orderCreated)
+    {
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "order-service";
+                metadata.Version = "1.0";
+            })
+            .WithRetryPolicy(RetryPolicyType.Linear)
+            .WithDeadLetterHandling(enabled: true)
+            .PublishAsync(orderCreated);
+    }
+}
+
+// Event handler
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task HandleAsync(OrderCreated orderCreated, EventContext context)
+    {
+        Console.WriteLine($"Handling OrderCreated event for order {orderCreated.OrderId}");
+        
+        // Business logic
+        await ProcessOrderCreatedAsync(orderCreated);
+        
+        // Publish follow-up events
+        await _streamFlow.EventBus.Event<InventoryRequested>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = context.CorrelationId;
+                metadata.CausationId = context.EventId;
+                metadata.Source = "order-service";
+            })
+            .PublishAsync(new InventoryRequested(orderCreated.OrderId, items));
+    }
+}
+```
+
+### 5. Infrastructure Management
+
+```csharp
+// Complete infrastructure setup
+public class InfrastructureSetup
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupAsync()
+    {
+        // Create exchanges with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("notifications")
+            .AsFanout()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.ExchangeManager.Exchange("dlx")
+            .AsDirect()
+            .WithDurable(true)
+            .DeclareAsync();
+        
+        // Create queues with fluent API
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.created")
+            .BindToExchange("orders", "order.updated")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("email-notifications")
+            .WithDurable(true)
+            .BindToExchange("notifications", "")
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("dlq")
+            .WithDurable(true)
+            .BindToExchange("dlx", "order.failed")
+            .DeclareAsync();
+        
+        // Create event streams with fluent API
+        await _streamFlow.EventStore.Stream("order-events")
+            .CreateAsync();
+            
+        await _streamFlow.EventStore.Stream("user-events")
+            .CreateAsync();
+    }
+}
+```
+
+### 6. Event Sourcing
+
+```csharp
+// Event store operations
+public class OrderEventStore
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .AppendEvents(events)
+            .SaveAsync();
+    }
+    
+    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .FromVersion(0)
+            .ReadAsync();
+    }
+    
+    public async Task<object?> GetOrderSnapshotAsync(Guid orderId)
+    {
+        return await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .GetSnapshotAsync();
+    }
+    
+    public async Task SaveOrderSnapshotAsync(Guid orderId, object snapshot, long version)
+    {
+        await _streamFlow.EventStore.Stream($"order-{orderId}")
+            .WithSnapshot(snapshot, version)
+            .SaveSnapshotAsync();
+    }
+}
+```
+
+## Running Your Application
+
+### 1. Complete Example
+
+```csharp
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+// Add logging
+builder.Services.AddLogging(config =>
+{
+    config.AddConsole();
+    config.SetMinimumLevel(LogLevel.Information);
 });
 
-// Register your services
-builder.Services.AddScoped<OrderPublisher>();
-builder.Services.AddScoped<OrderConsumer>();
-builder.Services.AddHostedService<OrderConsumerBackgroundService>();
+// Add FS.StreamFlow
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://guest:guest@localhost:5672";
+    options.Connection.AutomaticRecovery = true;
+    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.Producer.EnableConfirmations = true;
+    options.Consumer.PrefetchCount = 50;
+    options.ErrorHandling.EnableDeadLetterQueue = true;
+    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
+    options.ErrorHandling.MaxRetryAttempts = 3;
+    options.EnableHealthChecks = true;
+    options.EnableEventBus = true;
+    options.EnableMonitoring = true;
+});
 
-var app = builder.Build();
+// Add your services
+builder.Services.AddSingleton<OrderPublisher>();
+builder.Services.AddSingleton<OrderConsumer>();
+builder.Services.AddSingleton<InfrastructureSetup>();
+
+var host = builder.Build();
+
+// Setup infrastructure
+var infrastructureSetup = host.Services.GetRequiredService<InfrastructureSetup>();
+await infrastructureSetup.SetupAsync();
+
+// Start consumer
+var consumer = host.Services.GetRequiredService<OrderConsumer>();
+_ = Task.Run(async () => await consumer.StartConsumingAsync());
+
+// Publish some test messages
+var publisher = host.Services.GetRequiredService<OrderPublisher>();
+for (int i = 0; i < 10; i++)
+{
+    var order = new Order(
+        Guid.NewGuid(),
+        $"Customer {i}",
+        Random.Shared.Next(100, 1000),
+        DateTime.UtcNow);
+        
+    await publisher.PublishOrderAsync(order);
+    await Task.Delay(1000);
+}
+
+await host.RunAsync();
 ```
 
 ## Basic Patterns

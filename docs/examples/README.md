@@ -2,103 +2,126 @@
 
 This directory contains comprehensive examples demonstrating various use cases and patterns with FS.StreamFlow.
 
-## 📁 Examples Overview
+## 📚 Available Examples
 
-### 🏪 E-commerce Examples
-- **[Order Processing](order-processing.md)** - Complete order processing workflow with events
-- **[Inventory Management](inventory-management.md)** - Real-time inventory updates and reservations
-- **[Payment Processing](payment-processing.md)** - Payment workflows with retry and error handling
+### 🟢 Beginner Examples
 
-### 🏢 Enterprise Patterns
-- **[Microservices Integration](microservices-integration.md)** - Service-to-service communication
-- **[Event-Driven Architecture](event-driven-architecture.md)** - Domain and integration events
-- **[Saga Orchestration](saga-orchestration.md)** - Long-running workflow management
+**[Simple Producer-Consumer](simple-producer-consumer.md)**
+- Basic message publishing and consuming
+- Connection setup and configuration
+- Message serialization and deserialization
+- Error handling fundamentals
 
-### 🔧 Technical Examples
-- **[High-Throughput Processing](high-throughput-processing.md)** - Optimized for performance
-- **[Error Handling Patterns](error-handling-patterns.md)** - Comprehensive error handling
-- **[Monitoring and Observability](monitoring-observability.md)** - Production monitoring setup
+**[Work Queues](work-queues.md)**
+- Task distribution among workers
+- Queue durability and persistence
+- Fair dispatch and acknowledgments
+- Worker scaling patterns
 
-### 🚀 Getting Started Examples
-- **[Simple Producer-Consumer](simple-producer-consumer.md)** - Basic publish/subscribe
-- **[Request-Reply Pattern](request-reply-pattern.md)** - Synchronous communication
-- **[Work Queues](work-queues.md)** - Task distribution patterns
+### 🟡 Intermediate Examples
 
-## 🎯 How to Use Examples
+**[Request-Reply Pattern](request-reply-pattern.md)**
+- Synchronous communication over async messaging
+- Correlation IDs and response routing
+- Timeout handling and error responses
+- RPC-style messaging patterns
+
+**[Event-Driven Architecture](event-driven-architecture.md)**
+- Domain and integration events
+- Event publishing and subscription
+- Event handlers and processing
+- Decoupled microservices communication
+
+**[Error Handling Patterns](error-handling-patterns.md)**
+- Retry mechanisms and policies
+- Dead letter queues and poison messages
+- Circuit breaker patterns
+- Comprehensive error recovery
+
+### 🔴 Advanced Examples
+
+**[Microservices Integration](microservices-integration.md)**
+- Service-to-service communication
+- Event choreography patterns
+- Distributed transaction coordination
+- Service mesh integration
+
+**[Saga Orchestration](saga-orchestration.md)**
+- Long-running business processes
+- Saga state management
+- Compensation patterns
+- Distributed transaction management
+
+**[Order Processing](order-processing.md)**
+- Complete e-commerce workflow
+- Event sourcing implementation
+- CQRS patterns
+- Complex business logic handling
+
+**[Inventory Management](inventory-management.md)**
+- Real-time inventory tracking
+- Stock reservation and updates
+- Concurrent modification handling
+- Inventory event streaming
+
+**[Payment Processing](payment-processing.md)**
+- Secure payment workflows
+- Payment gateway integration
+- Transaction state management
+- Financial event processing
+
+**[High-Throughput Processing](high-throughput-processing.md)**
+- Batch processing patterns
+- High-volume message handling
+- Performance optimization
+- Scalability considerations
+
+**[Monitoring & Observability](monitoring-observability.md)**
+- Health checks and metrics
+- Distributed tracing
+- Logging and alerting
+- Performance monitoring
+
+## 🚀 Getting Started
 
 Each example includes:
-- **Complete source code** with detailed comments
-- **Configuration setup** for different environments
-- **Best practices** and performance tips
-- **Common pitfalls** and how to avoid them
-- **Unit tests** and integration tests
+- Complete, runnable code
+- Step-by-step setup instructions
+- Configuration explanations
+- Best practices and tips
+- Common pitfalls to avoid
 
-## 📋 Prerequisites
+## 🛠️ Prerequisites
 
-Before running the examples, ensure you have:
-- .NET 9 SDK installed
-- RabbitMQ server running (Docker recommended)
+- .NET 9 SDK
+- RabbitMQ server (local or remote)
 - Basic understanding of messaging concepts
 
-## 🐳 Quick Setup with Docker
+## 📖 How to Use
 
-```bash
-# Start RabbitMQ with management UI
-docker run -d --name rabbitmq \
-  -p 5672:5672 \
-  -p 15672:15672 \
-  rabbitmq:3-management
+1. Navigate to any example directory
+2. Follow the setup instructions
+3. Run the example code
+4. Experiment with modifications
+5. Apply patterns to your own projects
 
-# Access management UI at http://localhost:15672 (guest/guest)
-```
+## 🤝 Contributing
 
-## 🏃 Running Examples
+Found an issue or have a new example idea? Please contribute:
 
-1. Clone the repository
-2. Navigate to the example directory
-3. Run the setup script:
-   ```bash
-   dotnet restore
-   dotnet run
-   ```
-
-## 🔄 Example Categories
-
-### By Complexity
-- **Beginner** 🟢 - Simple concepts, minimal setup
-- **Intermediate** 🟡 - Multiple components, some configuration
-- **Advanced** 🔴 - Complex patterns, production-ready
-
-### By Use Case
-- **Learning** 📚 - Educational examples with detailed explanations
-- **Production** 🏭 - Real-world patterns ready for production
-- **Performance** ⚡ - High-throughput and optimization examples
-
-## 📝 Contributing Examples
-
-We welcome contributions! If you have a useful example:
-
-1. Create a new markdown file in this directory
-2. Follow the example template structure
-3. Include complete, runnable code
-4. Add tests and documentation
+1. Check existing examples for similar patterns
+2. Create a new example following the template
+3. Include comprehensive documentation
+4. Add proper error handling
 5. Submit a pull request
 
-## 🆘 Getting Help
+## 📞 Support
 
 If you need help with any example:
-- Check the troubleshooting section in each example
-- Review the main [documentation](../README.md)
-- Open an issue on GitHub
-- Join our community discussions
 
-## 📊 Example Metrics
+1. Check the example's documentation
+2. Review the main project documentation
+3. Search existing GitHub issues
+4. Create a new issue with detailed information
 
-| Category | Count | Difficulty | Focus Area |
-|----------|-------|------------|------------|
-| Getting Started | 3 | 🟢 | Basic patterns |
-| E-commerce | 3 | 🟡 | Real-world scenarios |
-| Enterprise | 3 | 🔴 | Production patterns |
-| Technical | 3 | 🟡 | Advanced features |
-
-Happy coding! 🚀 
+Happy coding with FS.StreamFlow! 🚀 

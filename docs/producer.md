@@ -27,16 +27,14 @@ using FS.StreamFlow.RabbitMQ.DependencyInjection;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add FS.StreamFlow with producer configuration
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithProducer(config =>
-    {
-        config.EnableConfirmations = true;
-        config.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-        config.BatchSize = 100;
-        config.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ConnectionString = "amqp://localhost";
+    options.Producer.EnableConfirmations = true;
+    options.Producer.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.Producer.BatchSize = 100;
+    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
+});
 
 var app = builder.Build();
 ```
@@ -46,21 +44,35 @@ var app = builder.Build();
 ```csharp
 public class OrderService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderService> _logger;
 
-    public OrderService(IRabbitMQClient rabbitMQ, ILogger<OrderService> logger)
+    public OrderService(IStreamFlowClient streamFlow, ILogger<OrderService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task CreateOrderAsync(Order order)
     {
-        await _rabbitMQ.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.created",
-            message: order);
+        // Setup infrastructure with fluent API
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .BindToExchange("orders", "order.created")
+            .DeclareAsync();
+            
+        // Publish with fluent API
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(order);
     }
 }
 ```
@@ -72,42 +84,81 @@ public class OrderService
 ```csharp
 public class MessageService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public MessageService(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public MessageService(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
 
-    // Publish a simple message
+    // Publish a simple message with fluent API
     public async Task PublishSimpleMessageAsync()
     {
-        await _rabbitMQ.Producer.PublishAsync(
-            exchange: "notifications",
-            routingKey: "email.send",
-            message: "Hello, World!");
+        await _streamFlow.Producer.Message<string>()
+            .WithExchange("notifications")
+            .WithRoutingKey("email.send")
+            .PublishAsync("Hello, World!");
     }
 
-    // Publish a complex object
+    // Publish a complex object with fluent API
     public async Task PublishOrderAsync(Order order)
     {
-        await _rabbitMQ.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.created",
-            message: order);
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .WithExpiration(TimeSpan.FromHours(24))
+            .WithPriority(5)
+            .PublishAsync(order);
     }
 
     // Publish with byte array
     public async Task PublishBytesAsync(byte[] data)
     {
-        await _rabbitMQ.Producer.PublishAsync(
-            exchange: "data",
-            routingKey: "binary.data",
-            message: data);
+        await _streamFlow.Producer.Message<byte[]>()
+            .WithExchange("data")
+            .WithRoutingKey("binary.data")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(data);
     }
 }
 ```
 
-### Message Properties
+### Advanced Message Publishing with Fluent API
 
 ```csharp
+public async Task PublishAdvancedMessageAsync(Order order)
+{
+    var result = await _streamFlow.Producer.Message<Order>()
+        .WithExchange("orders")
+        .WithRoutingKey("order.created")
+        .WithDeliveryMode(DeliveryMode.Persistent)
+        .WithExpiration(TimeSpan.FromMinutes(30))
+        .WithPriority(5)
+        .WithHeaders(new Dictionary<string, object>
+        {
+            ["source"] = "order-service",
+            ["version"] = "1.0",
+            ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            ["correlation-id"] = Guid.NewGuid().ToString()
+        })
+        .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+        .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
+        .WithTransaction(enabled: true)
+        .PublishAsync(order);
+        
+    if (result.IsSuccess)
+    {
+        Console.WriteLine($"Order {order.Id} published successfully!");
+    }
+    else
+    {
+        Console.WriteLine($"Failed to publish order {order.Id}: {result.Error}");
+    }
+}
+```
+
+### Message Properties (Legacy API)
+
+```csharp
+// Legacy API - still supported but fluent API is recommended
 public async Task PublishWithPropertiesAsync(Order order)
 {
     var properties = new BasicProperties
@@ -128,7 +179,7 @@ public async Task PublishWithPropertiesAsync(Order order)
         }
     };
 
-    await _rabbitMQ.Producer.PublishAsync(
+    await _streamFlow.Producer.PublishAsync(
         exchange: "orders",
         routingKey: "order.created",
         message: order,
@@ -142,10 +193,55 @@ public async Task PublishWithPropertiesAsync(Order order)
 // Publish directly to a queue using default exchange
 public async Task PublishToQueueAsync(string queueName, object message)
 {
-    await _rabbitMQ.Producer.PublishAsync(
-        exchange: "", // Default exchange
-        routingKey: queueName,
-        message: message);
+    await _streamFlow.Producer.Message<object>()
+        .WithExchange("") // Default exchange
+        .WithRoutingKey(queueName)
+        .WithDeliveryMode(DeliveryMode.Persistent)
+        .PublishAsync(message);
+}
+```
+
+### Infrastructure Setup with Fluent API
+
+```csharp
+// Complete infrastructure setup before publishing
+public class InfrastructureSetup
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public async Task SetupOrderInfrastructureAsync()
+    {
+        // Create main exchange
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAlternateExchange("alt-orders")
+            .DeclareAsync();
+            
+        // Create dead letter exchange
+        await _streamFlow.ExchangeManager.Exchange("dlx")
+            .AsDirect()
+            .WithDurable(true)
+            .DeclareAsync();
+            
+        // Create processing queue
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromHours(24))
+            .WithMaxLength(10000)
+            .WithPriority(5)
+            .BindToExchange("orders", "order.created")
+            .BindToExchange("orders", "order.updated")
+            .DeclareAsync();
+            
+        // Create dead letter queue
+        await _streamFlow.QueueManager.Queue("dlq")
+            .WithDurable(true)
+            .BindToExchange("dlx", "order.failed")
+            .DeclareAsync();
+    }
 }
 ```
 
