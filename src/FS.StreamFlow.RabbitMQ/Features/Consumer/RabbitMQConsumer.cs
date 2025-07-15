@@ -699,12 +699,41 @@ public class RabbitMQFluentConsumerApi<T> : IFluentConsumerApi<T> where T : clas
 
     public async Task ConsumeAsync(Func<IServiceProvider, Func<T, MessageContext, Task<bool>>> handlerFactory, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("Handler factory requires DI integration");
+        // Create a default service provider if none is available
+        var serviceProvider = new DefaultServiceProvider();
+        var handler = handlerFactory(serviceProvider);
+        
+        await _consumer.ConsumeAsync(_queueName, handler, new ConsumerContext 
+        { 
+            ConsumerTag = _queueName,
+            Settings = new ConsumerSettings
+            {
+                AutoAcknowledge = false,
+                PrefetchCount = 1
+            }
+        }, cancellationToken);
     }
 
     public async Task ConsumeAsync<THandler>(CancellationToken cancellationToken = default) where THandler : class
     {
-        throw new NotImplementedException("Typed handler requires DI integration");
+        // Create an instance of the handler type
+        var handler = Activator.CreateInstance<THandler>();
+        
+        // Check if handler implements the expected interface
+        if (handler is not Func<T, MessageContext, Task<bool>> messageHandler)
+        {
+            throw new InvalidOperationException($"Handler {typeof(THandler).Name} does not implement the expected message handler interface");
+        }
+        
+        await _consumer.ConsumeAsync(_queueName, messageHandler, new ConsumerContext 
+        { 
+            ConsumerTag = _queueName,
+            Settings = new ConsumerSettings
+            {
+                AutoAcknowledge = false,
+                PrefetchCount = 1
+            }
+        }, cancellationToken);
     }
 
     public async Task ConsumeEventAsync<TEvent>(Func<TEvent, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where TEvent : class, IEvent

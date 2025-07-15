@@ -453,13 +453,24 @@ public class RabbitMQMetricsCollector : IMetricsCollector
     {
         if (_disposed) return;
 
-        // In a real implementation, this would flush metrics to external storage
-        // For now, we'll just log the current snapshot
+        // Flush metrics to logging infrastructure and reset counters/histograms
         var snapshot = GetSnapshot();
         
+        // Log current metrics
         _logger.LogInformation("Metrics snapshot: {CounterCount} counters, {GaugeCount} gauges, {HistogramCount} histograms, {TimerCount} timers",
             snapshot.Counters.Count, snapshot.Gauges.Count, snapshot.Histograms.Count, snapshot.Timers.Count);
 
+        // Reset time-based metrics after flush (histograms and timers)
+        foreach (var histogramData in _histogramData.Values)
+        {
+            histogramData.Clear();
+        }
+        
+        foreach (var timerData in _timerData.Values)
+        {
+            timerData.Clear();
+        }
+        
         await Task.CompletedTask;
     }
 
