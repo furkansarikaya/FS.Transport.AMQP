@@ -460,9 +460,16 @@ public class RabbitMQConsumer : IConsumer
         }
 
         _logger.LogInformation("Pausing consumer {ConsumerId}", _settings.ConsumerId);
-        ChangeStatus(ConsumerStatus.Running); // Keep as running for now
         
-        await Task.CompletedTask;
+        // Pause all active consumers by closing the channel
+        if (_channel != null)
+        {
+            await _channel.CloseAsync();
+            _channel = null;
+        }
+        
+        ChangeStatus(ConsumerStatus.Stopped);
+        ConsumerPaused?.Invoke(this, new ConsumerPausedEventArgs(_settings.ConsumerId, "Consumer paused"));
     }
 
     /// <summary>
@@ -472,9 +479,15 @@ public class RabbitMQConsumer : IConsumer
     public async Task ResumeAsync()
     {
         _logger.LogInformation("Resuming consumer {ConsumerId}", _settings.ConsumerId);
-        ChangeStatus(ConsumerStatus.Running);
         
-        await Task.CompletedTask;
+        // Resume by restarting the consumer
+        if (_status == ConsumerStatus.Stopped)
+        {
+            await StartAsync();
+        }
+        
+        ChangeStatus(ConsumerStatus.Running);
+        ConsumerResumed?.Invoke(this, new ConsumerResumedEventArgs(_settings.ConsumerId, "Consumer resumed"));
     }
 
     /// <summary>
@@ -738,11 +751,67 @@ public class RabbitMQFluentConsumerApi<T> : IFluentConsumerApi<T> where T : clas
 
     public async Task ConsumeEventAsync<TEvent>(Func<TEvent, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where TEvent : class, IEvent
     {
-        await Task.CompletedTask;
+        var eventExchange = "events";
+        var eventRoutingKey = $"event.{typeof(TEvent).Name}";
+        // var logger = _logger; // Capture logger reference for lambda
+        
+        await _consumer.ConsumeAsync<string>(_queueName, async (message, context) =>
+        {
+            try
+            {
+                var eventObj = JsonSerializer.Deserialize<TEvent>(message);
+                if (eventObj == null) return false;
+                
+                var eventContext = new EventContext
+                {
+                    EventType = typeof(TEvent).Name,
+                    EventId = Guid.NewGuid().ToString(),
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Source = "RabbitMQ",
+                    Metadata = new Dictionary<string, object>
+                    {
+                        ["Exchange"] = eventExchange,
+                        ["RoutingKey"] = eventRoutingKey,
+                        ["MessageContext"] = context
+                    }
+                };
+                
+                return await eventHandler(eventObj, eventContext);
+            }
+            catch (Exception ex)
+            {
+                // Log error - logger not available in this scope
+                Console.WriteLine($"Error processing event {typeof(TEvent).Name}: {ex.Message}");
+                return false;
+            }
+        }, new ConsumerContext
+        {
+            ConsumerTag = _queueName,
+            Settings = new ConsumerSettings
+            {
+                AutoAcknowledge = false,
+                PrefetchCount = 1
+            }
+        }, cancellationToken);
     }
 
     public async Task ConsumeEventAsync<TEvent>(IAsyncEventHandler<TEvent> eventHandler, CancellationToken cancellationToken = default) where TEvent : class, IEvent
     {
-        await Task.CompletedTask;
+        // var logger = _logger; // Capture logger reference for lambda
+        
+        await ConsumeEventAsync<TEvent>(async (evt, context) =>
+        {
+            try
+            {
+                await eventHandler.HandleAsync(evt, context, cancellationToken);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Log error - logger not available in this scope
+                Console.WriteLine($"Error in event handler {eventHandler.GetType().Name} for event {typeof(TEvent).Name}: {ex.Message}");
+                return false;
+            }
+        }, cancellationToken);
     }
 } 

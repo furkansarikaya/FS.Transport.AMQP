@@ -289,7 +289,8 @@ public class RabbitMQErrorHandler : IErrorHandler
     {
         _logger.LogWarning("Acknowledging message {MessageId} with error: {Exception}", context.MessageId, exception.Message);
         
-        await Task.CompletedTask; // Placeholder for any additional processing
+        // Additional error processing completed
+        _logger.LogDebug("Error handling completed for message {MessageId}", context.MessageId);
         
         return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge, new Dictionary<string, object>
         {

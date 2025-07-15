@@ -321,7 +321,31 @@ public class RabbitMQEventBus : IEventBus
         _statistics.ActiveSubscriptions++;
         _logger.LogInformation("Subscribed to domain event: {EventType}", eventType.Name);
         
-        await Task.CompletedTask;
+        // Start consuming from the domain event queue
+        var queueName = $"domain-events-{eventType.Name}";
+        await _consumer.ConsumeAsync<T>(queueName, async (evt, context) =>
+        {
+            try
+            {
+                await handler.HandleAsync(evt, new EventContext
+                {
+                    EventType = eventType.Name,
+                    EventId = Guid.NewGuid().ToString(),
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Source = "EventBus"
+                }, CancellationToken.None);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling domain event {EventType}", eventType.Name);
+                return false;
+            }
+        }, new ConsumerContext
+        {
+            ConsumerTag = queueName,
+            Settings = new ConsumerSettings { AutoAcknowledge = false }
+        }, CancellationToken.None);
     }
 
     /// <summary>
@@ -416,8 +440,13 @@ public class RabbitMQEventBus : IEventBus
         if (_statistics.ActiveSubscriptions > 0)
             _statistics.ActiveSubscriptions--;
 
+        // Remove event handlers for the specific type
+        if (_eventHandlers.TryGetValue(eventType, out var handlers))
+        {
+            handlers.Clear();
+        }
+
         _logger.LogInformation("Unsubscribed from event: {EventType}", eventType.Name);
-        await Task.CompletedTask;
     }
 
     /// <summary>
