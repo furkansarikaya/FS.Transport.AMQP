@@ -605,4 +605,14 @@ public class RabbitMQProducer : IProducer
             throw;
         }
     }
+
+    /// <summary>
+    /// Creates a fluent API for advanced message publishing configuration
+    /// </summary>
+    /// <typeparam name="T">Message type</typeparam>
+    /// <returns>Fluent producer API for method chaining</returns>
+    public IFluentProducerApi<T> Message<T>() where T : class
+    {
+        return new RabbitMQFluentProducerApi<T>(this);
+    }
 } 

@@ -145,4 +145,11 @@ public interface IProducer : IDisposable
     /// <param name="mandatory">Whether message is mandatory</param>
     /// <returns>True if published successfully</returns>
     bool Publish(string exchange, string routingKey, ReadOnlyMemory<byte> message, BasicProperties? properties = null, bool mandatory = false);
+    
+    /// <summary>
+    /// Creates a fluent API for advanced message publishing configuration
+    /// </summary>
+    /// <typeparam name="T">Message type</typeparam>
+    /// <returns>Fluent producer API for method chaining</returns>
+    IFluentProducerApi<T> Message<T>() where T : class;
 }
