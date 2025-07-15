@@ -6,7 +6,7 @@ using FS.StreamFlow.RabbitMQ.Features.Producer;
 using FS.StreamFlow.RabbitMQ.Features.Consumer;
 using FS.StreamFlow.RabbitMQ.Features.Queue;
 using FS.StreamFlow.RabbitMQ.Features.EventBus;
-// using FS.StreamFlow.RabbitMQ.Features.Exchange; // TODO: Re-enable after fixing interface compatibility
+using FS.StreamFlow.RabbitMQ.Features.HealthCheck;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -152,6 +152,7 @@ public static class ServiceCollectionExtensions
             var connectionManager = provider.GetRequiredService<IConnectionManager>();
             var producer = provider.GetRequiredService<IProducer>();
             var queueManager = provider.GetRequiredService<IQueueManager>();
+            var exchangeManager = provider.GetRequiredService<IExchangeManager>();
             var eventBus = provider.GetRequiredService<IEventBus>();
             var eventStore = provider.GetRequiredService<IEventStore>();
             var healthChecker = provider.GetRequiredService<IHealthChecker>();
@@ -159,7 +160,7 @@ public static class ServiceCollectionExtensions
             var configuration = provider.GetRequiredService<IOptions<ClientConfiguration>>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             
-            return new RabbitMQStreamFlowClient(connectionManager, producer, queueManager, eventBus, eventStore, healthChecker, logger, configuration, loggerFactory);
+            return new RabbitMQStreamFlowClient(connectionManager, producer, queueManager, exchangeManager, eventBus, eventStore, healthChecker, logger, configuration, loggerFactory);
         });
 
         // Register options
@@ -201,10 +202,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IEventBus, RabbitMQEventBus>();
 
         services.TryAddSingleton<IEventStore>(provider =>
-            throw new NotImplementedException("RabbitMQ Event Store not yet implemented"));
+            throw new NotImplementedException("RabbitMQ Event Store implementation needs interface compatibility fixes"));
 
-        services.TryAddSingleton<IHealthChecker>(provider =>
-            throw new NotImplementedException("RabbitMQ Health Checker not yet implemented"));
+        services.TryAddSingleton<IHealthChecker, RabbitMQHealthChecker>();
     }
 
     private static void RegisterFeatureServices(IServiceCollection services)

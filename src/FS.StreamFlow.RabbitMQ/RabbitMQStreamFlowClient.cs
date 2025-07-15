@@ -18,6 +18,7 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     private readonly IConnectionManager _connectionManager;
     private readonly IProducer _producer;
     private readonly IQueueManager _queueManager;
+    private readonly IExchangeManager _exchangeManager;
     private readonly IEventBus _eventBus;
     private readonly IEventStore _eventStore;
     private readonly IHealthChecker _healthChecker;
@@ -55,7 +56,7 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     /// <summary>
     /// Gets the exchange manager interface.
     /// </summary>
-    public IExchangeManager ExchangeManager => throw new NotImplementedException("ExchangeManager implementation in progress");
+    public IExchangeManager ExchangeManager => _exchangeManager;
 
     /// <summary>
     /// Gets the queue manager interface.
@@ -88,6 +89,7 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
     /// <param name="connectionManager">The connection manager.</param>
     /// <param name="producer">The producer.</param>
     /// <param name="queueManager">The queue manager.</param>
+    /// <param name="exchangeManager">The exchange manager.</param>
     /// <param name="eventBus">The event bus.</param>
     /// <param name="eventStore">The event store.</param>
     /// <param name="healthChecker">The health checker.</param>
@@ -98,6 +100,7 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
         IConnectionManager connectionManager,
         IProducer producer,
         IQueueManager queueManager,
+        IExchangeManager exchangeManager,
         IEventBus eventBus,
         IEventStore eventStore,
         IHealthChecker healthChecker,
@@ -108,6 +111,7 @@ public class RabbitMQStreamFlowClient : IStreamFlowClient
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _producer = producer ?? throw new ArgumentNullException(nameof(producer));
         _queueManager = queueManager ?? throw new ArgumentNullException(nameof(queueManager));
+        _exchangeManager = exchangeManager ?? throw new ArgumentNullException(nameof(exchangeManager));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
         _healthChecker = healthChecker ?? throw new ArgumentNullException(nameof(healthChecker));
