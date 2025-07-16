@@ -78,6 +78,10 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 });
 
 var app = builder.Build();
+
+// Initialize the client
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
 ```
 
 ### 2. Configuration Options
@@ -122,24 +126,29 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 {
   "StreamFlow": {
     "RabbitMQ": {
-      "ConnectionString": "amqp://localhost",
-      "Connection": {
-        "AutomaticRecovery": true,
-        "HeartbeatInterval": "00:01:00",
-        "MaxChannels": 100
+      "ClientConfiguration": {
+        "ClientName": "My Application",
+        "EnableAutoRecovery": true,
+        "EnableHeartbeat": true,
+        "HeartbeatInterval": "00:01:00"
       },
-      "Producer": {
-        "EnableConfirmations": true,
-        "BatchSize": 100
+      "ConnectionSettings": {
+        "Host": "localhost",
+        "Port": 5672,
+        "Username": "guest",
+        "Password": "guest",
+        "VirtualHost": "/",
+        "ConnectionTimeout": "00:00:30"
       },
-      "Consumer": {
+      "ProducerSettings": {
+        "EnablePublisherConfirms": true,
+        "ConfirmationTimeout": "00:00:10",
+        "MaxConcurrentPublishes": 100
+      },
+      "ConsumerSettings": {
         "PrefetchCount": 50,
-        "ConcurrentConsumers": 5
-      },
-      "ErrorHandling": {
-        "EnableDeadLetterQueue": true,
-        "RetryPolicy": "ExponentialBackoff",
-        "MaxRetryAttempts": 3
+        "AutoAcknowledge": false,
+        "MaxConcurrentConsumers": 5
       }
     }
   }
@@ -168,6 +177,9 @@ public class OrderService
     
     public async Task ProcessOrderAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Setup infrastructure with fluent APIs
         await _streamFlow.ExchangeManager.Exchange("orders")
             .AsTopic()
@@ -217,7 +229,20 @@ public record Order(
 public record OrderCreated(
     Guid OrderId,
     string CustomerName,
-    decimal Amount) : IDomainEvent;
+    decimal Amount) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCreated);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => OrderId.ToString();
+    public string AggregateType => "Order";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
 ```
 
 ### 2. Publisher Service
@@ -236,6 +261,9 @@ public class OrderPublisher
     
     public async Task PublishOrderAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Setup infrastructure first
         await SetupInfrastructureAsync();
         
@@ -250,15 +278,15 @@ public class OrderPublisher
             .PublishAsync();
 
         // Option 2: With generic type (MUST pass message to PublishAsync)
-         var result = await _streamFlow.Producer.Message<Order>()
-        //     .WithExchange("orders")
-        //     .WithRoutingKey("order.created")
-        //     .WithDeliveryMode(DeliveryMode.Persistent)
-        //     .WithExpiration(TimeSpan.FromHours(24))
-        //     .WithPriority(5)
-        //     .PublishAsync(order);
+        var result2 = await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .WithExpiration(TimeSpan.FromHours(24))
+            .WithPriority(5)
+            .PublishAsync(order);
         
-        if (result.IsSuccess)
+        if (result)
         {
             Console.WriteLine($"Order {order.Id} published successfully!");
         }
@@ -302,16 +330,30 @@ public class OrderConsumer
     
     public async Task StartConsumingAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Consume with fluent API
         await _streamFlow.Consumer.Queue<Order>("order-processing")
             .WithConcurrency(5)
-            .WithPrefetch(100)
+            .WithPrefetchCount(100)
             .WithAutoAck(false)
-            .WithErrorHandling(ErrorHandlingStrategy.Retry)
-            .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-            .WithMaxRetries(3)
-            .WithDeadLetterQueue("dlq")
-            .HandleAsync(async (order, context) =>
+            .WithErrorHandler(async (exception, context) =>
+            {
+                return exception is ConnectFailureException || exception is BrokerUnreachableException;
+            })
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .WithDeadLetterQueue(new DeadLetterSettings
+            {
+                DeadLetterExchange = "dlx",
+                DeadLetterQueue = "dlq"
+            })
+            .ConsumeAsync(async (order, context) =>
             {
                 Console.WriteLine($"Processing order {order.Id}");
                 
@@ -346,6 +388,9 @@ public class OrderEventPublisher
     
     public async Task PublishOrderCreatedAsync(OrderCreated orderCreated)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await _streamFlow.EventBus.Event<OrderCreated>()
             .WithMetadata(metadata =>
             {
@@ -353,8 +398,17 @@ public class OrderEventPublisher
                 metadata.Source = "order-service";
                 metadata.Version = "1.0";
             })
-            .WithRetryPolicy(RetryPolicyType.Linear)
-            .WithDeadLetterHandling(enabled: true)
+            .WithRetryPolicy(new RetryPolicySettings
+            {
+                RetryPolicy = RetryPolicyType.Linear,
+                MaxRetryAttempts = 3,
+                RetryDelay = TimeSpan.FromSeconds(1)
+            })
+            .WithDeadLetterQueue(new DeadLetterSettings
+            {
+                DeadLetterExchange = "dlx",
+                DeadLetterQueue = "dlq"
+            })
             .PublishAsync(orderCreated);
     }
 }
@@ -394,6 +448,9 @@ public class InfrastructureSetup
     
     public async Task SetupAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Create exchanges with fluent API
         await _streamFlow.ExchangeManager.Exchange("orders")
             .AsTopic()
@@ -453,6 +510,9 @@ public class OrderEventStore
     
     public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .AppendEvents(events)
             .SaveAsync();
@@ -460,6 +520,9 @@ public class OrderEventStore
     
     public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .FromVersion(0)
             .ReadAsync();
@@ -467,12 +530,18 @@ public class OrderEventStore
     
     public async Task<object?> GetOrderSnapshotAsync(Guid orderId)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .GetSnapshotAsync();
     }
     
     public async Task SaveOrderSnapshotAsync(Guid orderId, object snapshot, long version)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await _streamFlow.EventStore.Stream($"order-{orderId}")
             .WithSnapshot(snapshot, version)
             .SaveSnapshotAsync();
@@ -529,6 +598,10 @@ builder.Services.AddSingleton<InfrastructureSetup>();
 
 var host = builder.Build();
 
+// Initialize the client
+var streamFlow = host.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
+
 // Setup infrastructure
 var infrastructureSetup = host.Services.GetRequiredService<InfrastructureSetup>();
 await infrastructureSetup.SetupAsync();
@@ -570,16 +643,19 @@ public class OrderProcessor
     
     public async Task<OrderResponse> ProcessOrderAsync(OrderRequest request)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Publish request
-        var result = await _streamFlow.Producer.PublishAsync(
-            exchange: "orders",
-            routingKey: "order.process",
-            message: request);
+        var result = await _streamFlow.Producer.Message(request)
+            .WithExchange("orders")
+            .WithRoutingKey("order.process")
+            .PublishAsync();
         
         // In a real scenario, you would implement a correlation mechanism
         // to wait for the response
         
-        return new OrderResponse { Success = result.IsSuccess };
+        return new OrderResponse { Success = result };
     }
 }
 ```
@@ -589,7 +665,20 @@ public class OrderProcessor
 ```csharp
 using FS.StreamFlow.Core.Features.Events.Interfaces;
 
-public record OrderCreatedEvent(Guid OrderId, string CustomerName, decimal Amount) : IDomainEvent;
+public record OrderCreatedEvent(Guid OrderId, string CustomerName, decimal Amount) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCreatedEvent);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => OrderId.ToString();
+    public string AggregateType => "Order";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
 
 public class OrderService
 {
@@ -602,12 +691,15 @@ public class OrderService
     
     public async Task CreateOrderAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Save order to database
         await SaveOrderAsync(order);
         
         // Publish domain event
-        await _streamFlow.EventBus.PublishAsync(
-            new OrderCreatedEvent(order.Id, order.CustomerName, order.Amount));
+        await _streamFlow.EventBus.Event<OrderCreatedEvent>()
+            .PublishAsync(new OrderCreatedEvent(order.Id, order.CustomerName, order.Amount));
     }
 }
 ```
@@ -630,27 +722,33 @@ public class OrderConsumerWithErrorHandling
     
     public async Task StartConsumingAsync(CancellationToken cancellationToken = default)
     {
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithErrorHandler(async (exception, context) =>
             {
                 try
                 {
-                    await ProcessOrderAsync(order);
+                    await ProcessOrderAsync(context.Message);
                     return true;
                 }
-                catch (TemporaryException ex)
+                catch (ConnectFailureException ex)
                 {
-                    _logger.LogWarning(ex, "Temporary error processing order {OrderId}, will retry", order.Id);
-                    return false; // Will be retried
+                    _logger.LogWarning(ex, "Temporary error processing order {OrderId}, will retry", context.Message.Id);
+                    return true; // Will be retried
                 }
-                catch (PermanentException ex)
+                catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Permanent error processing order {OrderId}, sending to DLQ", order.Id);
+                    _logger.LogError(ex, "Permanent error processing order {OrderId}, sending to DLQ", context.Message.Id);
                     return false; // Will be sent to dead letter queue after max retries
                 }
-            },
-            cancellationToken);
+            })
+            .ConsumeAsync(async (order, context) =>
+            {
+                await ProcessOrderAsync(order);
+                return true;
+            }, cancellationToken);
     }
 }
 ```
@@ -742,8 +840,6 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Username = "guest";
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
-    
-
 });
 
 // Add health check middleware
@@ -779,6 +875,9 @@ public class OrderServiceTests
         var provider = services.BuildServiceProvider();
         var streamFlow = provider.GetRequiredService<IStreamFlowClient>();
         
+        // Initialize the client
+        await streamFlow.InitializeAsync();
+        
         var service = new OrderService(streamFlow);
         var order = new Order(Guid.NewGuid(), "John Doe", 100.00m, DateTime.UtcNow);
         
@@ -809,6 +908,9 @@ public class OrderIntegrationTests : IClassFixture<WebApplicationFactory<Program
         // Arrange
         var client = _factory.CreateClient();
         var streamFlow = _factory.Services.GetRequiredService<IStreamFlowClient>();
+        
+        // Initialize the client
+        await streamFlow.InitializeAsync();
         
         // Act
         var response = await client.PostAsync("/orders", 
