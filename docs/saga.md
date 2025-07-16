@@ -18,14 +18,21 @@ A saga is a sequence of local transactions that need to be coordinated across mu
 ## Saga Configuration
 
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithSaga(config =>
-    {
-        config.SagaStateExchange = "saga-state";
-        config.SagaTimeoutExchange = "saga-timeout";
-        config.SagaTypesAssembly = typeof(OrderProcessingSaga).Assembly;
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Saga settings
+    options.SagaSettings.EnableSagaOrchestration = true;
+    options.SagaSettings.SagaStateExchange = "saga-state";
+    options.SagaSettings.SagaTimeoutExchange = "saga-timeout";
+    options.SagaSettings.SagaTimeout = TimeSpan.FromMinutes(30);
+});
 ```
 
 ## Implementing Sagas
@@ -49,76 +56,277 @@ public class OrderProcessingSagaState
 ### Saga Implementation
 
 ```csharp
-public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
+public class OrderProcessingSaga : ISaga
 {
     private readonly ILogger<OrderProcessingSaga> _logger;
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public string SagaId { get; }
+    public string SagaType => "OrderProcessing";
+    public SagaState State { get; private set; }
+    public long Version { get; private set; }
+    public string? CorrelationId { get; set; }
+    public SagaContext Context { get; }
+    
+    public event EventHandler<SagaStateChangedEventArgs>? StateChanged;
+    public event EventHandler<SagaStepCompletedEventArgs>? StepCompleted;
+    public event EventHandler<SagaStepFailedEventArgs>? StepFailed;
+    public event EventHandler<SagaCompensationEventArgs>? CompensationTriggered;
 
-    public OrderProcessingSaga(ILogger<OrderProcessingSaga> logger)
+    public OrderProcessingSaga(
+        ILogger<OrderProcessingSaga> logger,
+        IStreamFlowClient streamFlow,
+        string sagaId)
     {
         _logger = logger;
+        _streamFlow = streamFlow;
+        SagaId = sagaId;
+        Context = new SagaContext { SagaId = sagaId, SagaType = SagaType };
+        State = SagaState.NotStarted;
     }
 
-    // Starting the saga
-    public async Task Handle(OrderCreated @event, SagaContext context)
+    public async Task HandleAsync(OrderCreated @event, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting saga for order {OrderId}", @event.OrderId);
+        try
+        {
+            _logger.LogInformation(
+                "Starting order processing saga for order {OrderId}",
+                @event.OrderId);
 
-        // Initialize state
-        State.OrderId = @event.OrderId;
-        State.Amount = @event.Amount;
-        State.Status = "Processing";
-        State.StartedAt = DateTime.UtcNow;
+            Context.Data["OrderId"] = @event.OrderId;
+            Context.Data["Amount"] = @event.Amount;
+            Context.Data["Status"] = "Processing";
+            Context.Data["StartedAt"] = DateTime.UtcNow;
+            
+            State = SagaState.Running;
+            Version++;
+            StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
 
-        // Send command to reserve inventory
-        await context.SendAsync(
-            new ReserveInventory(@event.OrderId, @event.Items));
+            await _streamFlow.Producer.Message(new ReserveInventory(@event.OrderId, @event.Items))
+                .WithExchange("inventory")
+                .WithRoutingKey("inventory.reserve")
+                .PublishAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Error starting order processing saga for order {OrderId}",
+                @event.OrderId);
+            throw;
+        }
     }
 
-    // Handle inventory reserved event
-    public async Task Handle(InventoryReserved @event, SagaContext context)
+    public async Task HandleAsync(InventoryReserved @event, CancellationToken cancellationToken = default)
     {
-        State.IsInventoryReserved = true;
-        State.Status = "InventoryReserved";
+        try
+        {
+            _logger.LogInformation(
+                "Inventory reserved for order {OrderId}",
+                Context.Data["OrderId"]);
 
-        // Send command to process payment
-        await context.SendAsync(
-            new ProcessPayment(State.OrderId, State.Amount));
+            Context.Data["IsInventoryReserved"] = true;
+            Context.Data["Status"] = "InventoryReserved";
+            Version++;
+            
+            StepCompleted?.Invoke(this, new SagaStepCompletedEventArgs(SagaId, "InventoryReserved"));
+
+            await _streamFlow.Producer.Message(new ProcessPayment(Context.Data["OrderId"].ToString(), (decimal)Context.Data["Amount"]))
+                .WithExchange("payments")
+                .WithRoutingKey("payment.process")
+                .PublishAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Error processing inventory reserved event for order {OrderId}",
+                Context.Data["OrderId"]);
+            throw;
+        }
     }
 
-    // Handle payment processed event
-    public async Task Handle(PaymentProcessed @event, SagaContext context)
+    public async Task HandleAsync(PaymentProcessed @event, CancellationToken cancellationToken = default)
     {
-        State.IsPaymentProcessed = true;
-        State.Status = "PaymentProcessed";
+        try
+        {
+            _logger.LogInformation(
+                "Payment processed for order {OrderId}",
+                Context.Data["OrderId"]);
 
-        // Send command to ship order
-        await context.SendAsync(
-            new ShipOrder(State.OrderId));
+            Context.Data["IsPaymentProcessed"] = true;
+            Context.Data["Status"] = "PaymentProcessed";
+            Version++;
+            
+            StepCompleted?.Invoke(this, new SagaStepCompletedEventArgs(SagaId, "PaymentProcessed"));
+
+            await _streamFlow.Producer.Message(new ShipOrder(Context.Data["OrderId"].ToString()))
+                .WithExchange("shipping")
+                .WithRoutingKey("shipping.ship")
+                .PublishAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Error processing payment event for order {OrderId}",
+                Context.Data["OrderId"]);
+            throw;
+        }
     }
 
-    // Handle order shipped event
-    public async Task Handle(OrderShipped @event, SagaContext context)
+    public async Task HandleAsync(OrderShipped @event, CancellationToken cancellationToken = default)
     {
-        State.ShippingTrackingNumber = @event.TrackingNumber;
-        State.Status = "Completed";
-        State.CompletedAt = DateTime.UtcNow;
+        try
+        {
+            _logger.LogInformation(
+                "Order {OrderId} shipped with tracking number {TrackingNumber}",
+                Context.Data["OrderId"],
+                @event.TrackingNumber);
 
-        // Complete the saga
-        await context.CompleteAsync();
+            Context.Data["ShippingTrackingNumber"] = @event.TrackingNumber;
+            Context.Data["Status"] = "Completed";
+            Context.Data["CompletedAt"] = DateTime.UtcNow;
+            State = SagaState.Completed;
+            Version++;
+            
+            StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+
+            await CompleteAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Error processing order shipped event for order {OrderId}",
+                Context.Data["OrderId"]);
+            throw;
+        }
     }
 
-    // Handle failures
-    public async Task Handle(InventoryReservationFailed @event, SagaContext context)
+    public async Task HandleTimeoutAsync(CancellationToken cancellationToken = default)
     {
-        State.Status = "Failed";
-        await context.CompensateAsync(new CancelOrder(State.OrderId));
+        _logger.LogWarning(
+            "Order processing saga timed out for order {OrderId}",
+            Context.Data["OrderId"]);
+
+        State = SagaState.TimedOut;
+        Version++;
+        await CompensateAsync("Saga timed out");
     }
 
-    public async Task Handle(PaymentFailed @event, SagaContext context)
+    // ISaga interface implementation (simplified for brevity)
+    public async Task StartAsync(Dictionary<string, object> inputData, CancellationToken cancellationToken = default)
     {
-        State.Status = "Failed";
-        await context.CompensateAsync(new ReleaseInventory(State.OrderId));
-        await context.CompensateAsync(new CancelOrder(State.OrderId));
+        State = SagaState.Running;
+        Context.Data = inputData;
+        Version++;
+        StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+    }
+
+    public async Task ExecuteNextStepAsync(CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException("ExecuteNextStepAsync not implemented in this example");
+    }
+
+    public async Task CompensateAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        State = SagaState.Compensating;
+        Version++;
+        
+        // Send compensation commands
+        if (Context.Data.ContainsKey("IsInventoryReserved") && (bool)Context.Data["IsInventoryReserved"])
+        {
+            _logger.LogInformation(
+                "Compensating inventory reservation for order {OrderId}",
+                Context.Data["OrderId"]);
+
+            await _streamFlow.Producer.Message(new ReleaseInventory(Context.Data["OrderId"].ToString()))
+                .WithExchange("inventory")
+                .WithRoutingKey("inventory.release")
+                .PublishAsync();
+        }
+        
+        if (Context.Data.ContainsKey("IsPaymentProcessed") && (bool)Context.Data["IsPaymentProcessed"])
+        {
+            _logger.LogInformation(
+                "Compensating payment for order {OrderId}",
+                Context.Data["OrderId"]);
+
+            await _streamFlow.Producer.Message(new RefundPayment(Context.Data["OrderId"].ToString(), (decimal)Context.Data["Amount"]))
+                .WithExchange("payments")
+                .WithRoutingKey("payment.refund")
+                .PublishAsync();
+        }
+        
+        State = SagaState.Aborted;
+        Version++;
+        CompensationTriggered?.Invoke(this, new SagaCompensationEventArgs(SagaId, reason));
+    }
+
+    public async Task CompleteAsync(Dictionary<string, object>? result = null, CancellationToken cancellationToken = default)
+    {
+        State = SagaState.Completed;
+        Context.Result = result;
+        Version++;
+        StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+    }
+
+    public async Task AbortAsync(Exception error, CancellationToken cancellationToken = default)
+    {
+        State = SagaState.Aborted;
+        Context.Error = new SagaErrorInfo
+        {
+            Message = error.Message,
+            ErrorType = error.GetType().Name,
+            StackTrace = error.StackTrace
+        };
+        Version++;
+        StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+    }
+
+    public async Task PersistAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamFlow.EventStore.Stream($"saga-{SagaId}")
+            .AppendEvent(new SagaStateUpdated(SagaId, State, Context.Data))
+            .SaveAsync();
+    }
+
+    public async Task RestoreAsync(string sagaId, CancellationToken cancellationToken = default)
+    {
+        var events = await _streamFlow.EventStore.Stream($"saga-{sagaId}")
+            .ReadAsync();
+        
+        foreach (var @event in events)
+        {
+            if (@event is SagaStateUpdated stateUpdate)
+            {
+                Context.Data = stateUpdate.Data;
+                State = stateUpdate.State;
+            }
+        }
+    }
+
+    public Dictionary<string, object> GetSagaData() => Context.Data;
+
+    public async Task UpdateDataAsync(Dictionary<string, object> data, CancellationToken cancellationToken = default)
+    {
+        Context.Data = data;
+        Version++;
+    }
+
+    public bool CanHandle(IEvent @event) => @event switch
+    {
+        OrderCreated => true,
+        InventoryReserved => true,
+        PaymentProcessed => true,
+        OrderShipped => true,
+        InventoryReservationFailed => true,
+        PaymentFailed => true,
+        _ => false
+    };
+
+    public TimeSpan? GetTimeout() => TimeSpan.FromMinutes(30);
+
+    public void Dispose()
+    {
+        // Cleanup resources
     }
 }
 ```
@@ -130,14 +338,22 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
 ```csharp
 public class OrderService
 {
-    private readonly ISagaOrchestrator _sagaOrchestrator;
+    private readonly IStreamFlowClient _streamFlow;
+
+    public OrderService(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
 
     public async Task CreateOrderAsync(CreateOrderRequest request)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var orderId = Guid.NewGuid();
 
         // Start the saga
-        await _sagaOrchestrator.StartSagaAsync<OrderProcessingSaga>(
+        await _streamFlow.SagaOrchestrator.StartSagaAsync<OrderProcessingSaga>(
             sagaId: orderId,
             initialEvent: new OrderCreated(orderId, request.Amount));
     }
@@ -149,21 +365,35 @@ public class OrderService
 ```csharp
 public class SagaStateManager
 {
-    private readonly ISagaOrchestrator _sagaOrchestrator;
+    private readonly IStreamFlowClient _streamFlow;
+
+    public SagaStateManager(IStreamFlowClient streamFlow)
+    {
+        _streamFlow = streamFlow;
+    }
 
     public async Task<SagaState> GetSagaStateAsync(Guid sagaId)
     {
-        return await _sagaOrchestrator.GetSagaStateAsync(sagaId);
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        return await _streamFlow.SagaOrchestrator.GetSagaStateAsync(sagaId);
     }
 
     public async Task ResumeSagaAsync(Guid sagaId)
     {
-        await _sagaOrchestrator.ResumeSagaAsync(sagaId);
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.SagaOrchestrator.ResumeSagaAsync(sagaId);
     }
 
     public async Task CompensateSagaAsync(Guid sagaId)
     {
-        await _sagaOrchestrator.CompensateSagaAsync(sagaId);
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.SagaOrchestrator.CompensateSagaAsync(sagaId);
     }
 }
 ```
@@ -173,31 +403,17 @@ public class SagaStateManager
 ### Compensation Actions
 
 ```csharp
-public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
+public class OrderProcessingSaga : ISaga
 {
-    // Define compensation actions
-    protected override async Task DefineCompensationAsync(
-        ICompensationBuilder builder)
-    {
-        builder
-            .ForState("InventoryReserved", async context =>
-            {
-                await context.SendAsync(
-                    new ReleaseInventory(State.OrderId));
-            })
-            .ForState("PaymentProcessed", async context =>
-            {
-                await context.SendAsync(
-                    new RefundPayment(State.OrderId, State.Amount));
-            });
-    }
-
+    // Note: Compensation is handled in the CompensateAsync method
+    // See the main saga implementation above for complete compensation logic
+    
     // Handle timeout
-    protected override async Task HandleTimeoutAsync(
-        SagaContext context)
+    public async Task HandleTimeoutAsync(CancellationToken cancellationToken = default)
     {
-        State.Status = "TimedOut";
-        await context.CompensateAsync();
+        State = SagaState.TimedOut;
+        Version++;
+        await CompensateAsync("Saga timed out");
     }
 }
 ```
@@ -205,24 +421,24 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
 ### Retry Policies
 
 ```csharp
-public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
+public class OrderProcessingSaga : ISaga
 {
-    protected override void ConfigureRetryPolicy(
-        RetryPolicyBuilder builder)
-    {
-        builder
-            .ForEvent<InventoryReserved>(policy =>
-            {
-                policy.MaxRetries = 3;
-                policy.RetryDelay = TimeSpan.FromSeconds(5);
-                policy.BackoffMultiplier = 2;
-            })
-            .ForEvent<PaymentProcessed>(policy =>
-            {
-                policy.MaxRetries = 5;
-                policy.RetryDelay = TimeSpan.FromSeconds(10);
-            });
-    }
+    // Note: Retry policies are configured at the consumer level
+    // See consumer.md for retry policy configuration examples
+    
+    // Example retry configuration in consumer setup:
+    // await _streamFlow.Consumer.Queue<OrderCreated>("saga-events")
+    //     .WithRetryPolicy(new RetryPolicySettings
+    //     {
+    //         UseExponentialBackoff = true,
+    //         MaxRetryAttempts = 3,
+    //         InitialRetryDelay = TimeSpan.FromSeconds(5)
+    //     })
+    //     .ConsumeAsync(async (orderCreated, context) =>
+    //     {
+    //         await HandleAsync(orderCreated);
+    //         return true;
+    //     });
 }
 ```
 
@@ -263,20 +479,36 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
 ### E-commerce Order Processing
 
 ```csharp
-public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
+public class OrderProcessingSaga : ISaga
 {
     private readonly ILogger<OrderProcessingSaga> _logger;
-    private readonly IMetricsCollector _metrics;
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public string SagaId { get; }
+    public string SagaType => "OrderProcessing";
+    public SagaState State { get; private set; }
+    public long Version { get; private set; }
+    public string? CorrelationId { get; set; }
+    public SagaContext Context { get; }
+    
+    public event EventHandler<SagaStateChangedEventArgs>? StateChanged;
+    public event EventHandler<SagaStepCompletedEventArgs>? StepCompleted;
+    public event EventHandler<SagaStepFailedEventArgs>? StepFailed;
+    public event EventHandler<SagaCompensationEventArgs>? CompensationTriggered;
 
     public OrderProcessingSaga(
         ILogger<OrderProcessingSaga> logger,
-        IMetricsCollector metrics)
+        IStreamFlowClient streamFlow,
+        string sagaId)
     {
         _logger = logger;
-        _metrics = metrics;
+        _streamFlow = streamFlow;
+        SagaId = sagaId;
+        Context = new SagaContext { SagaId = sagaId, SagaType = SagaType };
+        State = SagaState.NotStarted;
     }
 
-    public async Task Handle(OrderCreated @event, SagaContext context)
+    public async Task HandleAsync(OrderCreated @event, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -284,15 +516,19 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
                 "Starting order processing saga for order {OrderId}",
                 @event.OrderId);
 
-            State.OrderId = @event.OrderId;
-            State.Amount = @event.Amount;
-            State.Status = "Processing";
-            State.StartedAt = DateTime.UtcNow;
+            Context.Data["OrderId"] = @event.OrderId;
+            Context.Data["Amount"] = @event.Amount;
+            Context.Data["Status"] = "Processing";
+            Context.Data["StartedAt"] = DateTime.UtcNow;
+            
+            State = SagaState.Running;
+            Version++;
+            StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
 
-            _metrics.RecordSagaStarted("OrderProcessing");
-
-            await context.SendAsync(
-                new ReserveInventory(@event.OrderId, @event.Items));
+            await _streamFlow.Producer.Message(new ReserveInventory(@event.OrderId, @event.Items))
+                .WithExchange("inventory")
+                .WithRoutingKey("inventory.reserve")
+                .PublishAsync();
         }
         catch (Exception ex)
         {
@@ -303,123 +539,217 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
         }
     }
 
-    public async Task Handle(InventoryReserved @event, SagaContext context)
+    public async Task HandleAsync(InventoryReserved @event, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation(
                 "Inventory reserved for order {OrderId}",
-                State.OrderId);
+                Context.Data["OrderId"]);
 
-            State.IsInventoryReserved = true;
-            State.Status = "InventoryReserved";
+            Context.Data["IsInventoryReserved"] = true;
+            Context.Data["Status"] = "InventoryReserved";
+            Version++;
+            
+            StepCompleted?.Invoke(this, new SagaStepCompletedEventArgs(SagaId, "InventoryReserved"));
 
-            _metrics.RecordSagaStepCompleted(
-                "OrderProcessing",
-                "InventoryReserved");
-
-            await context.SendAsync(
-                new ProcessPayment(State.OrderId, State.Amount));
+            await _streamFlow.Producer.Message(new ProcessPayment(Context.Data["OrderId"].ToString(), (decimal)Context.Data["Amount"]))
+                .WithExchange("payments")
+                .WithRoutingKey("payment.process")
+                .PublishAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "Error processing inventory reserved event for order {OrderId}",
-                State.OrderId);
+                Context.Data["OrderId"]);
             throw;
         }
     }
 
-    public async Task Handle(PaymentProcessed @event, SagaContext context)
+    public async Task HandleAsync(PaymentProcessed @event, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation(
                 "Payment processed for order {OrderId}",
-                State.OrderId);
+                Context.Data["OrderId"]);
 
-            State.IsPaymentProcessed = true;
-            State.Status = "PaymentProcessed";
+            Context.Data["IsPaymentProcessed"] = true;
+            Context.Data["Status"] = "PaymentProcessed";
+            Version++;
+            
+            StepCompleted?.Invoke(this, new SagaStepCompletedEventArgs(SagaId, "PaymentProcessed"));
 
-            _metrics.RecordSagaStepCompleted(
-                "OrderProcessing",
-                "PaymentProcessed");
-
-            await context.SendAsync(
-                new ShipOrder(State.OrderId));
+            await _streamFlow.Producer.Message(new ShipOrder(Context.Data["OrderId"].ToString()))
+                .WithExchange("shipping")
+                .WithRoutingKey("shipping.ship")
+                .PublishAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "Error processing payment event for order {OrderId}",
-                State.OrderId);
+                Context.Data["OrderId"]);
             throw;
         }
     }
 
-    public async Task Handle(OrderShipped @event, SagaContext context)
+    public async Task HandleAsync(OrderShipped @event, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation(
                 "Order {OrderId} shipped with tracking number {TrackingNumber}",
-                State.OrderId,
+                Context.Data["OrderId"],
                 @event.TrackingNumber);
 
-            State.ShippingTrackingNumber = @event.TrackingNumber;
-            State.Status = "Completed";
-            State.CompletedAt = DateTime.UtcNow;
+            Context.Data["ShippingTrackingNumber"] = @event.TrackingNumber;
+            Context.Data["Status"] = "Completed";
+            Context.Data["CompletedAt"] = DateTime.UtcNow;
+            State = SagaState.Completed;
+            Version++;
+            
+            StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
 
-            _metrics.RecordSagaCompleted(
-                "OrderProcessing",
-                State.StartedAt,
-                State.CompletedAt.Value);
-
-            await context.CompleteAsync();
+            await CompleteAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "Error processing order shipped event for order {OrderId}",
-                State.OrderId);
+                Context.Data["OrderId"]);
             throw;
         }
     }
 
-    protected override async Task HandleTimeoutAsync(SagaContext context)
+    public async Task HandleTimeoutAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogWarning(
             "Order processing saga timed out for order {OrderId}",
-            State.OrderId);
+            Context.Data["OrderId"]);
 
-        State.Status = "TimedOut";
-        _metrics.RecordSagaTimedOut("OrderProcessing");
-
-        await context.CompensateAsync();
+        State = SagaState.TimedOut;
+        Version++;
+        await CompensateAsync("Saga timed out");
     }
 
-    protected override async Task DefineCompensationAsync(
-        ICompensationBuilder builder)
+    // ISaga interface implementation (simplified for brevity)
+    public async Task StartAsync(Dictionary<string, object> inputData, CancellationToken cancellationToken = default)
     {
-        builder
-            .ForState("InventoryReserved", async context =>
-            {
-                _logger.LogInformation(
-                    "Compensating inventory reservation for order {OrderId}",
-                    State.OrderId);
+        State = SagaState.Running;
+        Context.Data = inputData;
+        Version++;
+        StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+    }
 
-                await context.SendAsync(
-                    new ReleaseInventory(State.OrderId));
-            })
-            .ForState("PaymentProcessed", async context =>
-            {
-                _logger.LogInformation(
-                    "Compensating payment for order {OrderId}",
-                    State.OrderId);
+    public async Task ExecuteNextStepAsync(CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException("ExecuteNextStepAsync not implemented in this example");
+    }
 
-                await context.SendAsync(
-                    new RefundPayment(State.OrderId, State.Amount));
-            });
+    public async Task CompensateAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        State = SagaState.Compensating;
+        Version++;
+        
+        // Send compensation commands
+        if (Context.Data.ContainsKey("IsInventoryReserved") && (bool)Context.Data["IsInventoryReserved"])
+        {
+            _logger.LogInformation(
+                "Compensating inventory reservation for order {OrderId}",
+                Context.Data["OrderId"]);
+
+            await _streamFlow.Producer.Message(new ReleaseInventory(Context.Data["OrderId"].ToString()))
+                .WithExchange("inventory")
+                .WithRoutingKey("inventory.release")
+                .PublishAsync();
+        }
+        
+        if (Context.Data.ContainsKey("IsPaymentProcessed") && (bool)Context.Data["IsPaymentProcessed"])
+        {
+            _logger.LogInformation(
+                "Compensating payment for order {OrderId}",
+                Context.Data["OrderId"]);
+
+            await _streamFlow.Producer.Message(new RefundPayment(Context.Data["OrderId"].ToString(), (decimal)Context.Data["Amount"]))
+                .WithExchange("payments")
+                .WithRoutingKey("payment.refund")
+                .PublishAsync();
+        }
+        
+        State = SagaState.Aborted;
+        Version++;
+        CompensationTriggered?.Invoke(this, new SagaCompensationEventArgs(SagaId, reason));
+    }
+
+    public async Task CompleteAsync(Dictionary<string, object>? result = null, CancellationToken cancellationToken = default)
+    {
+        State = SagaState.Completed;
+        Context.Result = result;
+        Version++;
+        StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+    }
+
+    public async Task AbortAsync(Exception error, CancellationToken cancellationToken = default)
+    {
+        State = SagaState.Aborted;
+        Context.Error = new SagaErrorInfo
+        {
+            Message = error.Message,
+            ErrorType = error.GetType().Name,
+            StackTrace = error.StackTrace
+        };
+        Version++;
+        StateChanged?.Invoke(this, new SagaStateChangedEventArgs(SagaId, State));
+    }
+
+    public async Task PersistAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamFlow.EventStore.Stream($"saga-{SagaId}")
+            .AppendEvent(new SagaStateUpdated(SagaId, State, Context.Data))
+            .SaveAsync();
+    }
+
+    public async Task RestoreAsync(string sagaId, CancellationToken cancellationToken = default)
+    {
+        var events = await _streamFlow.EventStore.Stream($"saga-{sagaId}")
+            .ReadAsync();
+        
+        foreach (var @event in events)
+        {
+            if (@event is SagaStateUpdated stateUpdate)
+            {
+                Context.Data = stateUpdate.Data;
+                State = stateUpdate.State;
+            }
+        }
+    }
+
+    public Dictionary<string, object> GetSagaData() => Context.Data;
+
+    public async Task UpdateDataAsync(Dictionary<string, object> data, CancellationToken cancellationToken = default)
+    {
+        Context.Data = data;
+        Version++;
+    }
+
+    public bool CanHandle(IEvent @event) => @event switch
+    {
+        OrderCreated => true,
+        InventoryReserved => true,
+        PaymentProcessed => true,
+        OrderShipped => true,
+        InventoryReservationFailed => true,
+        PaymentFailed => true,
+        _ => false
+    };
+
+    public TimeSpan? GetTimeout() => TimeSpan.FromMinutes(30);
+
+    public void Dispose()
+    {
+        // Cleanup resources
     }
 }
 ```
@@ -429,35 +759,47 @@ public class OrderProcessingSaga : SagaBase<OrderProcessingSagaState>
 ```csharp
 public class SagaMonitor
 {
-    private readonly ISagaOrchestrator _sagaOrchestrator;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<SagaMonitor> _logger;
-    private readonly IMetricsCollector _metrics;
 
-    public async Task MonitorSagaAsync(Guid sagaId)
+    public SagaMonitor(IStreamFlowClient streamFlow, ILogger<SagaMonitor> logger)
+    {
+        _streamFlow = streamFlow;
+        _logger = logger;
+    }
+
+    public async Task MonitorSagaAsync(string sagaId)
     {
         try
         {
-            var state = await _sagaOrchestrator.GetSagaStateAsync(sagaId);
+            // Initialize the client first
+            await _streamFlow.InitializeAsync();
+            
+            var saga = await _streamFlow.SagaOrchestrator.GetSagaAsync(sagaId);
+            
+            if (saga == null)
+            {
+                _logger.LogWarning("Saga {SagaId} not found", sagaId);
+                return;
+            }
 
-            _metrics.RecordSagaState(
-                state.SagaType,
-                state.Status);
-
-            if (state.Status == "Failed")
+            if (saga.State == SagaState.Failed)
             {
                 _logger.LogError(
                     "Saga {SagaType} failed for ID {SagaId}",
-                    state.SagaType,
+                    saga.SagaType,
                     sagaId);
 
-                await AlertOperatorsAsync(state);
+                await AlertOperatorsAsync(saga);
             }
 
-            if (state.Status == "Completed")
+            if (saga.State == SagaState.Completed)
             {
-                var duration = state.CompletedAt - state.StartedAt;
-                _metrics.RecordSagaDuration(
-                    state.SagaType,
+                var duration = DateTime.UtcNow - saga.Context.CreatedAt;
+                _logger.LogInformation(
+                    "Saga {SagaType} completed for ID {SagaId} in {Duration}",
+                    saga.SagaType,
+                    sagaId,
                     duration);
             }
         }
@@ -468,6 +810,15 @@ public class SagaMonitor
                 sagaId);
             throw;
         }
+    }
+
+    private async Task AlertOperatorsAsync(ISaga saga)
+    {
+        // Send alert to operators
+        await _streamFlow.Producer.Message(new SagaAlert(saga.SagaId, saga.SagaType, saga.State))
+            .WithExchange("alerts")
+            .WithRoutingKey("saga.failed")
+            .PublishAsync();
     }
 }
 ``` 
