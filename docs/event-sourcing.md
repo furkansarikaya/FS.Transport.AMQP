@@ -19,14 +19,15 @@ Event sourcing is a pattern where the state of your application is determined by
 ### Configuration
 
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithEventStore(config =>
-    {
-        config.StreamPrefix = "eventstore";
-        config.SnapshotInterval = 100;
-        config.EnableSnapshots = true;
-    })
-    .Build();
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+});
 ```
 
 ### Basic Operations
@@ -234,11 +235,6 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Username = "guest";
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
-    
-    // Event store settings
-    options.EventStore.StreamPrefix = "eventstore";
-    options.EventStore.SnapshotInterval = 100;
-    options.EventStore.EnableSnapshots = true;
 });
 ```
 

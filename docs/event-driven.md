@@ -81,10 +81,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     
-    // Event bus settings
-    options.EventBus.DomainEventExchange = "domain-events";
-    options.EventBus.IntegrationEventExchange = "integration-events";
-    options.EventBus.DefaultEventTimeout = TimeSpan.FromMinutes(5);
+
 });
 ```
 

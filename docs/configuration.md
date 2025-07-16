@@ -52,7 +52,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "RabbitMQ": {
+    "RabbitMQ": {
     "ClientConfiguration": {
       "ClientName": "My Application",
       "EnableAutoRecovery": true,
@@ -67,15 +67,15 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "VirtualHost": "/",
       "ConnectionTimeout": "00:00:30",
       "UseSsl": false
-    },
+      },
     "ProducerSettings": {
       "EnablePublisherConfirms": true,
       "ConfirmationTimeout": "00:00:10",
       "MaxConcurrentPublishes": 100,
       "PublishTimeout": "00:00:30"
-    },
+      },
     "ConsumerSettings": {
-      "PrefetchCount": 50,
+        "PrefetchCount": 50,
       "AutoAcknowledge": false,
       "MaxConcurrentConsumers": 5,
       "ConsumerTimeout": "00:00:30"
@@ -209,6 +209,20 @@ options.ConnectionSettings.Password = "password";
 options.ConnectionSettings.VirtualHost = "/myvhost";
 ```
 
+### Connection Pool Settings
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Connection pool configuration
+    options.ConnectionSettings.MaxChannels = 100;
+    options.ConnectionSettings.ChannelPoolSize = 10;
+    options.ConnectionSettings.ConnectionPoolSize = 5;
+    options.ConnectionSettings.MaxConnectionRetries = 3;
+    options.ConnectionSettings.ConnectionRetryDelay = TimeSpan.FromSeconds(5);
+});
+```
+
 ## SSL/TLS Configuration
 
 ### Basic SSL Configuration
@@ -248,13 +262,22 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Ssl.Enabled = true;
-    options.Ssl.CertificatePath = "/path/to/client-certificate.pfx";
-    options.Ssl.CertificatePassword = "certificate-password";
-    options.Ssl.CertificateSelectionCallback = (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
+    // Connection settings with SSL
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5671;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.UseSsl = true;
+    
+    // SSL settings
+    options.ConnectionSettings.Ssl = new SslSettings
     {
-        // Custom certificate selection logic
-        return localCertificates[0];
+        Enabled = true,
+        CertificatePath = "/path/to/client-certificate.pfx",
+        CertificatePassword = "certificate-password",
+        VerifyCertificate = true,
+        ProtocolVersion = "Tls12"
     };
 });
 ```
@@ -287,16 +310,17 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Producer.EnableConfirmations = true;
-    options.Producer.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-    options.Producer.BatchSize = 100;
-    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
-    options.Producer.EnableTransactions = false;
-    options.Producer.TransactionTimeout = TimeSpan.FromSeconds(30);
-    options.Producer.MaxRetryAttempts = 3;
-    options.Producer.RetryDelay = TimeSpan.FromSeconds(1);
-    options.Producer.EnableCompression = false;
-    options.Producer.CompressionLevel = CompressionLevel.Fastest;
+    // Producer configuration
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.ProducerSettings.BatchSize = 100;
+    options.ProducerSettings.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
+    options.ProducerSettings.EnableTransactions = false;
+    options.ProducerSettings.TransactionTimeout = TimeSpan.FromSeconds(30);
+    options.ProducerSettings.MaxRetryAttempts = 3;
+    options.ProducerSettings.RetryDelay = TimeSpan.FromSeconds(1);
+    options.ProducerSettings.EnableCompression = false;
+    options.ProducerSettings.CompressionLevel = CompressionLevel.Fastest;
 });
 ```
 
@@ -306,13 +330,13 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
     // High-throughput settings
-    options.Producer.EnableConfirmations = true;
-    options.Producer.BatchSize = 1000;
-    options.Producer.MaxBatchWaitTime = TimeSpan.FromMilliseconds(100);
-    options.Producer.MaxConcurrentPublishes = 100;
-    options.Producer.PublishTimeout = TimeSpan.FromSeconds(10);
-    options.Producer.UseBackgroundThreads = true;
-    options.Producer.ChannelPoolSize = 10;
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.BatchSize = 1000;
+    options.ProducerSettings.MaxBatchWaitTime = TimeSpan.FromMilliseconds(100);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    options.ProducerSettings.PublishTimeout = TimeSpan.FromSeconds(10);
+    options.ProducerSettings.UseBackgroundThreads = true;
+    options.ProducerSettings.ChannelPoolSize = 10;
 });
 ```
 
@@ -321,7 +345,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Producer.RetryPolicy = new ExponentialBackoffRetryPolicy
+    options.ProducerSettings.RetryPolicy = new ExponentialBackoffRetryPolicy
     {
         MaxRetryAttempts = 5,
         InitialDelay = TimeSpan.FromMilliseconds(500),
@@ -337,18 +361,16 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ### Basic Consumer Settings
 
 ```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.Consumer.PrefetchCount = 50;
-    options.Consumer.ConcurrentConsumers = 5;
-    options.Consumer.AutoAck = false;
-    options.Consumer.RequeueOnFailure = true;
-    options.Consumer.MaxConsumerConcurrency = 10;
-    options.Consumer.ConsumerTag = "my-consumer";
-    options.Consumer.Priority = 0;
-    options.Consumer.Exclusive = false;
-    options.Consumer.Arguments = new Dictionary<string, object>();
-});
+// Consumer configuration
+options.ConsumerSettings.PrefetchCount = 50;
+options.ConsumerSettings.MaxConcurrentConsumers = 5;
+options.ConsumerSettings.AutoAcknowledge = false;
+options.ConsumerSettings.RequeueOnFailure = true;
+options.ConsumerSettings.MaxConsumerConcurrency = 10;
+options.ConsumerSettings.ConsumerTag = "my-consumer";
+options.ConsumerSettings.Priority = 0;
+options.ConsumerSettings.Exclusive = false;
+options.ConsumerSettings.Arguments = new Dictionary<string, object>();
 ```
 
 ### Consumer Performance Tuning
@@ -357,12 +379,12 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
     // High-throughput consumer settings
-    options.Consumer.PrefetchCount = 100;
-    options.Consumer.ConcurrentConsumers = 10;
-    options.Consumer.MaxConsumerConcurrency = 20;
-    options.Consumer.ProcessingTimeout = TimeSpan.FromSeconds(30);
-    options.Consumer.UseBackgroundThreads = true;
-    options.Consumer.ChannelPoolSize = 5;
+    options.ConsumerSettings.PrefetchCount = 100;
+    options.ConsumerSettings.MaxConcurrentConsumers = 10;
+    options.ConsumerSettings.MaxConsumerConcurrency = 20;
+    options.ConsumerSettings.ProcessingTimeout = TimeSpan.FromSeconds(30);
+    options.ConsumerSettings.UseBackgroundThreads = true;
+    options.ConsumerSettings.ChannelPoolSize = 5;
 });
 ```
 
@@ -371,11 +393,19 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Consumer.ErrorHandling.Strategy = ErrorHandlingStrategy.Retry;
-    options.Consumer.ErrorHandling.MaxRetryAttempts = 3;
-    options.Consumer.ErrorHandling.RetryDelay = TimeSpan.FromSeconds(2);
-    options.Consumer.ErrorHandling.RequeueOnFailure = true;
-    options.Consumer.ErrorHandling.SendToDeadLetterQueueOnFailure = true;
+    // Consumer error handling settings
+    options.ConsumerSettings.ErrorHandling.Strategy = ErrorHandlingStrategy.Requeue;
+    options.ConsumerSettings.ErrorHandling.MaxRetries = 3;
+    options.ConsumerSettings.ErrorHandling.RetryDelay = TimeSpan.FromSeconds(2);
+    options.ConsumerSettings.ErrorHandling.LogErrors = true;
+    options.ConsumerSettings.ErrorHandling.ContinueOnError = true;
+    
+    // Dead letter queue settings
+    options.ConsumerSettings.EnableDeadLetterQueue = true;
+    options.ConsumerSettings.DeadLetterSettings.ExchangeName = "dlx";
+    options.ConsumerSettings.DeadLetterSettings.RoutingKey = "failed";
+    options.ConsumerSettings.DeadLetterSettings.MaxRetries = 3;
+    options.ConsumerSettings.DeadLetterSettings.MessageTtl = TimeSpan.FromHours(24);
 });
 ```
 
@@ -386,13 +416,17 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ErrorHandling.EnableDeadLetterQueue = true;
-    options.ErrorHandling.DeadLetterExchange = "dlx";
-    options.ErrorHandling.DeadLetterQueue = "dlq";
-    options.ErrorHandling.DeadLetterRoutingKey = "failed";
-    options.ErrorHandling.MessageTtl = TimeSpan.FromHours(24);
-    options.ErrorHandling.MaxMessageLength = 1000000;
-    options.ErrorHandling.MaxQueueLength = 10000;
+    // Dead letter queue settings
+    options.ConsumerSettings.EnableDeadLetterQueue = true;
+    options.ConsumerSettings.DeadLetterSettings.ExchangeName = "dlx";
+    options.ConsumerSettings.DeadLetterSettings.RoutingKey = "failed";
+    options.ConsumerSettings.DeadLetterSettings.MaxRetries = 3;
+    options.ConsumerSettings.DeadLetterSettings.MessageTtl = TimeSpan.FromHours(24);
+    
+    // Error handling settings
+    options.ConsumerSettings.ErrorHandling.Strategy = ErrorHandlingStrategy.Reject;
+    options.ConsumerSettings.ErrorHandling.MaxRetries = 3;
+    options.ConsumerSettings.ErrorHandling.LogErrors = true;
 });
 ```
 
@@ -401,28 +435,23 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    // Exponential backoff retry policy
-    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-    options.ErrorHandling.MaxRetryAttempts = 5;
-    options.ErrorHandling.InitialRetryDelay = TimeSpan.FromSeconds(1);
-    options.ErrorHandling.MaxRetryDelay = TimeSpan.FromMinutes(5);
-    options.ErrorHandling.BackoffMultiplier = 2.0;
-    options.ErrorHandling.RetryJitter = true;
+    // Consumer retry policy settings
+    options.ConsumerSettings.RetryPolicy.MaxRetryAttempts = 5;
+    options.ConsumerSettings.RetryPolicy.InitialRetryDelay = TimeSpan.FromSeconds(1);
+    options.ConsumerSettings.RetryPolicy.MaxRetryDelay = TimeSpan.FromMinutes(5);
+    options.ConsumerSettings.RetryPolicy.RetryDelayMultiplier = 2.0;
+    options.ConsumerSettings.RetryPolicy.UseExponentialBackoff = true;
+    options.ConsumerSettings.RetryPolicy.UseJitter = true;
+    
+    // Producer retry policy settings
+    options.ProducerSettings.RetryPolicy.MaxRetryAttempts = 3;
+    options.ProducerSettings.RetryPolicy.InitialRetryDelay = TimeSpan.FromMilliseconds(500);
+    options.ProducerSettings.RetryPolicy.MaxRetryDelay = TimeSpan.FromSeconds(30);
+    options.ProducerSettings.RetryPolicy.UseExponentialBackoff = true;
 });
 ```
 
-### Circuit Breaker Configuration
 
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.ErrorHandling.CircuitBreaker.Enabled = true;
-    options.ErrorHandling.CircuitBreaker.FailureThreshold = 5;
-    options.ErrorHandling.CircuitBreaker.RecoveryTimeout = TimeSpan.FromMinutes(1);
-    options.ErrorHandling.CircuitBreaker.HalfOpenRetryCount = 3;
-    options.ErrorHandling.CircuitBreaker.TimeWindow = TimeSpan.FromMinutes(5);
-});
-```
 
 ## Serialization Configuration
 
@@ -431,15 +460,18 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Serialization.Format = SerializationFormat.Json;
-    options.Serialization.UseCompression = true;
-    options.Serialization.CompressionLevel = CompressionLevel.Fastest;
-    options.Serialization.JsonOptions = new JsonSerializerOptions
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
+    // Producer serialization settings
+    options.ProducerSettings.Serialization.Format = SerializationFormat.Json;
+    options.ProducerSettings.Serialization.EnableCompression = true;
+    options.ProducerSettings.Serialization.CompressionAlgorithm = CompressionAlgorithm.Gzip;
+    options.ProducerSettings.Serialization.CompressionThreshold = 1024;
+    options.ProducerSettings.Serialization.IncludeTypeInformation = true;
+    
+    // Consumer serialization settings
+    options.ConsumerSettings.Serialization.Format = SerializationFormat.Json;
+    options.ConsumerSettings.Serialization.EnableCompression = true;
+    options.ConsumerSettings.Serialization.CompressionAlgorithm = CompressionAlgorithm.Gzip;
+    options.ConsumerSettings.Serialization.IncludeTypeInformation = true;
 });
 ```
 
@@ -683,7 +715,13 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
     options.CustomValidators.Add(new CustomConfigurationValidator());
 });
 
@@ -693,14 +731,14 @@ public class CustomConfigurationValidator : IConfigurationValidator
     {
         var errors = new List<string>();
         
-        if (options.Consumer.PrefetchCount > 1000)
+        if (options.ConsumerSettings.PrefetchCount > 1000)
         {
             errors.Add("PrefetchCount should not exceed 1000 for optimal performance");
         }
         
-        if (options.Producer.BatchSize > 10000)
+        if (options.ProducerSettings.MaxConcurrentPublishes > 10000)
         {
-            errors.Add("BatchSize should not exceed 10000");
+            errors.Add("MaxConcurrentPublishes should not exceed 10000");
         }
         
         return new ValidationResult(errors);
@@ -715,28 +753,40 @@ public class CustomConfigurationValidator : IConfigurationValidator
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    var environment = builder.Environment.EnvironmentName;
-    
-    switch (environment)
+    if (builder.Environment.IsDevelopment())
     {
-        case "Development":
-            options.ConnectionString = "amqp://localhost";
-            options.Producer.EnableConfirmations = false;
-            options.Consumer.PrefetchCount = 10;
-            break;
-            
-        case "Staging":
-            options.ConnectionString = builder.Configuration.GetConnectionString("RabbitMQ-Staging");
-            options.Producer.EnableConfirmations = true;
-            options.Consumer.PrefetchCount = 50;
-            break;
-            
-        case "Production":
-            options.ConnectionString = builder.Configuration.GetConnectionString("RabbitMQ-Production");
-            options.Producer.EnableConfirmations = true;
-            options.Consumer.PrefetchCount = 100;
-            options.Ssl.Enabled = true;
-            break;
+        // Development settings
+        options.ConnectionSettings.Host = "localhost";
+        options.ConnectionSettings.Port = 5672;
+        options.ConnectionSettings.Username = "guest";
+        options.ConnectionSettings.Password = "guest";
+        options.ConnectionSettings.VirtualHost = "/";
+        
+        // Producer settings
+        options.ProducerSettings.EnablePublisherConfirms = false;
+    }
+    else
+    {
+        // Production settings
+        options.ConnectionSettings.Host = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
+        options.ConnectionSettings.Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+        options.ConnectionSettings.Username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+        options.ConnectionSettings.Password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+        options.ConnectionSettings.VirtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
+        options.ConnectionSettings.UseSsl = true;
+        
+        // SSL settings
+        options.ConnectionSettings.Ssl = new SslSettings
+        {
+            Enabled = true,
+            CertificatePath = builder.Configuration["RabbitMQ:Ssl:CertificatePath"],
+            CertificatePassword = builder.Configuration["RabbitMQ:Ssl:CertificatePassword"],
+            VerifyCertificate = true,
+            ProtocolVersion = "Tls12"
+        };
+        
+        // Producer settings
+        options.ProducerSettings.EnablePublisherConfirms = true;
     }
 });
 ```
@@ -764,8 +814,22 @@ builder.Configuration.AddAzureKeyVault(
 
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = builder.Configuration["rabbitmq-connection-string"];
-    options.Ssl.CertificatePassword = builder.Configuration["rabbitmq-certificate-password"];
+    // Connection settings from Key Vault
+    options.ConnectionSettings.Host = builder.Configuration["rabbitmq-host"] ?? "localhost";
+    options.ConnectionSettings.Port = int.Parse(builder.Configuration["rabbitmq-port"] ?? "5672");
+    options.ConnectionSettings.Username = builder.Configuration["rabbitmq-username"] ?? "guest";
+    options.ConnectionSettings.Password = builder.Configuration["rabbitmq-password"] ?? "guest";
+    options.ConnectionSettings.VirtualHost = builder.Configuration["rabbitmq-virtualhost"] ?? "/";
+    
+    // SSL settings from Key Vault
+    options.ConnectionSettings.Ssl = new SslSettings
+    {
+        Enabled = true,
+        CertificatePath = builder.Configuration["rabbitmq-certificate-path"],
+        CertificatePassword = builder.Configuration["rabbitmq-certificate-password"],
+        VerifyCertificate = true,
+        ProtocolVersion = "Tls12"
+    };
 });
 ```
 
@@ -788,13 +852,38 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 {
     if (builder.Environment.IsDevelopment())
     {
-        options.Logging.EnableVerboseLogging = true;
-        options.Producer.EnableConfirmations = false;
+        // Development settings
+        options.ConnectionSettings.Host = "localhost";
+        options.ConnectionSettings.Port = 5672;
+        options.ConnectionSettings.Username = "guest";
+        options.ConnectionSettings.Password = "guest";
+        options.ConnectionSettings.VirtualHost = "/";
+        
+        // Producer settings
+        options.ProducerSettings.EnablePublisherConfirms = false;
     }
     else
     {
-        options.Ssl.Enabled = true;
-        options.Producer.EnableConfirmations = true;
+        // Production settings
+        options.ConnectionSettings.Host = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
+        options.ConnectionSettings.Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+        options.ConnectionSettings.Username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+        options.ConnectionSettings.Password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+        options.ConnectionSettings.VirtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
+        options.ConnectionSettings.UseSsl = true;
+        
+        // SSL settings
+        options.ConnectionSettings.Ssl = new SslSettings
+        {
+            Enabled = true,
+            CertificatePath = builder.Configuration["RabbitMQ:Ssl:CertificatePath"],
+            CertificatePassword = builder.Configuration["RabbitMQ:Ssl:CertificatePassword"],
+            VerifyCertificate = true,
+            ProtocolVersion = "Tls12"
+        };
+        
+        // Producer settings
+        options.ProducerSettings.EnablePublisherConfirms = true;
     }
 });
 ```
@@ -809,8 +898,22 @@ builder.Configuration.AddAzureKeyVault(vaultUrl, credential);
 // Don't hardcode sensitive values
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = builder.Configuration.GetConnectionString("RabbitMQ");
-    options.Ssl.CertificatePassword = builder.Configuration["RabbitMQ:CertificatePassword"];
+    // Connection settings from configuration
+    options.ConnectionSettings.Host = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
+    options.ConnectionSettings.Port = int.Parse(builder.Configuration["RabbitMQ:Port"] ?? "5672");
+    options.ConnectionSettings.Username = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+    options.ConnectionSettings.Password = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+    options.ConnectionSettings.VirtualHost = builder.Configuration["RabbitMQ:VirtualHost"] ?? "/";
+    
+    // SSL settings from configuration
+    options.ConnectionSettings.Ssl = new SslSettings
+    {
+        Enabled = true,
+        CertificatePath = builder.Configuration["RabbitMQ:Ssl:CertificatePath"],
+        CertificatePassword = builder.Configuration["RabbitMQ:Ssl:CertificatePassword"],
+        VerifyCertificate = true,
+        ProtocolVersion = "Tls12"
+    };
 });
 ```
 
@@ -830,25 +933,38 @@ builder.Services.AddSingleton<IOptionsMonitor<RabbitMQStreamFlowOptions>>();
 1. **Connection String Format**
    ```csharp
    // Incorrect
-   options.ConnectionString = "localhost";
+   options.ConnectionSettings.Host = "localhost";
+   options.ConnectionSettings.Port = 5672;
    
    // Correct
-   options.ConnectionString = "amqp://localhost";
+   options.ConnectionSettings.Host = "localhost";
+   options.ConnectionSettings.Port = 5672;
+   options.ConnectionSettings.Username = "guest";
+   options.ConnectionSettings.Password = "guest";
+   options.ConnectionSettings.VirtualHost = "/";
    ```
 
 2. **SSL Configuration**
    ```csharp
    // Ensure SSL is properly configured
-   options.ConnectionString = "amqps://hostname:5671";
-   options.Ssl.Enabled = true;
-   options.Ssl.ServerName = "hostname";
+   options.ConnectionSettings.Host = "hostname";
+   options.ConnectionSettings.Port = 5671;
+   options.ConnectionSettings.UseSsl = true;
+   options.ConnectionSettings.Ssl = new SslSettings
+   {
+       Enabled = true,
+       CertificatePath = "/path/to/certificate.pfx",
+       CertificatePassword = "password",
+       VerifyCertificate = true,
+       ProtocolVersion = "Tls12"
+   };
    ```
 
 3. **Performance Settings**
    ```csharp
    // Balance prefetch count with consumer concurrency
-   options.Consumer.PrefetchCount = 50;
-   options.Consumer.ConcurrentConsumers = 5;
+   options.ConsumerSettings.PrefetchCount = 50;
+   options.ConsumerSettings.MaxConcurrentConsumers = 5;
    ```
 
 ### Configuration Debugging

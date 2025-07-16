@@ -75,11 +75,6 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Username = "guest";
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
-    
-    // Feature enablement
-    options.EnableHealthChecks = true;
-    options.EnableEventBus = true;
-    options.EnableMonitoring = true;
 });
 
 var app = builder.Build();
@@ -677,21 +672,17 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConsumerSettings.AutoAcknowledge = false;
     options.ConsumerSettings.EnableDeadLetterQueue = true;
     
-    // Error handling
-    options.ErrorHandling.EnableDeadLetterQueue = true;
-    options.ErrorHandling.DeadLetterExchange = "dlx";
-    options.ErrorHandling.DeadLetterQueue = "dlq";
-    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-    options.ErrorHandling.MaxRetryAttempts = 3;
+    // SSL settings
+    options.ConnectionSettings.UseSsl = true;
+    options.ConnectionSettings.Ssl = new SslSettings
+    {
+        Enabled = true,
+        CertificatePath = "/path/to/certificate.pfx",
+        CertificatePassword = "certificate-password",
+        VerifyCertificate = true,
+        ProtocolVersion = "Tls12"
+    };
     
-    // SSL/TLS for production
-    options.Ssl.Enabled = true;
-    options.Ssl.ServerName = "rabbitmq.production.com";
-    options.Ssl.CertificatePath = "/path/to/certificate.pfx";
-    
-    // Monitoring
-    options.EnableHealthChecks = true;
-    options.EnableMonitoring = true;
 });
 ```
 
@@ -739,10 +730,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     
-    // Health check settings
-    options.EnableHealthChecks = true;
-    options.HealthCheck.Interval = TimeSpan.FromSeconds(30);
-    options.HealthCheck.Timeout = TimeSpan.FromSeconds(5);
+
 });
 
 // Add health check middleware
@@ -871,8 +859,12 @@ By default, JSON serialization is used. For custom serialization:
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Serialization.Format = SerializationFormat.Json;
-    options.Serialization.UseCompression = true;
+    // Serialization settings
+    options.ProducerSettings.Serialization.Format = SerializationFormat.Json;
+    options.ProducerSettings.Serialization.EnableCompression = true;
+    options.ProducerSettings.Serialization.CompressionAlgorithm = CompressionAlgorithm.Gzip;
+    options.ConsumerSettings.Serialization.Format = SerializationFormat.Json;
+    options.ConsumerSettings.Serialization.EnableCompression = true;
 });
 ```
 

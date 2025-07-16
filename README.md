@@ -459,13 +459,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     
-    // Error handling configuration
-    options.ErrorHandling.EnableDeadLetterQueue = true;
-    options.ErrorHandling.DeadLetterExchange = "dlx";
-    options.ErrorHandling.DeadLetterQueue = "dlq";
-    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-    options.ErrorHandling.MaxRetryAttempts = 3;
-    options.ErrorHandling.RetryDelay = TimeSpan.FromSeconds(1);
+
 });
 ```
 
@@ -752,35 +746,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConsumerSettings.AutoAcknowledge = false;
     options.ConsumerSettings.MaxConcurrentConsumers = 5;
     
-    // Error handling
-    options.ErrorHandling.EnableDeadLetterQueue = true;
-    options.ErrorHandling.DeadLetterExchange = "dlx";
-    options.ErrorHandling.DeadLetterQueue = "dlq";
-    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-    options.ErrorHandling.MaxRetryAttempts = 3;
-    options.ErrorHandling.RetryDelay = TimeSpan.FromSeconds(1);
-    
-    // Serialization
-    options.Serialization.Format = SerializationFormat.Json;
-    options.Serialization.UseCompression = true;
-    
-    // Health checks
-    options.HealthCheck.Enabled = true;
-    options.HealthCheck.Interval = TimeSpan.FromSeconds(30);
-    options.HealthCheck.Timeout = TimeSpan.FromSeconds(5);
-    
-    // Event bus
-    options.EventBus.DomainEventExchange = "domain-events";
-    options.EventBus.IntegrationEventExchange = "integration-events";
-    
-    // Event store
-    options.EventStore.StreamPrefix = "eventstore";
-    options.EventStore.SnapshotInterval = 100;
-    options.EventStore.EnableSnapshots = true;
-    
-    // Monitoring
-    options.Monitoring.EnableMetrics = true;
-    options.Monitoring.MetricsInterval = TimeSpan.FromSeconds(60);
+
 });
 ```
 
@@ -788,7 +754,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "RabbitMQ": {
+    "RabbitMQ": {
     "ClientConfiguration": {
       "ClientName": "My Application",
       "EnableAutoRecovery": true,
