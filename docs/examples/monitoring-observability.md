@@ -73,7 +73,38 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 // Add health checks
 builder.Services.AddHealthChecks()
-    .AddCheck<StreamFlowHealthCheck>("streamflow", tags: new[] { "messaging" });
+    .AddCheck("streamflow", async () =>
+    {
+        var streamFlow = host.Services.GetRequiredService<IStreamFlowClient>();
+        await streamFlow.InitializeAsync();
+        
+        var healthResult = await streamFlow.HealthChecker.CheckHealthAsync();
+        
+        if (healthResult.Status == HealthStatus.Healthy)
+        {
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(
+                "StreamFlow is healthy",
+                new Dictionary<string, object>
+                {
+                    ["description"] = healthResult.Description,
+                    ["duration"] = healthResult.Duration.TotalMilliseconds,
+                    ["timestamp"] = healthResult.Timestamp
+                });
+        }
+        else
+        {
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(
+                "StreamFlow is unhealthy",
+                healthResult.Exception,
+                new Dictionary<string, object>
+                {
+                    ["description"] = healthResult.Description,
+                    ["status"] = healthResult.Status.ToString(),
+                    ["duration"] = healthResult.Duration.TotalMilliseconds,
+                    ["timestamp"] = healthResult.Timestamp
+                });
+        }
+    }, tags: new[] { "messaging" });
 
 // Add logging
 builder.Services.AddLogging(config =>
@@ -116,72 +147,39 @@ Console.ReadKey();
 
 ### 2. Health Check Implementation
 
-```csharp
-// Services/StreamFlowHealthCheck.cs
-using FS.StreamFlow.Core.Features.Messaging.Interfaces;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
+FS.StreamFlow provides built-in health checking through the `IHealthChecker` interface. The health check is already configured in the Program.cs above using a lambda function that directly uses the framework's health checking capabilities.
 
-public class StreamFlowHealthCheck : IHealthCheck
+For more advanced health check scenarios, you can also use the health checker directly in your services:
+
+```csharp
+// Direct health check usage in services
+public class HealthMonitoringService
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<StreamFlowHealthCheck> _logger;
+    private readonly ILogger<HealthMonitoringService> _logger;
 
-    public StreamFlowHealthCheck(IStreamFlowClient streamFlow, ILogger<StreamFlowHealthCheck> logger)
+    public HealthMonitoringService(IStreamFlowClient streamFlow, ILogger<HealthMonitoringService> logger)
     {
         _streamFlow = streamFlow;
         _logger = logger;
     }
 
-    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> CheckHealthAsync()
     {
-        try
-        {
-            // Initialize the client first
-            await _streamFlow.InitializeAsync(cancellationToken);
-            
-            // Check connection health using FS.StreamFlow's built-in health checker
-            var healthResult = await _streamFlow.HealthChecker.CheckHealthAsync(cancellationToken);
-            
-            if (healthResult.Status == HealthStatus.Healthy)
-            {
-                _logger.LogInformation("StreamFlow health check passed");
-                return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(
-                    "StreamFlow connection is healthy", 
-                    new Dictionary<string, object>
-                    {
-                        ["description"] = healthResult.Description,
-                        ["duration"] = healthResult.Duration.TotalMilliseconds,
-                        ["timestamp"] = healthResult.Timestamp
-                    });
-            }
-            else
-            {
-                _logger.LogWarning("StreamFlow health check failed: {Reason}", healthResult.Description);
-                return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(
-                    "StreamFlow connection is unhealthy", 
-                    healthResult.Exception,
-                    new Dictionary<string, object>
-                    {
-                        ["description"] = healthResult.Description,
-                        ["status"] = healthResult.Status.ToString(),
-                        ["duration"] = healthResult.Duration.TotalMilliseconds,
-                        ["timestamp"] = healthResult.Timestamp
-                    });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during StreamFlow health check");
-            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(
-                "StreamFlow health check failed", 
-                ex,
-                new Dictionary<string, object>
-                {
-                    ["error"] = ex.Message,
-                    ["timestamp"] = DateTimeOffset.UtcNow
-                });
-        }
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        // Use built-in health checker
+        return await _streamFlow.HealthChecker.CheckHealthAsync();
+    }
+
+    public async Task<Dictionary<string, HealthCheckResult>> GetAllComponentHealthAsync()
+    {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        // Get health status of all components
+        return await _streamFlow.HealthChecker.GetAllHealthStatusesAsync();
     }
 }
 ```
@@ -348,7 +346,38 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services (same as above)
 builder.Services.AddRabbitMQStreamFlow(options => { /* configuration */ });
 builder.Services.AddHealthChecks()
-    .AddCheck<StreamFlowHealthCheck>("streamflow", tags: new[] { "messaging" });
+    .AddCheck("streamflow", async () =>
+    {
+        var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+        await streamFlow.InitializeAsync();
+        
+        var healthResult = await streamFlow.HealthChecker.CheckHealthAsync();
+        
+        if (healthResult.Status == HealthStatus.Healthy)
+        {
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(
+                "StreamFlow is healthy",
+                new Dictionary<string, object>
+                {
+                    ["description"] = healthResult.Description,
+                    ["duration"] = healthResult.Duration.TotalMilliseconds,
+                    ["timestamp"] = healthResult.Timestamp
+                });
+        }
+        else
+        {
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(
+                "StreamFlow is unhealthy",
+                healthResult.Exception,
+                new Dictionary<string, object>
+                {
+                    ["description"] = healthResult.Description,
+                    ["status"] = healthResult.Status.ToString(),
+                    ["duration"] = healthResult.Duration.TotalMilliseconds,
+                    ["timestamp"] = healthResult.Timestamp
+                });
+        }
+    }, tags: new[] { "messaging" });
 
 var app = builder.Build();
 
