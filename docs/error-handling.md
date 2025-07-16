@@ -66,6 +66,7 @@ public class LinearRetryExample
 
     public async Task ProcessWithLinearRetryAsync(Order order)
     {
+        await _streamFlow.InitializeAsync();
         var retryPolicy = new LinearRetryPolicy(
             maxAttempts: 3,
             retryDelay: TimeSpan.FromSeconds(2));
@@ -105,6 +106,7 @@ public class ExponentialBackoffRetryExample
 
     public async Task ProcessWithExponentialBackoffAsync(Order order)
     {
+        await _streamFlow.InitializeAsync();
         var retryPolicy = new ExponentialBackoffRetryPolicy(
             maxAttempts: 5,
             initialDelay: TimeSpan.FromSeconds(1),
@@ -227,6 +229,7 @@ public class RetryConsumer
 
     public async Task ConsumeWithRetryAsync(CancellationToken cancellationToken = default)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "order-processing",
             messageHandler: async (order, context) =>
@@ -266,6 +269,7 @@ public class RetryConsumer
 
     private async Task SendToDeadLetterQueue(Order order, Exception exception)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "dlx",
             routingKey: "order.failed",
@@ -311,6 +315,7 @@ public class CircuitBreakerExample
 
     public async Task ProcessWithCircuitBreakerAsync(Order order)
     {
+        await _streamFlow.InitializeAsync();
         try
         {
             await _circuitBreaker.ExecuteAsync(async () =>
@@ -490,6 +495,7 @@ public class DeadLetterQueueSetup
 
     public async Task SetupDeadLetterInfrastructureAsync()
     {
+        await _streamFlow.InitializeAsync();
         // Declare dead letter exchange
         await _streamFlow.ExchangeManager.DeclareExchangeAsync(
             exchange: "dlx",
@@ -545,6 +551,7 @@ public class DeadLetterQueueConsumer
 
     public async Task ProcessDeadLetterMessagesAsync(CancellationToken cancellationToken = default)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Consumer.ConsumeAsync<DeadLetterMessage>(
             queueName: "dlq",
             messageHandler: async (deadLetterMessage, context) =>
@@ -685,6 +692,7 @@ public class DeadLetterQueueConsumer
 
     private async Task ArchiveMessage(DeadLetterMessage deadLetterMessage, DeathInformation deathInfo)
     {
+        await _streamFlow.InitializeAsync();
         var archiveData = new
         {
             DeadLetterMessage = deadLetterMessage,
@@ -815,6 +823,7 @@ public class ClassifyingErrorConsumer
 
     public async Task ConsumeWithErrorClassificationAsync(CancellationToken cancellationToken = default)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "order-processing",
             messageHandler: async (order, context) =>
@@ -894,6 +903,7 @@ public class ClassifyingErrorConsumer
 
     private async Task PublishForRetry(Order order, MessageContext context, int attemptNumber, TimeSpan delay)
     {
+        await _streamFlow.InitializeAsync();
         // Publish to retry queue with delay
         var retryProperties = new BasicProperties
         {
@@ -914,6 +924,7 @@ public class ClassifyingErrorConsumer
 
     private async Task SendToDeadLetterQueue(Order order, Exception exception, ErrorType errorType)
     {
+        await _streamFlow.InitializeAsync();
         var deadLetterRoutingKey = errorType switch
         {
             ErrorType.Permanent => "permanent.error",
@@ -979,6 +990,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     public async Task<ErrorHandlingResult> HandleErrorAsync(ErrorContext context, CancellationToken cancellationToken = default)
     {
+        await _streamFlow.InitializeAsync();
         var errorType = _errorClassifier.ClassifyError(context.Exception);
         
         _logger.LogError(context.Exception, "Handling error for message {MessageId}. Error type: {ErrorType}", 
@@ -1087,6 +1099,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToDeadLetterQueue(ErrorContext context, string errorType)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "dlx",
             routingKey: errorType,
@@ -1103,6 +1116,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToValidationErrorQueue(ErrorContext context)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "validation-errors",
             routingKey: "validation.failed",
@@ -1116,6 +1130,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToAuthErrorQueue(ErrorContext context)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "auth-errors",
             routingKey: "auth.failed",
@@ -1129,6 +1144,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToBusinessErrorQueue(ErrorContext context)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "business-errors",
             routingKey: "business.rule.violated",
@@ -1142,6 +1158,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToSystemErrorQueue(ErrorContext context)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "system-errors",
             routingKey: "system.error",
@@ -1281,6 +1298,7 @@ public class ErrorMonitoringService
 
     private async Task SendHighErrorRateAlert(ErrorMetrics metrics)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "error.high-rate",
@@ -1298,6 +1316,7 @@ public class ErrorMonitoringService
 
     private async Task SendNewErrorTypeAlert(ErrorMetrics metrics)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "error.new-type",
@@ -1315,6 +1334,7 @@ public class ErrorMonitoringService
 
     private async Task SendSystemErrorAlert(ErrorMetrics metrics)
     {
+        await _streamFlow.InitializeAsync();
         await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "error.system",
