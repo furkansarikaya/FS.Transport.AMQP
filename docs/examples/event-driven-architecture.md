@@ -39,10 +39,41 @@ EventDrivenArchitecture/
 
 ```csharp
 // Models/UserRegistered.cs
-public record UserRegistered(Guid UserId, string Email, DateTime RegisteredAt);
+using FS.StreamFlow.Core.Features.Events.Interfaces;
+
+public record UserRegistered(Guid UserId, string Email, DateTime RegisteredAt) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(UserRegistered);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => UserId.ToString();
+    public string AggregateType => "User";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
 
 // Models/EmailSent.cs
-public record EmailSent(Guid UserId, string Email, DateTime SentAt);
+using FS.StreamFlow.Core.Features.Events.Interfaces;
+
+public record EmailSent(Guid UserId, string Email, DateTime SentAt) : IIntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(EmailSent);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "email-service";
+    public string RoutingKey => "email.sent";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+}
 ```
 
 ### 2. User Service (Publisher)
@@ -57,19 +88,37 @@ public class UserService
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<UserService> _logger;
 
-    public UserService(IStreamFlowClient rabbitMQ, ILogger<UserService> logger)
+    public UserService(IStreamFlowClient streamFlow, ILogger<UserService> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task RegisterUserAsync(string email)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var userId = Guid.NewGuid();
         var registeredAt = DateTime.UtcNow;
+        
         // Save user to database (omitted)
-        await _streamFlow.EventBus.PublishDomainEventAsync(
-            new UserRegistered(userId, email, registeredAt));
+        // await _userRepository.SaveAsync(user);
+        
+        // Publish domain event with fluent API
+        await _streamFlow.EventBus.Event<UserRegistered>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "user-service";
+                metadata.Version = "1.0";
+            })
+            .WithAggregateId(userId.ToString())
+            .WithAggregateType("User")
+            .WithPriority(1)
+            .WithTtl(TimeSpan.FromMinutes(30))
+            .PublishAsync(new UserRegistered(userId, email, registeredAt));
+            
         _logger.LogInformation("UserRegistered event published for {Email}", email);
     }
 }
@@ -79,63 +128,184 @@ public class UserService
 
 ```csharp
 // Services/EmailService.cs
+using FS.StreamFlow.Core.Features.Events.Interfaces;
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using Microsoft.Extensions.Logging;
 
-public class EmailService : IEventHandler<UserRegistered>
+public class EmailService : IAsyncEventHandler<UserRegistered>
 {
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IStreamFlowClient rabbitMQ, ILogger<EmailService> logger)
+    public EmailService(IStreamFlowClient streamFlow, ILogger<EmailService> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task HandleAsync(UserRegistered @event, EventContext context)
     {
-        // Send welcome email (omitted)
-        await _streamFlow.EventBus.PublishIntegrationEventAsync(
-            new EmailSent(@event.UserId, @event.Email, DateTime.UtcNow));
-        _logger.LogInformation("EmailSent event published for {Email}", @event.Email);
+        try
+        {
+            // Initialize the client first
+            await _streamFlow.InitializeAsync();
+            
+            _logger.LogInformation("Processing UserRegistered event for user {UserId}", @event.UserId);
+            
+            // Send welcome email (omitted)
+            // await _emailProvider.SendWelcomeEmailAsync(@event.Email);
+            
+            // Publish integration event with fluent API
+            await _streamFlow.EventBus.Event<EmailSent>()
+                .WithCorrelationId(context.CorrelationId)
+                .WithCausationId(context.EventId)
+                .WithSource("email-service")
+                .WithVersion("1.0")
+                .WithAggregateId(@event.UserId.ToString())
+                .WithAggregateType("User")
+                .WithProperty("email-type", "welcome")
+                .PublishAsync(new EmailSent(@event.UserId, @event.Email, DateTime.UtcNow));
+                
+            _logger.LogInformation("EmailSent event published for {Email}", @event.Email);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing UserRegistered event for user {UserId}", @event.UserId);
+            throw;
+        }
     }
 }
 ```
 
-### 4. Event Handler Registration
+### 4. Program Setup
 
 ```csharp
 // Program.cs
 using FS.StreamFlow.RabbitMQ.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
-var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddLogging(config =>
+var builder = WebApplication.CreateBuilder(args);
+
+// Add FS.StreamFlow with RabbitMQ
+builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    config.AddConsole();
-    config.SetMinimumLevel(LogLevel.Information);
+    // Client configuration
+    options.ClientConfiguration.ClientName = "Event-Driven Architecture Example";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Event bus settings
+    options.EventBusSettings.EnableEventBus = true;
+    options.EventBusSettings.DomainEventExchange = "domain-events";
+    options.EventBusSettings.IntegrationEventExchange = "integration-events";
+    options.EventBusSettings.EventHandlerAssembly = typeof(UserRegistered).Assembly;
+    
+    // Error handling settings
+    options.ErrorHandlingSettings.MaxRetries = 3;
+    options.ErrorHandlingSettings.RetryDelay = TimeSpan.FromSeconds(2);
+    options.ErrorHandlingSettings.UseExponentialBackoff = true;
+    options.ErrorHandlingSettings.EnableDeadLetterQueue = true;
+    
+    // Dead letter settings
+    options.DeadLetterSettings.ExchangeName = "dlx";
+    options.DeadLetterSettings.RoutingKey = "event-handling.failed";
 });
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithEventBus(config =>
+
+// Register services
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<EmailService>();
+
+var app = builder.Build();
+
+// Initialize the client
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
+
+// Setup infrastructure
+await streamFlow.ExchangeManager.Exchange("domain-events")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
+
+await streamFlow.ExchangeManager.Exchange("integration-events")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
+
+await streamFlow.ExchangeManager.Exchange("dlx")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
+
+// Setup queues
+await streamFlow.QueueManager.Queue("user-events")
+    .WithDurable(true)
+    .WithDeadLetterExchange("dlx")
+    .WithDeadLetterRoutingKey("user-events.failed")
+    .BindToExchange("domain-events", "user.*")
+    .DeclareAsync();
+
+await streamFlow.QueueManager.Queue("email-events")
+    .WithDurable(true)
+    .WithDeadLetterExchange("dlx")
+    .WithDeadLetterRoutingKey("email-events.failed")
+    .BindToExchange("integration-events", "email.*")
+    .DeclareAsync();
+
+await streamFlow.QueueManager.Queue("dead-letter-queue")
+    .WithDurable(true)
+    .BindToExchange("dlx", "event-handling.failed")
+    .DeclareAsync();
+
+// Start event consumers
+await streamFlow.Consumer.Queue<UserRegistered>("user-events")
+    .WithConcurrency(3)
+    .WithPrefetchCount(10)
+    .WithErrorHandler(async (exception, context) =>
     {
-        config.DomainEventExchange = "domain-events";
-        config.IntegrationEventExchange = "integration-events";
-        config.EventTypesAssembly = typeof(UserRegistered).Assembly;
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(exception, "Error processing user event {MessageId}", context.MessageId);
+        return exception is TimeoutException || exception is InvalidOperationException;
     })
-    .WithErrorHandling(config =>
+    .ConsumeAsync(async (userRegistered, context) =>
     {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(2);
-    })
-    .Build();
-builder.Services.AddSingleton<UserService>();
-builder.Services.AddSingleton<EmailService>();
-var host = builder.Build();
+        var emailService = app.Services.GetRequiredService<EmailService>();
+        await emailService.HandleAsync(userRegistered, new EventContext
+        {
+            EventId = context.MessageId,
+            CorrelationId = context.CorrelationId,
+            Timestamp = DateTimeOffset.UtcNow
+        });
+        return true;
+    });
+
+// Start dead letter processor
+await streamFlow.Consumer.Queue<DeadLetterMessage>("dead-letter-queue")
+    .WithConcurrency(1)
+    .WithPrefetchCount(5)
+    .ConsumeAsync(async (deadLetterMessage, context) =>
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("Processing dead letter event {MessageId}: {Reason}", 
+            deadLetterMessage.MessageId, deadLetterMessage.Reason);
+        
+        // Here you could implement retry logic, alerting, or manual intervention
+        return true;
+    });
+
+// Start the application
+app.Run();
 ```
 
 ### 5. Running the Example
@@ -144,24 +314,83 @@ var host = builder.Build();
    ```bash
    docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
    ```
+
 2. **Run the application**:
    ```bash
    dotnet run
    ```
-3. **Expected flow**:
+
+3. **Test the event flow**:
+   ```csharp
+   // In a separate console or test
+   var userService = app.Services.GetRequiredService<UserService>();
+   await userService.RegisterUserAsync("user@example.com");
+   ```
+
+4. **Expected flow**:
    ```
    UserRegistered → EmailSent
    ```
 
+5. **Monitor the flow**:
+   - Check RabbitMQ Management UI at http://localhost:15672
+   - Monitor queues: user-events, email-events, dead-letter-queue
+   - View logs for event processing
+
 ## 🛡️ Error Handling
-- All failures are routed to a dead letter queue after max retries.
-- Handlers log errors and processing failures.
+
+### Event Processing Errors
+- **Retry Policy**: Transient errors are retried with exponential backoff
+- **Dead Letter Queue**: Permanent failures are sent to DLQ
+- **Error Classification**: Different error types have different handling strategies
+
+### Error Handling Configuration
+```csharp
+// Custom error handling for specific events
+.WithErrorHandler(async (exception, context) =>
+{
+    if (exception is ValidationException)
+        return false; // Send to DLQ immediately
+    
+    if (exception is TimeoutException)
+        return true; // Retry
+    
+    return true; // Default retry
+})
+```
 
 ## 📊 Monitoring
-- Use RabbitMQ Management UI at http://localhost:15672 to monitor event flows.
-- Logs show event publishing and handling in real time.
+
+### Event Flow Monitoring
+```csharp
+// Monitor event processing statistics
+var eventBusStats = await streamFlow.EventBus.GetStatisticsAsync();
+Console.WriteLine($"Events published: {eventBusStats.EventsPublished}");
+Console.WriteLine($"Events processed: {eventBusStats.EventsProcessed}");
+Console.WriteLine($"Failed events: {eventBusStats.FailedEvents}");
+```
+
+### Dead Letter Queue Monitoring
+```csharp
+// Monitor dead letter queue
+var dlqStats = await streamFlow.DeadLetterHandler.GetStatisticsAsync();
+Console.WriteLine($"Dead letter messages: {dlqStats.TotalMessages}");
+Console.WriteLine($"Reprocessed: {dlqStats.ReprocessedMessages}");
+```
+
+### RabbitMQ Management
+- **Management UI**: http://localhost:15672 (guest/guest)
+- **Queue Monitoring**: Track message rates and processing times
+- **Exchange Monitoring**: Monitor event routing and delivery
+- **Connection Monitoring**: Track client connections and health
 
 ## 🎯 Key Takeaways
-- Event-driven architecture enables decoupled, scalable systems.
-- Error handling and monitoring are essential for reliable event flows.
-- FS.StreamFlow simplifies event-driven design in .NET. 
+
+- **Event-driven architecture** enables decoupled, scalable systems
+- **Domain and integration events** provide clear separation of concerns
+- **Fluent API** simplifies event publishing and subscription
+- **Error handling and monitoring** are essential for reliable event flows
+- **Dead letter queues** ensure no events are lost
+- **FS.StreamFlow simplifies** event-driven design in .NET applications
+- **Correlation and causation IDs** enable event tracing and debugging
+- **Event versioning** supports schema evolution and backward compatibility 
