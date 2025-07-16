@@ -47,6 +47,9 @@ public class RabbitMQHealthCheck : IHealthCheck
     {
         try
         {
+            // Initialize the client first
+            await _streamFlow.InitializeAsync(cancellationToken);
+            
             var data = new Dictionary<string, object>();
             
             // Check connection health
@@ -125,6 +128,9 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync(cancellationToken);
+        
         var healthData = new Dictionary<string, object>();
         var issues = new List<string>();
 
@@ -371,6 +377,9 @@ public class RabbitMQMetricsCollector
     {
         try
         {
+            // Initialize the client first
+            await _streamFlow.InitializeAsync();
+            
             var metrics = await CollectAllMetricsAsync();
             await PublishMetricsAsync(metrics);
         }
@@ -380,16 +389,16 @@ public class RabbitMQMetricsCollector
         }
     }
 
-    private async Task<RabbitMQMetrics> CollectAllMetricsAsync()
+    private async Task<object> CollectAllMetricsAsync()
     {
         var connectionStats = _streamFlow.ConnectionManager.Statistics;
         var producerStats = _streamFlow.Producer.Statistics;
         var consumerStats = _streamFlow.Consumer.Statistics;
 
-        return new RabbitMQMetrics
+        return new
         {
             Timestamp = DateTimeOffset.UtcNow,
-            Connection = new ConnectionMetrics
+            Connection = new
             {
                 IsConnected = _streamFlow.ConnectionManager.IsConnected,
                 State = _streamFlow.ConnectionManager.State.ToString(),
@@ -398,7 +407,7 @@ public class RabbitMQMetricsCollector
                 RecoveryCount = connectionStats.RecoveryCount,
                 LastRecoveryTime = connectionStats.LastRecoveryTime
             },
-            Producer = new ProducerMetrics
+            Producer = new
             {
                 IsReady = _streamFlow.Producer.IsReady,
                 Status = producerStats.Status.ToString(),
@@ -410,7 +419,7 @@ public class RabbitMQMetricsCollector
                 ErrorRate = producerStats.TotalPublished > 0 ? 
                     (double)producerStats.TotalFailed / producerStats.TotalPublished * 100 : 0
             },
-            Consumer = new ConsumerMetrics
+            Consumer = new
             {
                 Status = consumerStats.Status.ToString(),
                 MessagesProcessed = consumerStats.MessagesProcessed,
@@ -430,11 +439,11 @@ public class RabbitMQMetricsCollector
         return elapsed.TotalSeconds > 0 ? count / elapsed.TotalSeconds : 0;
     }
 
-    private async Task<SystemMetrics> CollectSystemMetricsAsync()
+    private async Task<object> CollectSystemMetricsAsync()
     {
         var process = Process.GetCurrentProcess();
         
-        return new SystemMetrics
+        return new
         {
             CpuUsage = await GetCpuUsageAsync(),
             MemoryUsage = process.WorkingSet64,
@@ -466,13 +475,13 @@ public class RabbitMQMetricsCollector
         return cpuUsedMs / (Environment.ProcessorCount * totalMsPassed) * 100;
     }
 
-    private async Task PublishMetricsAsync(RabbitMQMetrics metrics)
+    private async Task PublishMetricsAsync(object metrics)
     {
         // Publish metrics to monitoring system
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "monitoring",
-            routingKey: "metrics.rabbitmq",
-            message: metrics);
+        await _streamFlow.Producer.Message(metrics)
+            .WithExchange("monitoring")
+            .WithRoutingKey("metrics.rabbitmq")
+            .PublishAsync();
         
         // Log key metrics
         _logger.LogInformation("RabbitMQ Metrics: " +
@@ -480,10 +489,10 @@ public class RabbitMQMetricsCollector
             "Consumer Rate: {ConsumerRate:F1} msgs/sec, " +
             "Error Rate: {ErrorRate:F2}%, " +
             "Memory: {MemoryMB:F1} MB",
-            metrics.Producer.PublishRate,
-            metrics.Consumer.ProcessingRate,
-            metrics.Producer.ErrorRate,
-            metrics.System.MemoryUsage / 1024.0 / 1024.0);
+            ((dynamic)metrics).Producer.PublishRate,
+            ((dynamic)metrics).Consumer.ProcessingRate,
+            ((dynamic)metrics).Producer.ErrorRate,
+            ((dynamic)metrics).System.MemoryUsage / 1024.0 / 1024.0);
     }
 }
 ```
@@ -561,15 +570,18 @@ public class CustomMetricsCollector
 
     public async Task FlushMetricsAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var metrics = _customMetrics.Values.ToList();
         _customMetrics.Clear();
 
         foreach (var metric in metrics)
         {
-            await _streamFlow.Producer.PublishAsync(
-                exchange: "metrics",
-                routingKey: $"custom.{metric.Type.ToString().ToLower()}",
-                message: metric);
+            await _streamFlow.Producer.Message(metric)
+                .WithExchange("metrics")
+                .WithRoutingKey($"custom.{metric.Type.ToString().ToLower()}")
+                .PublishAsync();
         }
 
         _logger.LogInformation("Flushed {MetricsCount} custom metrics", metrics.Count);
@@ -746,16 +758,19 @@ public class LogAggregator
     {
         try
         {
+            // Initialize the client first
+            await _streamFlow.InitializeAsync();
+            
             // Send logs to centralized logging system
-            await _streamFlow.Producer.PublishAsync(
-                exchange: "logs",
-                routingKey: "application.logs",
-                message: new LogBatch
-                {
-                    Logs = logs,
-                    BatchId = Guid.NewGuid().ToString(),
-                    Timestamp = DateTimeOffset.UtcNow
-                });
+            await _streamFlow.Producer.Message(new LogBatch
+            {
+                Logs = logs,
+                BatchId = Guid.NewGuid().ToString(),
+                Timestamp = DateTimeOffset.UtcNow
+            })
+            .WithExchange("logs")
+            .WithRoutingKey("application.logs")
+            .PublishAsync();
         }
         catch (Exception ex)
         {
@@ -800,6 +815,9 @@ public class AlertManager
 
     public async Task SendAlertAsync(string alertType, string message, AlertSeverity severity, Dictionary<string, object>? metadata = null)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var alert = new Alert
         {
             Id = Guid.NewGuid().ToString(),
@@ -822,10 +840,10 @@ public class AlertManager
         _activeAlerts[alertKey] = alert;
 
         // Send alert
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "alerts",
-            routingKey: $"alert.{severity.ToString().ToLower()}",
-            message: alert);
+        await _streamFlow.Producer.Message(alert)
+            .WithExchange("alerts")
+            .WithRoutingKey($"alert.{severity.ToString().ToLower()}")
+            .PublishAsync();
 
         _logger.LogWarning("Alert sent: {AlertType} - {Message} (Severity: {Severity})", 
             alertType, message, severity);
@@ -931,6 +949,9 @@ public class DashboardDataProvider
 
     public async Task<DashboardData> GetDashboardDataAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var data = new DashboardData
         {
             Timestamp = DateTimeOffset.UtcNow,
@@ -1200,11 +1221,14 @@ public class RabbitMQTracer
                 headers["span-id"] = activity.SpanId.ToString();
             }
             
-            await _streamFlow.Producer.PublishAsync(
-                exchange: exchange,
-                routingKey: routingKey,
-                message: message,
-                properties: new BasicProperties { Headers = headers });
+            // Initialize the client first
+            await _streamFlow.InitializeAsync();
+            
+            await _streamFlow.Producer.Message(message)
+                .WithExchange(exchange)
+                .WithRoutingKey(routingKey)
+                .WithHeaders(headers)
+                .PublishAsync();
                 
             return true;
         });
@@ -1212,9 +1236,11 @@ public class RabbitMQTracer
 
     public async Task TraceConsumeAsync<T>(string queueName, Func<T, MessageContext, Task<bool>> handler)
     {
-        await _streamFlow.Consumer.ConsumeAsync<T>(
-            queueName: queueName,
-            messageHandler: async (message, context) =>
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.Consumer.Queue<T>(queueName)
+            .ConsumeAsync(async (message, context) =>
             {
                 return await TraceOperationAsync("consume", async (activity) =>
                 {
@@ -1250,6 +1276,9 @@ public class RabbitMQTracer
 // DO: Check all components
 public async Task<HealthCheckResult> CheckHealthAsync()
 {
+    // Initialize the client first
+    await _streamFlow.InitializeAsync();
+    
     var checks = new[]
     {
         CheckConnectionHealth(),
