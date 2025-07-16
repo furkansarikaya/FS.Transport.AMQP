@@ -175,15 +175,6 @@ await _streamFlow.ExchangeManager.Exchange("orders")
     .DeclareAsync();
 ```
 
-**Problem**: `PublishAsync()` throws "Routing key must be configured before publishing"  
-**Solution**: Always set both exchange and routing key:
-```csharp
-await _streamFlow.Producer.Message(order)
-    .WithExchange("orders")      // Required
-    .WithRoutingKey("order.created")  // Required
-    .PublishAsync();
-```
-
 **Problem**: `Message<T>()` with `.PublishAsync()` throws compilation error  
 **Solution**: Use the correct overload:
 ```csharp
