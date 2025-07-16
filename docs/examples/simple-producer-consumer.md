@@ -77,7 +77,7 @@ public class Message
 
 ```csharp
 // Services/MessageProducer.cs
-using FS.StreamFlow.Core;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using SimpleProducerConsumer.Models;
 
 namespace SimpleProducerConsumer.Services;
@@ -87,9 +87,9 @@ public class MessageProducer
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<MessageProducer> _logger;
 
-    public MessageProducer(IStreamFlowClient rabbitMQ, ILogger<MessageProducer> logger)
+    public MessageProducer(IStreamFlowClient streamFlow, ILogger<MessageProducer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -104,10 +104,15 @@ public class MessageProducer
 
         try
         {
-            await _streamFlow.Producer.PublishAsync(
-                exchange: "simple-messages",
-                routingKey: "message.created",
-                message: message);
+            // Initialize the client first
+            await _streamFlow.InitializeAsync();
+            
+            // Publish message with fluent API
+            await _streamFlow.Producer.Message(message)
+                .WithExchange("simple-messages")
+                .WithRoutingKey("message.created")
+                .WithDeliveryMode(DeliveryMode.Persistent)
+                .PublishAsync();
 
             _logger.LogInformation("Message published: {MessageId} - {Content}", 
                 message.Id, message.Content);
@@ -140,8 +145,7 @@ public class MessageProducer
 
 ```csharp
 // Services/MessageConsumer.cs
-using FS.StreamFlow.Core;
-using FS.StreamFlow.RabbitMQ;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using SimpleProducerConsumer.Models;
 
 namespace SimpleProducerConsumer.Services;
@@ -152,9 +156,9 @@ public class MessageConsumer
     private readonly ILogger<MessageConsumer> _logger;
     private int _processedCount = 0;
 
-    public MessageConsumer(IStreamFlowClient rabbitMQ, ILogger<MessageConsumer> logger)
+    public MessageConsumer(IStreamFlowClient streamFlow, ILogger<MessageConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -162,8 +166,11 @@ public class MessageConsumer
     {
         _logger.LogInformation("Starting message consumer...");
 
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+
         // Start consuming messages with fluent API
-        await _streamFlow.Consumer.Queue<SimpleMessage>("simple-queue")
+        await _streamFlow.Consumer.Queue<Message>("simple-message-queue")
             .WithConcurrency(3)
             .WithPrefetchCount(10)
             .WithAutoAck(false)
@@ -173,8 +180,7 @@ public class MessageConsumer
             })
             .ConsumeAsync(async (message, context) =>
             {
-                await ProcessMessageAsync(message);
-                return true; // Acknowledge
+                return await ProcessMessageAsync(message, context);
             });
     }
 
@@ -236,29 +242,40 @@ builder.Services.AddLogging(config =>
     config.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add FS.StreamFlow
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithProducer(config =>
-    {
-        config.EnableConfirmations = true;
-        config.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-    })
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 5;
-        config.AutoAck = false;
-        config.RequeueOnFailure = true;
-    })
-    .WithErrorHandling(config =>
-    {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(2);
-    })
-    .Build();
+// Add FS.StreamFlow with RabbitMQ
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Client configuration
+    options.ClientConfiguration.ClientName = "Simple Producer-Consumer Example";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 10;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 3;
+    
+    // Error handling settings
+    options.ErrorHandlingSettings.EnableDeadLetterQueue = true;
+    options.ErrorHandlingSettings.DeadLetterExchange = "dlx";
+    options.ErrorHandlingSettings.DeadLetterQueue = "dlq";
+    options.ErrorHandlingSettings.MaxRetryAttempts = 3;
+    options.ErrorHandlingSettings.RetryDelay = TimeSpan.FromSeconds(2);
+});
 
 // Add our services
 builder.Services.AddSingleton<MessageProducer>();
@@ -276,8 +293,12 @@ Console.CancelKeyPress += (_, e) =>
 
 try
 {
+    // Get StreamFlow client and initialize
+    var streamFlow = host.Services.GetRequiredService<IStreamFlowClient>();
+    await streamFlow.InitializeAsync();
+    
     // Setup infrastructure
-    await SetupInfrastructureAsync(host.Services);
+    await SetupInfrastructureAsync(streamFlow);
 
     // Get services
     var producer = host.Services.GetRequiredService<MessageProducer>();
@@ -317,65 +338,43 @@ finally
 }
 
 // Infrastructure setup method
-static async Task SetupInfrastructureAsync(IServiceProvider services)
+static async Task SetupInfrastructureAsync(IStreamFlowClient streamFlow)
 {
-    var rabbitMQ = services.GetRequiredService<IStreamFlowClient>();
-    var logger = services.GetRequiredService<ILogger<Program>>();
-
     try
     {
-        logger.LogInformation("Setting up RabbitMQ infrastructure...");
+        Console.WriteLine("Setting up RabbitMQ infrastructure...");
 
-        // Declare exchange
-        await rabbitMQ.ExchangeManager.DeclareExchangeAsync(
-            exchange: "simple-messages",
-            type: "topic",
-            durable: true,
-            autoDelete: false);
+        // Declare exchange with fluent API
+        await streamFlow.ExchangeManager.Exchange("simple-messages")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
 
-        // Declare dead letter exchange
-        await rabbitMQ.ExchangeManager.DeclareExchangeAsync(
-            exchange: "dlx",
-            type: "topic",
-            durable: true,
-            autoDelete: false);
+        // Declare dead letter exchange with fluent API
+        await streamFlow.ExchangeManager.Exchange("dlx")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
 
-        // Declare main queue
-        await rabbitMQ.QueueManager.DeclareQueueAsync(
-            queue: "simple-message-queue",
-            durable: true,
-            exclusive: false,
-            autoDelete: false,
-            arguments: new Dictionary<string, object>
-            {
-                ["x-dead-letter-exchange"] = "dlx",
-                ["x-dead-letter-routing-key"] = "message.failed"
-            });
+        // Declare main queue with fluent API
+        await streamFlow.QueueManager.Queue("simple-message-queue")
+            .WithDurable(true)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("message.failed")
+            .BindToExchange("simple-messages", "message.created")
+            .DeclareAsync();
 
-        // Declare dead letter queue
-        await rabbitMQ.QueueManager.DeclareQueueAsync(
-            queue: "dlq",
-            durable: true,
-            exclusive: false,
-            autoDelete: false);
+        // Declare dead letter queue with fluent API
+        await streamFlow.QueueManager.Queue("dlq")
+            .WithDurable(true)
+            .BindToExchange("dlx", "message.failed")
+            .DeclareAsync();
 
-        // Bind main queue to exchange
-        await rabbitMQ.QueueManager.BindQueueAsync(
-            queue: "simple-message-queue",
-            exchange: "simple-messages",
-            routingKey: "message.created");
-
-        // Bind dead letter queue to dead letter exchange
-        await rabbitMQ.QueueManager.BindQueueAsync(
-            queue: "dlq",
-            exchange: "dlx",
-            routingKey: "message.failed");
-
-        logger.LogInformation("RabbitMQ infrastructure setup completed successfully");
+        Console.WriteLine("RabbitMQ infrastructure setup completed successfully");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Failed to setup RabbitMQ infrastructure");
+        Console.WriteLine($"Failed to setup RabbitMQ infrastructure: {ex.Message}");
         throw;
     }
 }
@@ -395,10 +394,8 @@ static async Task SetupInfrastructureAsync(IServiceProvider services)
 
 3. **Expected output**:
    ```
-   info: Program[0]
-         Setting up RabbitMQ infrastructure...
-   info: Program[0]
-         RabbitMQ infrastructure setup completed successfully
+   Setting up RabbitMQ infrastructure...
+   RabbitMQ infrastructure setup completed successfully
    info: SimpleProducerConsumer.Services.MessageConsumer[0]
          Starting message consumer...
    info: SimpleProducerConsumer.Services.MessageProducer[0]
@@ -413,24 +410,16 @@ static async Task SetupInfrastructureAsync(IServiceProvider services)
 
 ### Producer Configuration
 ```csharp
-.WithProducer(config =>
-{
-    config.EnableConfirmations = true;          // Wait for broker confirmation
-    config.ConfirmationTimeout = TimeSpan.FromSeconds(5);  // Confirmation timeout
-    config.BatchSize = 100;                     // Batch size for bulk operations
-    config.MaxBatchWaitTime = TimeSpan.FromSeconds(1);     // Max wait time for batch
-})
+options.ProducerSettings.EnablePublisherConfirms = true;          // Wait for broker confirmation
+options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);  // Confirmation timeout
+options.ProducerSettings.MaxConcurrentPublishes = 100;            // Max concurrent publishes
 ```
 
 ### Consumer Configuration
 ```csharp
-.WithConsumer(config =>
-{
-    config.PrefetchCount = 5;                   // Number of messages to prefetch
-    config.AutoAck = false;                     // Manual acknowledgment
-    config.RequeueOnFailure = true;             // Requeue failed messages
-    config.ConcurrentConsumers = 1;             // Number of concurrent consumers
-})
+options.ConsumerSettings.PrefetchCount = 10;                      // Number of messages to prefetch
+options.ConsumerSettings.AutoAcknowledge = false;                 // Manual acknowledgment
+options.ConsumerSettings.MaxConcurrentConsumers = 3;              // Number of concurrent consumers
 ```
 
 ## 🐛 Troubleshooting
@@ -473,7 +462,7 @@ static async Task SetupInfrastructureAsync(IServiceProvider services)
 
 3. **Monitor queue depth**:
    ```csharp
-   var queueInfo = await rabbitMQ.QueueManager.GetQueueInfoAsync("simple-message-queue");
+   var queueInfo = await streamFlow.QueueManager.Queue("simple-message-queue").GetInfoAsync();
    Console.WriteLine($"Queue has {queueInfo.MessageCount} messages");
    ```
 
@@ -488,10 +477,11 @@ Once you've mastered this example, try:
 ## 🎯 Key Takeaways
 
 - ✅ Basic producer-consumer pattern with FS.StreamFlow
-- ✅ Infrastructure setup (exchanges, queues, bindings)
+- ✅ Infrastructure setup (exchanges, queues, bindings) with fluent API
 - ✅ Message serialization and deserialization
 - ✅ Error handling and retry mechanisms
 - ✅ Graceful shutdown patterns
 - ✅ Monitoring and logging
+- ✅ Always call InitializeAsync() before using the client
 
 This example provides a solid foundation for building more complex messaging applications with FS.StreamFlow! 🚀 
