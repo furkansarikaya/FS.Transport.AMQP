@@ -1036,5 +1036,680 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
 
 Manage events with comprehensive fluent operations:
 
+```csharp
+// Advanced event publishing with fluent API
+await _streamFlow.EventBus.Event<OrderCreated>()
+    .WithMetadata(metadata =>
+    {
+        metadata.CorrelationId = correlationId;
+        metadata.Source = "order-service";
+        metadata.Version = "1.0";
+    })
+    .WithCorrelationId(correlationId)
+    .WithCausationId(causationId)
+    .WithAggregateId(orderId.ToString())
+    .WithAggregateType("Order")
+    .WithPriority(1)
+    .WithTtl(TimeSpan.FromMinutes(30))
+    .WithProperty("priority", "high")
+    .PublishAsync(new OrderCreated(orderId, customerName, amount));
+
+// Integration event publishing
+await _streamFlow.EventBus.Event<OrderShipped>()
+    .WithSource("order-service")
+    .WithVersion("1.0")
+    .WithCorrelationId(correlationId)
+    .WithCausationId(causationId)
+    .WithProperty("tracking-number", trackingNumber)
+    .PublishAsync(new OrderShipped(orderId, trackingNumber));
 ```
+
+### Fluent Event Store API
+
+Manage event streams with comprehensive fluent operations:
+
+```csharp
+// Store events with fluent API
+await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .AppendEvent(new OrderCreated(orderId, customerName, amount))
+    .AppendEvent(new OrderItemAdded(orderId, itemId, quantity))
+    .WithSnapshot(orderSnapshot, version: 50)
+    .SaveAsync();
+
+// Read events with fluent API
+var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .FromVersion(0)
+    .WithMaxCount(100)
+    .ReadAsync();
+
+// Read events backwards
+var recentEvents = await _streamFlow.EventStore.Stream($"order-{orderId}")
+    .FromVersion(-1)
+    .WithMaxCount(10)
+    .ReadBackwardAsync();
+
+// Stream management
+await _streamFlow.EventStore.Stream("order-events").CreateAsync();
+await _streamFlow.EventStore.Stream("order-events").DeleteAsync();
+await _streamFlow.EventStore.Stream("order-events").TruncateAsync(version: 50);
+
+// Snapshot management
+var snapshot = await _streamFlow.EventStore.Stream("order-events").GetSnapshotAsync();
+await _streamFlow.EventStore.Stream("order-events")
+    .WithSnapshot(orderSnapshot, version: 100)
+    .SaveSnapshotAsync();
 ```
+
+### Comprehensive Error Handling
+
+Built-in retry policies, circuit breakers, and dead letter queues:
+
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Client configuration
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
+    options.ConsumerSettings.EnableDeadLetterQueue = true;
+    options.ConsumerSettings.DeadLetterSettings = new DeadLetterSettings
+    {
+        ExchangeName = "dlx",
+        RoutingKey = "failed",
+        Enabled = true,
+        MaxRetries = 3,
+        MessageTtl = TimeSpan.FromHours(24)
+    };
+    
+    // Retry policy settings
+    options.ClientConfiguration.RetryPolicy = new RetryPolicySettings
+    {
+        MaxRetryAttempts = 3,
+        InitialRetryDelay = TimeSpan.FromSeconds(1),
+        MaxRetryDelay = TimeSpan.FromSeconds(30),
+        RetryDelayMultiplier = 2.0,
+        UseExponentialBackoff = true,
+        UseJitter = true
+    };
+    
+    // Error handling settings
+    options.ConsumerSettings.ErrorHandling = new ErrorHandlingSettings
+    {
+        Strategy = ErrorHandlingStrategy.Requeue,
+        MaxRetries = 3,
+        RetryDelay = TimeSpan.FromSeconds(1),
+        UseExponentialBackoff = true,
+        LogErrors = true,
+        ContinueOnError = true
+    };
+});
+```
+
+### Production Monitoring and Health Checks
+
+Comprehensive monitoring and observability:
+
+```csharp
+// Health check integration
+builder.Services.AddHealthChecks()
+    .AddCheck<RabbitMQHealthCheck>("rabbitmq", tags: new[] { "messaging" });
+
+// Custom health check implementation
+public class RabbitMQHealthCheck : IHealthCheck
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public RabbitMQHealthCheck(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
+    
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var healthResult = await _streamFlow.HealthChecker.CheckHealthAsync(cancellationToken);
+            
+            if (healthResult.IsHealthy)
+            {
+                return HealthCheckResult.Healthy("RabbitMQ connection is healthy", 
+                    new Dictionary<string, object>
+                    {
+                        ["connection_state"] = _streamFlow.ConnectionManager.State,
+                        ["messages_sent"] = _streamFlow.Producer.Statistics.TotalMessagesPublished,
+                        ["messages_received"] = _streamFlow.Consumer.Statistics.TotalMessagesConsumed
+                    });
+            }
+            
+            return HealthCheckResult.Unhealthy("RabbitMQ connection is unhealthy", 
+                healthResult.Exception);
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("RabbitMQ health check failed", ex);
+        }
+    }
+}
+
+// Metrics collection
+public class MetricsService
+{
+    private readonly IStreamFlowClient _streamFlow;
+    private readonly ILogger<MetricsService> _logger;
+    
+    public MetricsService(IStreamFlowClient streamFlow, ILogger<MetricsService> logger)
+    {
+        _streamFlow = streamFlow;
+        _logger = logger;
+    }
+    
+    public async Task CollectMetricsAsync()
+    {
+        var clientStats = _streamFlow.MetricsCollector.GetClientStatistics();
+        var connectionStats = _streamFlow.ConnectionManager.Statistics;
+        var producerStats = _streamFlow.Producer.Statistics;
+        var consumerStats = _streamFlow.Consumer.Statistics;
+        
+        _logger.LogInformation("Client Statistics: {ClientStats}", clientStats);
+        _logger.LogInformation("Connection Statistics: {ConnectionStats}", connectionStats);
+        _logger.LogInformation("Producer Statistics: {ProducerStats}", producerStats);
+        _logger.LogInformation("Consumer Statistics: {ConsumerStats}", consumerStats);
+        
+        // Send metrics to monitoring system
+        await SendMetricsToMonitoringSystemAsync(clientStats, connectionStats, producerStats, consumerStats);
+    }
+}
+```
+
+### Saga Orchestration
+
+Long-running workflow management with compensation:
+
+```csharp
+// Saga implementation
+public class OrderProcessingSaga : ISaga<OrderProcessingSagaState>
+{
+    private readonly IStreamFlowClient _streamFlow;
+    private readonly ILogger<OrderProcessingSaga> _logger;
+    
+    public OrderProcessingSaga(IStreamFlowClient streamFlow, ILogger<OrderProcessingSaga> logger)
+    {
+        _streamFlow = streamFlow;
+        _logger = logger;
+    }
+    
+    public async Task HandleAsync(OrderCreated @event, SagaContext context)
+    {
+        State.OrderId = @event.OrderId;
+        State.Status = "Processing";
+        
+        // Send command to reserve inventory
+        await context.SendAsync(new ReserveInventory(@event.OrderId, @event.Items));
+    }
+    
+    public async Task HandleAsync(InventoryReserved @event, SagaContext context)
+    {
+        State.Status = "InventoryReserved";
+        
+        // Send command to process payment
+        await context.SendAsync(new ProcessPayment(@event.OrderId, State.Amount));
+    }
+    
+    public async Task HandleAsync(PaymentProcessed @event, SagaContext context)
+    {
+        State.Status = "Completed";
+        
+        // Complete the saga
+        await context.CompleteAsync();
+    }
+    
+    public async Task CompensateAsync(SagaContext context)
+    {
+        _logger.LogWarning("Compensating order processing saga for order {OrderId}", State.OrderId);
+        
+        // Implement compensation logic
+        if (State.Status == "InventoryReserved")
+        {
+            await context.SendAsync(new ReleaseInventory(State.OrderId));
+        }
+        
+        if (State.Status == "PaymentProcessed")
+        {
+            await context.SendAsync(new RefundPayment(State.OrderId));
+        }
+    }
+}
+
+// Saga state
+public class OrderProcessingSagaState
+{
+    public Guid OrderId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public List<OrderItem> Items { get; set; } = new();
+}
+
+// Start saga
+await _streamFlow.SagaOrchestrator.StartSagaAsync<OrderProcessingSaga>(
+    sagaId: order.Id,
+    initialEvent: new OrderCreated(order.Id, order.CustomerName, order.Total));
+```
+
+### Message Serialization and Compression
+
+Support for multiple serialization formats and compression:
+
+```csharp
+// Configure serialization settings
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Serialization settings
+    options.ClientConfiguration.Serialization = new SerializationSettings
+    {
+        Format = SerializationFormat.Json,
+        EnableCompression = true,
+        CompressionAlgorithm = CompressionAlgorithm.Gzip,
+        CompressionThreshold = 1024,
+        IncludeTypeInformation = true
+    };
+});
+
+// Custom serialization
+var serializer = _streamFlow.SerializerFactory.CreateSerializer(SerializationFormat.Json);
+var messageBytes = await serializer.SerializeAsync(order, cancellationToken);
+var deserializedOrder = await serializer.DeserializeAsync<Order>(messageBytes, cancellationToken);
+```
+
+### Connection Management and Recovery
+
+Automatic connection recovery with intelligent backoff:
+
+```csharp
+// Connection event handling
+_streamFlow.ConnectionManager.Connected += (sender, e) =>
+{
+    _logger.LogInformation("Connected to RabbitMQ at {Timestamp}", e.Timestamp);
+};
+
+_streamFlow.ConnectionManager.Disconnected += (sender, e) =>
+{
+    _logger.LogWarning("Disconnected from RabbitMQ: {Reason}", e.Reason);
+};
+
+_streamFlow.ConnectionManager.Recovering += (sender, e) =>
+{
+    _logger.LogInformation("Attempting to reconnect to RabbitMQ...");
+};
+
+_streamFlow.ConnectionManager.Recovered += (sender, e) =>
+{
+    _logger.LogInformation("Successfully reconnected to RabbitMQ");
+};
+
+// Manual connection management
+await _streamFlow.ConnectionManager.ConnectAsync(cancellationToken);
+var isConnected = _streamFlow.ConnectionManager.IsConnected;
+var connectionStats = _streamFlow.ConnectionManager.Statistics;
+```
+
+### Queue and Exchange Management
+
+Comprehensive infrastructure management:
+
+```csharp
+// Queue management
+await _streamFlow.QueueManager.Queue("order-processing")
+    .WithDurable(true)
+    .WithExclusive(false)
+    .WithAutoDelete(false)
+    .WithArguments(new Dictionary<string, object>
+    {
+        ["x-message-ttl"] = 3600000,
+        ["x-max-length"] = 10000
+    })
+    .WithDeadLetterExchange("dlx")
+    .WithDeadLetterRoutingKey("order.failed")
+    .WithMessageTtl(TimeSpan.FromHours(24))
+    .WithMaxLength(10000)
+    .WithMaxLengthBytes(1024 * 1024 * 100) // 100MB
+    .WithPriority(5)
+    .BindToExchange("orders", "order.created")
+    .DeclareAsync();
+
+// Exchange management
+await _streamFlow.ExchangeManager.Exchange("orders")
+    .WithType("topic")
+    .AsTopic()
+    .WithDurable(true)
+    .WithAutoDelete(false)
+    .WithArguments(new Dictionary<string, object>
+    {
+        ["alternate-exchange"] = "alt-orders"
+    })
+    .WithAlternateExchange("alt-orders")
+    .WithInternal(false)
+    .BindToExchange("master-orders", "order.*")
+    .DeclareAsync();
+
+// Support for all exchange types
+await _streamFlow.ExchangeManager.Exchange("direct-orders").AsDirect().DeclareAsync();
+await _streamFlow.ExchangeManager.Exchange("fanout-orders").AsFanout().DeclareAsync();
+await _streamFlow.ExchangeManager.Exchange("header-orders").AsHeaders().DeclareAsync();
+```
+
+## 📊 Performance and Monitoring
+
+### Performance Optimization
+
+```csharp
+// High-throughput configuration
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Client configuration
+    options.ClientConfiguration.ClientName = "High-Throughput Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(30);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.MaxConcurrentPublishes = 1000;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 100;
+    options.ConsumerSettings.MaxConcurrentConsumers = 10;
+    options.ConsumerSettings.AutoAcknowledge = false;
+});
+```
+
+### Monitoring and Observability
+
+```csharp
+// Comprehensive monitoring
+public class MonitoringService
+{
+    private readonly IStreamFlowClient _streamFlow;
+    private readonly ILogger<MonitoringService> _logger;
+    
+    public MonitoringService(IStreamFlowClient streamFlow, ILogger<MonitoringService> logger)
+    {
+        _streamFlow = streamFlow;
+        _logger = logger;
+    }
+    
+    public async Task MonitorSystemAsync()
+    {
+        // Client status
+        var clientStatus = _streamFlow.Status;
+        var clientStats = _streamFlow.MetricsCollector.GetClientStatistics();
+        
+        // Connection monitoring
+        var connectionState = _streamFlow.ConnectionManager.State;
+        var connectionStats = _streamFlow.ConnectionManager.Statistics;
+        
+        // Producer monitoring
+        var producerStats = _streamFlow.Producer.Statistics;
+        var producerSuccessRate = producerStats.PublishSuccessRate;
+        
+        // Consumer monitoring
+        var consumerStats = _streamFlow.Consumer.Statistics;
+        var consumerSuccessRate = consumerStats.ProcessingSuccessRate;
+        
+        // Log metrics
+        _logger.LogInformation("System Status: {Status}, Success Rate: {SuccessRate}%", 
+            clientStatus, producerSuccessRate);
+        
+        // Alert on issues
+        if (producerSuccessRate < 95)
+        {
+            _logger.LogWarning("Producer success rate is low: {SuccessRate}%", producerSuccessRate);
+        }
+        
+        if (consumerSuccessRate < 95)
+        {
+            _logger.LogWarning("Consumer success rate is low: {SuccessRate}%", consumerSuccessRate);
+        }
+    }
+}
+```
+
+## 🚀 Getting Started Examples
+
+### Example 1: Simple Message Publishing
+
+```csharp
+public class SimplePublisher
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public SimplePublisher(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
+    
+    public async Task PublishMessageAsync(string message)
+    {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        // Declare exchange
+        await _streamFlow.ExchangeManager.Exchange("messages")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+        
+        // Publish message
+        await _streamFlow.Producer.Message(message)
+            .WithExchange("messages")
+            .WithRoutingKey("message.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync();
+    }
+}
+```
+
+### Example 2: Simple Message Consumption
+
+```csharp
+public class SimpleConsumer
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public SimpleConsumer(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
+    
+    public async Task StartConsumingAsync()
+    {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        // Declare queue
+        await _streamFlow.QueueManager.Queue("message-processing")
+            .WithDurable(true)
+            .BindToExchange("messages", "message.*")
+            .DeclareAsync();
+        
+        // Consume messages
+        await _streamFlow.Consumer.Queue<string>("message-processing")
+            .WithConcurrency(3)
+            .WithPrefetchCount(10)
+            .ConsumeAsync(async (message, context) =>
+            {
+                await ProcessMessageAsync(message);
+                return true; // Acknowledge message
+            });
+    }
+    
+    private async Task ProcessMessageAsync(string message)
+    {
+        // Process the message
+        Console.WriteLine($"Processing message: {message}");
+        await Task.Delay(100); // Simulate processing
+    }
+}
+```
+
+### Example 3: Event-Driven Architecture
+
+```csharp
+// Domain Event
+public record OrderCreated(Guid OrderId, string CustomerName, decimal Amount) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCreated);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => OrderId.ToString();
+    public string AggregateType => "Order";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
+
+// Event Handler
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
+{
+    private readonly IStreamFlowClient _streamFlow;
+    
+    public OrderCreatedHandler(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
+    
+    public async Task HandleAsync(OrderCreated @event, EventContext context)
+    {
+        // Handle domain event
+        await SendOrderConfirmationAsync(@event);
+        
+        // Publish integration event
+        await _streamFlow.EventBus.Event<OrderConfirmed>()
+            .WithCorrelationId(context.CorrelationId)
+            .WithCausationId(context.EventId)
+            .WithSource("order-service")
+            .PublishAsync(new OrderConfirmed(@event.OrderId, @event.CustomerName));
+    }
+    
+    private async Task SendOrderConfirmationAsync(OrderCreated @event)
+    {
+        // Send email confirmation
+        Console.WriteLine($"Sending confirmation for order {@event.OrderId}");
+        await Task.Delay(100); // Simulate email sending
+    }
+}
+```
+
+## 📚 Additional Resources
+
+### Documentation
+
+- [Getting Started Guide](docs/getting-started.md)
+- [Configuration Reference](docs/configuration.md)
+- [Producer Guide](docs/producer.md)
+- [Consumer Guide](docs/consumer.md)
+- [Event-Driven Architecture](docs/event-driven.md)
+- [Event Sourcing](docs/event-sourcing.md)
+- [Saga Orchestration](docs/saga.md)
+- [Error Handling](docs/error-handling.md)
+- [Performance Tuning](docs/performance.md)
+- [Monitoring and Observability](docs/monitoring.md)
+
+### Examples
+
+- [Simple Producer-Consumer](docs/examples/simple-producer-consumer.md)
+- [Request-Reply Pattern](docs/examples/request-reply-pattern.md)
+- [Work Queues](docs/examples/work-queues.md)
+- [Event-Driven Architecture](docs/examples/event-driven-architecture.md)
+- [Microservices Integration](docs/examples/microservices-integration.md)
+- [Order Processing](docs/examples/order-processing.md)
+- [Payment Processing](docs/examples/payment-processing.md)
+- [Inventory Management](docs/examples/inventory-management.md)
+- [High-Throughput Processing](docs/examples/high-throughput-processing.md)
+- [Error Handling Patterns](docs/examples/error-handling-patterns.md)
+- [Monitoring and Observability](docs/examples/monitoring-observability.md)
+- [Saga Orchestration](docs/examples/saga-orchestration.md)
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/furkansarikaya/FS.StreamFlow.git
+cd FS.StreamFlow
+
+# Restore dependencies
+dotnet restore
+
+# Build the solution
+dotnet build
+
+# Run tests
+dotnet test
+
+# Build packages
+dotnet pack
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built on top of [RabbitMQ.Client](https://github.com/rabbitmq/rabbitmq-dotnet-client)
+- Inspired by modern messaging patterns and event-driven architecture
+- Designed for production-ready .NET applications
+
+---
+
+**FS.StreamFlow** - Enterprise-grade messaging framework for .NET 9 with comprehensive event-driven capabilities, automatic recovery, and production-ready features.
+
+## 📦 Packages
+
+| Package   | Description | NuGet                                                                                                      |
+|-----------|-------------|------------------------------------------------------------------------------------------------------------|
+| FS.StreamFlow.Core | Core library with all features | [![NuGet](https://img.shields.io/nuget/v/FS.StreamFlow.Core.svg)](https://www.nuget.org/packages/FS.StreamFlow.Core/) |
+| FS.StreamFlow.RabbitMQ | RabbitMQ implementation | [![NuGet](https://img.shields.io/nuget/v/FS.StreamFlow.RabbitMQ.svg)](https://www.nuget.org/packages/FS.StreamFlow.RabbitMQ/) |
+
+## 🌟 Star History
+
+If you find this library useful, please consider giving it a star on GitHub! It helps others discover the project.
+
+**Made with ❤️ by [Furkan Sarıkaya](https://github.com/furkansarikaya)**
+
+[![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/furkansarikaya)
+[![LinkedIn](https://img.shields.io/badge/linkedin-%230077B5.svg?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/furkansarikaya/)
+[![Medium](https://img.shields.io/badge/medium-%23121011.svg?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@furkansarikaya)
+
+---
+
+## Support
+
+If you encounter any issues or have questions:
+
+1. Check the [troubleshooting section](#troubleshooting)
+2. Search existing [GitHub issues](https://github.com/furkansarikaya/FS.StreamFlow/issues)
+3. Create a new issue with detailed information
+4. Join our community discussions
+
+**Happy coding! 🚀**
