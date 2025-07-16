@@ -26,15 +26,12 @@ public class RabbitMqSampleConsumer(ILogger<RabbitMqSampleConsumer> logger,IHost
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        streamFlow.ShutdownAsync(cancellationToken);
         logger.LogInformation($"{nameof(RabbitMqSampleConsumer)} is stopping");
         return Task.FromResult(Task.CompletedTask);
     }
 
     private async Task StartProcessingAsync(CancellationToken cancellationToken)
     {
-        await streamFlow.InitializeAsync(cancellationToken);
-
         await streamFlow.ExchangeManager.Exchange("weather-exchange")
             .AsDirect()
             .WithDurable()
