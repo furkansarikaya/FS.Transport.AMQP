@@ -8,7 +8,7 @@ public class EventContext
     /// <summary>
     /// Event identifier
     /// </summary>
-    public string EventId { get; set; } = Guid.NewGuid().ToString();
+    public string EventId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Event type

@@ -8,7 +8,7 @@ public class ProducerSettings
     /// <summary>
     /// Producer identifier
     /// </summary>
-    public string ProducerId { get; set; } = Guid.NewGuid().ToString();
+    public string ProducerId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Whether to enable publisher confirmations

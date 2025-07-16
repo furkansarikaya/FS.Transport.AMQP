@@ -642,7 +642,7 @@ public class RabbitMQConsumer : IConsumer
             Body = eventArgs.Body,
             Properties = new MessageProperties
             {
-                MessageId = properties.MessageId ?? Guid.NewGuid().ToString(),
+                MessageId = properties.MessageId ?? Guid.CreateVersion7().ToString(),
                 CorrelationId = properties.CorrelationId,
                 ContentType = properties.ContentType,
                 ContentEncoding = properties.ContentEncoding,

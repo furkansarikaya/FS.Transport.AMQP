@@ -363,8 +363,8 @@ public class RabbitMQErrorHandler : IErrorHandler
             // Create dead letter message with metadata
             var deadLetterMessage = new DeadLetterMessage
             {
-                MessageId = context.MessageId ?? Guid.NewGuid().ToString(),
-                Data = context.Body.IsEmpty ? Array.Empty<byte>() : context.Body.ToArray(),
+                MessageId = context.MessageId ?? Guid.CreateVersion7().ToString(),
+                Data = context.Body.IsEmpty ? [] : context.Body.ToArray(),
                 Context = context,
                 Exception = exception,
                 AttemptNumber = attemptNumber,
@@ -544,7 +544,7 @@ public class RabbitMQDeadLetterHandler : IDeadLetterHandler
             // Create dead letter message with metadata
             var deadLetterMessage = new DeadLetterMessage
             {
-                MessageId = context.MessageId ?? Guid.NewGuid().ToString(),
+                MessageId = context.MessageId ?? Guid.CreateVersion7().ToString(),
                 Data = message,
                 Context = context,
                 Exception = exception,

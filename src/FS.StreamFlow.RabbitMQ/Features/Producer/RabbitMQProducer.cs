@@ -93,7 +93,7 @@ public class RabbitMQProducer : IProducer
         
         _statistics = new ProducerStatistics
         {
-            ProducerId = Guid.NewGuid().ToString(),
+            ProducerId = Guid.CreateVersion7().ToString(),
             StartTime = DateTimeOffset.UtcNow
         };
     }
@@ -167,8 +167,8 @@ public class RabbitMQProducer : IProducer
 
         try
         {
-            var messageId = properties?.MessageId ?? Guid.NewGuid().ToString();
-            var correlationId = properties?.CorrelationId ?? Guid.NewGuid().ToString();
+            var messageId = properties?.MessageId ?? Guid.CreateVersion7().ToString();
+            var correlationId = properties?.CorrelationId ?? Guid.CreateVersion7().ToString();
             
             _logger.LogDebug("Publishing message {MessageId} to exchange {Exchange} with routing key {RoutingKey}",
                 messageId, exchange, routingKey);
@@ -303,7 +303,7 @@ public class RabbitMQProducer : IProducer
 
             var batchResult = new BatchPublishResult
             {
-                BatchId = Guid.NewGuid().ToString(),
+                BatchId = Guid.CreateVersion7().ToString(),
                 TotalMessages = messageList.Count,
                 SuccessfulMessages = results.Count,
                 FailedMessages = failures.Count,
@@ -541,7 +541,7 @@ public class RabbitMQProducer : IProducer
     {
         return new CoreBasicProperties
         {
-            MessageId = properties?.MessageId ?? Guid.NewGuid().ToString(),
+            MessageId = properties?.MessageId ?? Guid.CreateVersion7().ToString(),
             CorrelationId = properties?.CorrelationId,
             ContentType = properties?.ContentType ?? "application/json",
             ContentEncoding = properties?.ContentEncoding,

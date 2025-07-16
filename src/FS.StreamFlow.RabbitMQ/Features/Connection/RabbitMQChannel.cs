@@ -59,7 +59,7 @@ public class RabbitMQChannel : FS.StreamFlow.Core.Features.Messaging.Models.ICha
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _statistics = new ChannelStatistics
         {
-            ChannelId = Guid.NewGuid().ToString(),
+            ChannelId = Guid.CreateVersion7().ToString(),
             CreatedAt = DateTimeOffset.UtcNow,
             CurrentState = ChannelState.Open
         };

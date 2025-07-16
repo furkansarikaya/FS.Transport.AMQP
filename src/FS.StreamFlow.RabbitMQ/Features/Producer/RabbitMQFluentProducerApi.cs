@@ -221,7 +221,7 @@ public class RabbitMQFluentProducerApi<T> : IFluentProducerApi<T> where T : clas
             IsSuccess = success,
             Exchange = _exchange,
             RoutingKey = _routingKey,
-            MessageId = _properties.MessageId ?? Guid.NewGuid().ToString(),
+            MessageId = _properties.MessageId ?? Guid.CreateVersion7().ToString(),
             CorrelationId = _properties.CorrelationId,
             Timestamp = DateTimeOffset.UtcNow
         };

@@ -161,7 +161,7 @@ public class BatchPublishResult
     /// <summary>
     /// Batch identifier
     /// </summary>
-    public string BatchId { get; set; } = Guid.NewGuid().ToString();
+    public string BatchId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Batch publish timestamp
@@ -217,7 +217,7 @@ public class EventPublishContext
     /// <summary>
     /// Event identifier
     /// </summary>
-    public string EventId { get; set; } = Guid.NewGuid().ToString();
+    public string EventId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Correlation identifier

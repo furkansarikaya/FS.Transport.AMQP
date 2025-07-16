@@ -418,7 +418,7 @@ public class DeadLetterMessage
     /// <summary>
     /// Message identifier
     /// </summary>
-    public string MessageId { get; set; } = Guid.NewGuid().ToString();
+    public string MessageId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Original message data

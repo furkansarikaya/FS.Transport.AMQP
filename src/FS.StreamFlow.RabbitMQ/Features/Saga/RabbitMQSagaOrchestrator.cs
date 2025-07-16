@@ -103,7 +103,7 @@ public class RabbitMQSagaOrchestrator : ISagaOrchestrator
             }
 
             // Create saga instance
-            var sagaId = Guid.NewGuid().ToString();
+            var sagaId = Guid.CreateVersion7().ToString();
             var saga = sagaFactory(sagaId);
 
             // Set correlation ID if provided

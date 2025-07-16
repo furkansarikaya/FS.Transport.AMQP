@@ -222,7 +222,7 @@ public class ClientConfiguration
     /// <summary>
     /// Client identifier
     /// </summary>
-    public string ClientId { get; set; } = Guid.NewGuid().ToString();
+    public string ClientId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Client name

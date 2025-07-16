@@ -8,7 +8,7 @@ public class ConsumerSettings
     /// <summary>
     /// Consumer identifier
     /// </summary>
-    public string ConsumerId { get; set; } = Guid.NewGuid().ToString();
+    public string ConsumerId { get; set; } = Guid.CreateVersion7().ToString();
     
     /// <summary>
     /// Consumer tag

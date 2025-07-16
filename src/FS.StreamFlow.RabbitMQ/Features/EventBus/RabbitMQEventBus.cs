@@ -329,7 +329,7 @@ public class RabbitMQEventBus : IEventBus
                 await handler.HandleAsync(evt, new EventContext
                 {
                     EventType = eventType.Name,
-                    EventId = Guid.NewGuid().ToString(),
+                    EventId = Guid.CreateVersion7().ToString(),
                     Timestamp = DateTimeOffset.UtcNow,
                     Source = "EventBus"
                 }, CancellationToken.None);
