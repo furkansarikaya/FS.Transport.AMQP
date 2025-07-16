@@ -545,14 +545,11 @@ public class JsonMessageSerializer : MessageSerializerBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        if (settings.IncludeTypeInformation)
-        {
-            // Add type information if needed
-            var wrapper = new { Type = obj.GetType().AssemblyQualifiedName, Data = obj };
-            return JsonSerializer.SerializeToUtf8Bytes(wrapper, options);
-        }
+        if (!settings.IncludeTypeInformation) return JsonSerializer.SerializeToUtf8Bytes(obj, options);
+        // Add type information if needed
+        var wrapper = new { Type = obj.GetType().AssemblyQualifiedName, Data = obj };
+        return JsonSerializer.SerializeToUtf8Bytes(wrapper, options);
 
-        return JsonSerializer.SerializeToUtf8Bytes(obj, options);
     }
 
     /// <summary>
@@ -569,21 +566,12 @@ public class JsonMessageSerializer : MessageSerializerBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        if (settings.IncludeTypeInformation)
-        {
-            // Handle type information
-            var wrapper = JsonSerializer.Deserialize<Dictionary<string, object>>(data, options);
-            if (wrapper != null && wrapper.ContainsKey("Type") && wrapper.ContainsKey("Data"))
-            {
-                var actualType = Type.GetType(wrapper["Type"].ToString()!);
-                if (actualType != null)
-                {
-                    return JsonSerializer.Deserialize(JsonSerializer.SerializeToUtf8Bytes(wrapper["Data"]), actualType, options)!;
-                }
-            }
-        }
-
-        return JsonSerializer.Deserialize(data, type, options)!;
+        if (!settings.IncludeTypeInformation) return JsonSerializer.Deserialize(data, type, options)!;
+        // Handle type information
+        var wrapper = JsonSerializer.Deserialize<Dictionary<string, object>>(data, options);
+        if (wrapper == null || (!wrapper.ContainsKey("type")) || !wrapper.ContainsKey("data")) return JsonSerializer.Deserialize(data, type, options)!;
+        var actualType = Type.GetType(wrapper["type"].ToString()!);
+        return actualType != null ? JsonSerializer.Deserialize(JsonSerializer.SerializeToUtf8Bytes(wrapper["data"]), actualType, options)! : JsonSerializer.Deserialize(data, type, options)!;
     }
 }
 

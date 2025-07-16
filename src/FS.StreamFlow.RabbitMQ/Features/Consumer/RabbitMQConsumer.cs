@@ -27,6 +27,7 @@ public class RabbitMQConsumer : IConsumer
     private readonly ConcurrentDictionary<string, ConsumerInfo> _activeConsumers;
     private readonly SemaphoreSlim _operationSemaphore;
     private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly IMessageSerializerFactory _serializerFactory;
     
     private volatile ConsumerStatus _status = ConsumerStatus.NotInitialized;
     private volatile bool _disposed;
@@ -93,15 +94,18 @@ public class RabbitMQConsumer : IConsumer
     /// <param name="connectionManager">Connection manager</param>
     /// <param name="settings">Consumer settings</param>
     /// <param name="logger">Logger</param>
+    /// <param name="serializerFactory">Message serializer factory</param>
     public RabbitMQConsumer(
         IConnectionManager connectionManager,
         IOptions<ConsumerSettings> settings,
-        ILogger<RabbitMQConsumer> logger)
+        ILogger<RabbitMQConsumer> logger, 
+        IMessageSerializerFactory serializerFactory)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _settings = settings.Value ?? throw new ArgumentNullException(nameof(settings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        
+        _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
+
         _statistics = new ConsumerStatistics
         {
             ConsumerId = _settings.ConsumerId,
@@ -576,7 +580,7 @@ public class RabbitMQConsumer : IConsumer
         try
         {
             // Deserialize message
-            var message = DeserializeMessage<T>(eventArgs.Body.ToArray());
+            var message = await DeserializeMessage<T>(eventArgs.Body.ToArray(), cancellationToken);
             messageContext.Message = message;
             
             MessageReceived?.Invoke(this, new MessageReceivedEventArgs(message, messageContext));
@@ -656,10 +660,11 @@ public class RabbitMQConsumer : IConsumer
         };
     }
 
-    private T DeserializeMessage<T>(byte[] body) where T : class
+    private async Task<T> DeserializeMessage<T>(byte[] body, CancellationToken cancellationToken) where T : class
     {
-        var json = Encoding.UTF8.GetString(body);
-        return JsonSerializer.Deserialize<T>(json) ?? throw new InvalidOperationException($"Failed to deserialize message to type {typeof(T).Name}");
+        var serializer = _serializerFactory.CreateSerializer(SerializationFormat.Json);
+        var result = await serializer.DeserializeAsync<T>(body, cancellationToken);
+        return result  ?? throw new InvalidOperationException($"Failed to deserialize message to type {typeof(T).Name}");
     }
 
     private void ChangeStatus(ConsumerStatus newStatus)
