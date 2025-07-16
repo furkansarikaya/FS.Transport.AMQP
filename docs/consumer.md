@@ -29,11 +29,17 @@ var builder = WebApplication.CreateBuilder(args);
 // Add FS.StreamFlow with consumer configuration
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.Consumer.PrefetchCount = 10;
-    options.Consumer.ConcurrentConsumers = 2;
-    options.Consumer.AutoAck = false;
-    options.Consumer.RequeueOnFailure = true;
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
 });
 
 var app = builder.Build();

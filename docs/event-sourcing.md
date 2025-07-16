@@ -228,10 +228,17 @@ Snapshots improve performance by reducing the number of events that need to be r
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.EventStore.EnableSnapshots = true;
-    options.EventStore.SnapshotInterval = 100; // Take snapshot every 100 events
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Event store settings
     options.EventStore.StreamPrefix = "eventstore";
+    options.EventStore.SnapshotInterval = 100;
+    options.EventStore.EnableSnapshots = true;
 });
 ```
 

@@ -22,10 +22,29 @@ using FS.StreamFlow.RabbitMQ.DependencyInjection;
 // Program.cs
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.EnableHealthChecks = true;
-    options.EnableEventBus = true;
-    options.EnableMonitoring = true;
+    // Client configuration
+    options.ClientConfiguration.ClientName = "My Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(10);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
 });
 ```
 
@@ -33,42 +52,33 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "StreamFlow": {
-    "RabbitMQ": {
-      "ConnectionString": "amqp://guest:guest@localhost:5672",
-      "Connection": {
-        "AutomaticRecovery": true,
-        "HeartbeatInterval": "00:01:00",
-        "MaxChannels": 100,
-        "ConnectionTimeout": "00:00:30"
-      },
-      "Producer": {
-        "EnableConfirmations": true,
-        "ConfirmationTimeout": "00:00:05",
-        "BatchSize": 100
-      },
-      "Consumer": {
-        "PrefetchCount": 50,
-        "ConcurrentConsumers": 5,
-        "AutoAck": false
-      },
-      "ErrorHandling": {
-        "EnableDeadLetterQueue": true,
-        "RetryPolicy": "ExponentialBackoff",
-        "MaxRetryAttempts": 3
-      },
-      "EventBus": {
-        "DomainEventExchange": "domain-events",
-        "IntegrationEventExchange": "integration-events"
-      },
-      "EventStore": {
-        "EnableSnapshots": true,
-        "SnapshotInterval": 100,
-        "StreamPrefix": "eventstore"
-      },
-      "EnableHealthChecks": true,
-      "EnableEventBus": true,
-      "EnableMonitoring": true
+  "RabbitMQ": {
+    "ClientConfiguration": {
+      "ClientName": "My Application",
+      "EnableAutoRecovery": true,
+      "EnableHeartbeat": true,
+      "HeartbeatInterval": "00:01:00"
+    },
+    "ConnectionSettings": {
+      "Host": "localhost",
+      "Port": 5672,
+      "Username": "guest",
+      "Password": "guest",
+      "VirtualHost": "/",
+      "ConnectionTimeout": "00:00:30",
+      "UseSsl": false
+    },
+    "ProducerSettings": {
+      "EnablePublisherConfirms": true,
+      "ConfirmationTimeout": "00:00:10",
+      "MaxConcurrentPublishes": 100,
+      "PublishTimeout": "00:00:30"
+    },
+    "ConsumerSettings": {
+      "PrefetchCount": 50,
+      "AutoAcknowledge": false,
+      "MaxConcurrentConsumers": 5,
+      "ConsumerTimeout": "00:00:30"
     }
   }
 }
@@ -170,59 +180,33 @@ public class StartupService
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    // Connection string
-    options.ConnectionString = "amqp://username:password@hostname:port/vhost";
+    // Client configuration
+    options.ClientConfiguration.ClientName = "MyApplication";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
     
     // Connection settings
-    options.Connection.AutomaticRecovery = true;
-    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
-    options.Connection.MaxChannels = 100;
-    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    options.Connection.RequestedConnectionTimeout = TimeSpan.FromSeconds(30);
-    options.Connection.ClientProvidedName = "MyApplication";
-    options.Connection.ContinuationTimeout = TimeSpan.FromSeconds(20);
-    options.Connection.HandshakeContinuationTimeout = TimeSpan.FromSeconds(10);
-    options.Connection.NetworkRecoveryInterval = TimeSpan.FromSeconds(5);
-    options.Connection.RequestedHeartbeat = TimeSpan.FromSeconds(60);
-    options.Connection.RequestedChannelMax = 100;
-    options.Connection.RequestedFrameMax = 131072;
-    options.Connection.TopologyRecoveryEnabled = true;
-    options.Connection.UseBackgroundThreadsForIO = true;
-    options.Connection.DispatchConsumersAsync = true;
-    options.Connection.ConsumerDispatchConcurrency = 1;
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    options.ConnectionSettings.RequestTimeout = TimeSpan.FromSeconds(30);
+    options.ConnectionSettings.UseSsl = false;
 });
 ```
 
 ### Connection String Formats
 
 ```csharp
-// Basic format
-"amqp://localhost"
-
-// With credentials
-"amqp://username:password@localhost:5672"
-
-// With virtual host
-"amqp://username:password@localhost:5672/myvhost"
-
-// With SSL
-"amqps://username:password@localhost:5671"
-
-// With query parameters
-"amqp://localhost?heartbeat=60&connection_timeout=30"
-```
-
-### Connection Pool Settings
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.Connection.MaxChannels = 100;
-    options.Connection.ChannelPoolSize = 10;
-    options.Connection.ConnectionPoolSize = 5;
-    options.Connection.MaxConnectionRetries = 3;
-    options.Connection.ConnectionRetryDelay = TimeSpan.FromSeconds(5);
-});
+// Use individual connection settings instead of connection string
+options.ConnectionSettings.Host = "localhost";
+options.ConnectionSettings.Port = 5672;
+options.ConnectionSettings.Username = "username";
+options.ConnectionSettings.Password = "password";
+options.ConnectionSettings.VirtualHost = "/myvhost";
 ```
 
 ## SSL/TLS Configuration
@@ -232,13 +216,30 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqps://localhost:5671";
+    // Client configuration
+    options.ClientConfiguration.ClientName = "SSL Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
     
-    options.Ssl.Enabled = true;
-    options.Ssl.ServerName = "rabbitmq.example.com";
-    options.Ssl.AcceptablePolicyErrors = SslPolicyErrors.None;
-    options.Ssl.Version = SslProtocols.Tls12 | SslProtocols.Tls13;
-    options.Ssl.CheckCertificateRevocation = true;
+    // Connection settings with SSL
+    options.ConnectionSettings.Host = "rabbitmq.example.com";
+    options.ConnectionSettings.Port = 5671;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    options.ConnectionSettings.UseSsl = true;
+    
+    // SSL settings
+    options.ConnectionSettings.Ssl = new SslSettings
+    {
+        Enabled = true,
+        CertificatePath = "/path/to/certificate.pfx",
+        CertificatePassword = "password",
+        VerifyCertificate = true,
+        ProtocolVersion = "Tls12"
+    };
 });
 ```
 
@@ -663,7 +664,14 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Additional configuration options
     options.EnableConfigurationValidation = true;
     options.ValidateOnStart = true;
     options.ThrowOnValidationErrors = true;

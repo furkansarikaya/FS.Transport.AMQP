@@ -74,11 +74,17 @@ The event bus is the central component for publishing and subscribing to events:
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Event bus settings
     options.EventBus.DomainEventExchange = "domain-events";
     options.EventBus.IntegrationEventExchange = "integration-events";
-    options.EventBus.EventTypesAssembly = typeof(OrderCreated).Assembly;
-    options.EnableEventBus = true;
+    options.EventBus.DefaultEventTimeout = TimeSpan.FromMinutes(5);
 });
 ```
 

@@ -29,11 +29,17 @@ var builder = WebApplication.CreateBuilder(args);
 // Add FS.StreamFlow with producer configuration
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.Producer.EnableConfirmations = true;
-    options.Producer.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-    options.Producer.BatchSize = 100;
-    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(10);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
 });
 
 var app = builder.Build();

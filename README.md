@@ -59,10 +59,29 @@ var builder = WebApplication.CreateBuilder(args);
 // Add FS.StreamFlow with RabbitMQ
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.EnableHealthChecks = true;
-    options.EnableEventBus = true;
-    options.EnableMonitoring = true;
+    // Client configuration
+    options.ClientConfiguration.ClientName = "My Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(10);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
 });
 
 var app = builder.Build();
@@ -93,11 +112,11 @@ public class OrderService
             .DeclareAsync();
         
         // Publish a message with fluent API
-        await _streamFlow.Producer.Message<Order>()
+        await _streamFlow.Producer.Message(order)
             .WithExchange("orders")
             .WithRoutingKey("order.created")
             .WithDeliveryMode(DeliveryMode.Persistent)
-            .PublishAsync(order);
+            .PublishAsync();
     }
 }
 
@@ -138,11 +157,18 @@ Automatic connection recovery with intelligent backoff strategies:
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.Connection.AutomaticRecovery = true;
-    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
-    options.Connection.MaxChannels = 100;
-    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Client configuration
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
 });
 ```
 
@@ -263,7 +289,7 @@ Publisher confirms, transactions, and batch operations:
 
 ```csharp
 // Advanced producer with fluent API
-await _streamFlow.Producer.Message<Order>()
+await _streamFlow.Producer.Message(order)
     .WithExchange("orders")
     .WithRoutingKey("order.created")
     .WithDeliveryMode(DeliveryMode.Persistent)
@@ -281,14 +307,14 @@ await _streamFlow.Producer.Message<Order>()
     .WithMessageId(Guid.NewGuid().ToString())
     .WithMandatory(true)
     .WithConfirmationTimeout(TimeSpan.FromSeconds(5))
-    .PublishAsync(order);
+    .PublishAsync();
 
 // Alternative syntax
-await _streamFlow.Producer.Message<Order>()
+await _streamFlow.Producer.Message(order)
     .ToExchange("orders")
     .WithRoutingKey("order.created")
     .WithDeliveryMode(DeliveryMode.Persistent)
-    .PublishAsync(order);
+    .PublishAsync();
 
 // Batch operations
 var messages = new[]
@@ -313,9 +339,8 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
     .WithSettings(settings =>
     {
         settings.PrefetchCount = 100;
-        settings.ConcurrentConsumers = 5;
-        settings.AutoAck = false;
-        settings.RequeueOnFailure = true;
+        settings.MaxConcurrentConsumers = 5;
+        settings.AutoAcknowledge = false;
     })
     .WithConsumerTag("order-processor-1")
     .WithAutoAck(false)
@@ -427,7 +452,14 @@ Built-in retry policies, circuit breakers, and dead letter queues:
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    
+    // Error handling configuration
     options.ErrorHandling.EnableDeadLetterQueue = true;
     options.ErrorHandling.DeadLetterExchange = "dlx";
     options.ErrorHandling.DeadLetterQueue = "dlq";
@@ -662,13 +694,28 @@ public class AnalyticsProcessor
 // Configuration for high-throughput scenarios
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ConnectionString = "amqp://localhost";
-    options.Connection.MaxChannels = 200;
-    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(30);
-    options.Producer.BatchSize = 1000;
-    options.Producer.MaxBatchWaitTime = TimeSpan.FromMilliseconds(100);
-    options.Consumer.PrefetchCount = 100;
-    options.Consumer.ConcurrentConsumers = 10;
+    // Client configuration
+    options.ClientConfiguration.ClientName = "High-Throughput Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(30);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.MaxConcurrentPublishes = 1000;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 100;
+    options.ConsumerSettings.MaxConcurrentConsumers = 10;
+    options.ConsumerSettings.AutoAcknowledge = false;
 });
 ```
 
@@ -681,31 +728,29 @@ Complete configuration with the options pattern:
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    // Connection settings
-    options.ConnectionString = "amqp://localhost";
-    options.Connection.AutomaticRecovery = true;
-    options.Connection.HeartbeatInterval = TimeSpan.FromSeconds(60);
-    options.Connection.MaxChannels = 100;
-    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    options.Connection.ClientProvidedName = "MyApplication";
+    // Client configuration
+    options.ClientConfiguration.ClientName = "My Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
     
-    // SSL/TLS settings
-    options.Ssl.Enabled = true;
-    options.Ssl.ServerName = "rabbitmq.example.com";
-    options.Ssl.CertificatePath = "/path/to/certificate.pfx";
-    options.Ssl.CertificatePassword = "password";
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
     
     // Producer settings
-    options.Producer.EnableConfirmations = true;
-    options.Producer.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-    options.Producer.BatchSize = 100;
-    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
     
     // Consumer settings
-    options.Consumer.PrefetchCount = 50;
-    options.Consumer.ConcurrentConsumers = 5;
-    options.Consumer.AutoAck = false;
-    options.Consumer.RequeueOnFailure = true;
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
     
     // Error handling
     options.ErrorHandling.EnableDeadLetterQueue = true;
@@ -743,49 +788,37 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "StreamFlow": {
-    "RabbitMQ": {
-      "ConnectionString": "amqp://localhost",
-      "Connection": {
-        "AutomaticRecovery": true,
-        "HeartbeatInterval": "00:01:00",
-        "MaxChannels": 100,
-        "ConnectionTimeout": "00:00:30"
-      },
-      "Producer": {
-        "EnableConfirmations": true,
-        "ConfirmationTimeout": "00:00:05",
-        "BatchSize": 100,
-        "MaxBatchWaitTime": "00:00:01"
-      },
-      "Consumer": {
-        "PrefetchCount": 50,
-        "ConcurrentConsumers": 5,
-        "AutoAck": false,
-        "RequeueOnFailure": true
-      },
-      "ErrorHandling": {
-        "EnableDeadLetterQueue": true,
-        "DeadLetterExchange": "dlx",
-        "DeadLetterQueue": "dlq",
-        "RetryPolicy": "ExponentialBackoff",
-        "MaxRetryAttempts": 3,
-        "RetryDelay": "00:00:01"
-      },
-      "EventBus": {
-        "DomainEventExchange": "domain-events",
-        "IntegrationEventExchange": "integration-events"
-      },
-      "EventStore": {
-        "StreamPrefix": "eventstore",
-        "SnapshotInterval": 100,
-        "EnableSnapshots": true
-      },
-      "HealthCheck": {
-        "Enabled": true,
-        "Interval": "00:00:30",
-        "Timeout": "00:00:05"
-      }
+  "RabbitMQ": {
+    "ClientConfiguration": {
+      "ClientName": "My Application",
+      "EnableAutoRecovery": true,
+      "EnableHeartbeat": true,
+      "HeartbeatInterval": "00:01:00"
+    },
+    "ConnectionSettings": {
+      "Host": "localhost",
+      "Port": 5672,
+      "Username": "guest",
+      "Password": "guest",
+      "VirtualHost": "/",
+      "ConnectionTimeout": "00:00:30",
+      "RequestTimeout": "00:00:30",
+      "UseSsl": false
+    },
+    "ProducerSettings": {
+      "EnablePublisherConfirms": true,
+      "ConfirmationTimeout": "00:00:10",
+      "MaxConcurrentPublishes": 100,
+      "PublishTimeout": "00:00:30",
+      "DefaultExchange": "",
+      "DefaultRoutingKey": ""
+    },
+    "ConsumerSettings": {
+      "PrefetchCount": 50,
+      "AutoAcknowledge": false,
+      "MaxConcurrentConsumers": 5,
+      "ConsumerTimeout": "00:00:30",
+      "EnableDeadLetterQueue": true
     }
   }
 }
@@ -856,7 +889,7 @@ Chain operations with the comprehensive fluent API:
 
 ```csharp
 // Advanced message publishing with fluent API
-await _streamFlow.Producer.Message<Order>()
+await _streamFlow.Producer.Message(order)
     .WithExchange("orders")
     .WithRoutingKey("order.created")
     .WithDeliveryMode(DeliveryMode.Persistent)
@@ -869,20 +902,16 @@ await _streamFlow.Producer.Message<Order>()
         ["correlation-id"] = Guid.NewGuid().ToString()
     })
     .WithHeader("priority", "high")
-    .WithContentType("application/json")
-    .WithContentEncoding("utf-8")
-    .WithCorrelationId(correlationId)
-    .WithMessageId(Guid.NewGuid().ToString())
     .WithMandatory(true)
     .WithConfirmationTimeout(TimeSpan.FromSeconds(5))
-    .PublishAsync(order);
+    .PublishAsync();
 
 // Alternative syntax
-await _streamFlow.Producer.Message<Order>()
+await _streamFlow.Producer.Message(order)
     .ToExchange("orders")
     .WithRoutingKey("order.created")
     .WithDeliveryMode(DeliveryMode.Persistent)
-    .PublishAsync(order);
+    .PublishAsync();
 ```
 
 ### Fluent Consumer API
@@ -897,9 +926,8 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
     .WithSettings(settings =>
     {
         settings.PrefetchCount = 100;
-        settings.ConcurrentConsumers = 5;
-        settings.AutoAck = false;
-        settings.RequeueOnFailure = true;
+        settings.MaxConcurrentConsumers = 5;
+        settings.AutoAcknowledge = false;
     })
     .WithConsumerTag("order-processor-1")
     .WithAutoAck(false)
@@ -935,342 +963,5 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
 
 Manage events with comprehensive fluent operations:
 
-```csharp
-// Advanced event publishing with fluent API
-public class EventPublisher
-{
-    private readonly IStreamFlowClient _streamFlow;
-    
-    public async Task PublishOrderEventsAsync(Order order)
-    {
-        // Domain event with full metadata
-        await _streamFlow.EventBus.Event<OrderCreated>()
-            .WithMetadata(metadata =>
-            {
-                metadata.CorrelationId = order.CorrelationId;
-                metadata.Source = "order-service";
-                metadata.Version = "1.0";
-                metadata.Timestamp = DateTimeOffset.UtcNow;
-            })
-            .WithCorrelationId(order.CorrelationId)
-            .WithCausationId(order.CausationId)
-            .WithSource("order-service")
-            .WithVersion("1.0")
-            .WithAggregateId(order.Id.ToString())
-            .WithAggregateType("Order")
-            .WithPriority(1)
-            .WithTtl(TimeSpan.FromMinutes(30))
-            .WithProperties(new Dictionary<string, object>
-            {
-                ["business-unit"] = "sales",
-                ["region"] = "us-east-1"
-            })
-            .WithProperty("customer-tier", "premium")
-            .PublishAsync(new OrderCreated(order.Id, order.CustomerName, order.Total));
-        
-        // Integration event
-        await _streamFlow.EventBus.Event<OrderProcessingStarted>()
-            .WithCorrelationId(order.CorrelationId)
-            .WithSource("order-service")
-            .WithAggregateId(order.Id.ToString())
-            .WithAggregateType("Order")
-            .WithProperty("priority", "high")
-            .PublishAsync(new OrderProcessingStarted(order.Id, order.Items));
-    }
-}
 ```
-
-### Fluent Event Store API
-
-Manage event streams with comprehensive fluent operations:
-
-```csharp
-// Advanced event store operations with fluent API
-public class OrderEventStore
-{
-    private readonly IStreamFlowClient _streamFlow;
-    
-    public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .AppendEvents(events)
-            .SaveAsync();
-    }
-    
-    public async Task<long> SaveOrderEventsWithVersionAsync(Guid orderId, IEnumerable<object> events, long expectedVersion)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .AppendEventsWithExpectedVersion(events, expectedVersion)
-            .SaveAsync();
-    }
-    
-    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .FromVersion(fromVersion)
-            .WithMaxCount(100)
-            .ReadAsync();
-    }
-    
-    public async Task<IEnumerable<object>> GetRecentOrderEventsAsync(Guid orderId)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .FromVersion(-1)
-            .WithMaxCount(10)
-            .ReadBackwardAsync();
-    }
-    
-    public async Task<bool> CreateOrderStreamAsync(Guid orderId)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .CreateAsync();
-    }
-    
-    public async Task<bool> DeleteOrderStreamAsync(Guid orderId)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .DeleteAsync();
-    }
-    
-    public async Task<bool> TruncateOrderStreamAsync(Guid orderId, long version)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .TruncateAsync(version);
-    }
-    
-    public async Task<object?> GetOrderSnapshotAsync(Guid orderId)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .GetSnapshotAsync();
-    }
-    
-    public async Task SaveOrderSnapshotAsync(Guid orderId, object snapshot, long version)
-    {
-        await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .WithSnapshot(snapshot, version)
-            .SaveAsync();
-    }
-    
-    public async Task<long> SaveOrderWithSnapshotAsync(Guid orderId, IEnumerable<object> events, object snapshot, long snapshotVersion)
-    {
-        return await _streamFlow.EventStore.Stream($"order-{orderId}")
-            .AppendEvents(events)
-            .WithSnapshot(snapshot, snapshotVersion)
-            .SaveAsync();
-    }
-}
 ```
-
-### Custom Retry Policies
-
-Implement custom retry strategies:
-
-```csharp
-public class CustomRetryPolicy : IRetryPolicy
-{
-    public async Task<bool> ShouldRetryAsync(Exception exception, int attemptNumber, TimeSpan elapsed)
-    {
-        // Custom retry logic
-        if (exception is TemporaryException && attemptNumber < 5)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attemptNumber)));
-            return true;
-        }
-        
-        return false;
-    }
-}
-
-// Register custom retry policy
-builder.Services.AddSingleton<IRetryPolicy, CustomRetryPolicy>();
-```
-
-### Custom Error Handling
-
-Implement custom error handling strategies:
-
-```csharp
-public class CustomErrorHandler : IErrorHandler
-{
-    public async Task<ErrorHandlingResult> HandleErrorAsync(ErrorContext context, CancellationToken cancellationToken)
-    {
-        // Log error
-        _logger.LogError(context.Exception, "Error processing message");
-        
-        // Send to monitoring system
-        await _monitoringService.ReportErrorAsync(context);
-        
-        // Determine action based on error type
-        return context.Exception switch
-        {
-            TemporaryException => ErrorHandlingResult.Retry,
-            PermanentException => ErrorHandlingResult.DeadLetter,
-            _ => ErrorHandlingResult.Reject
-        };
-    }
-}
-```
-
-## 📊 Performance Characteristics
-
-FS.StreamFlow is designed for high-performance scenarios:
-
-| Feature | Performance | Best For |
-|---------|-------------|----------|
-| Basic Publish/Subscribe | 50k+ msgs/sec | Standard messaging |
-| Batch Operations | 200k+ msgs/sec | High-throughput |
-| Event Sourcing | 20k+ events/sec | CQRS applications |
-| Saga Orchestration | 10k+ workflows/sec | Complex workflows |
-| Connection Recovery | < 5 seconds | Resilient systems |
-
-### Benchmarks
-
-Real-world performance metrics:
-
-```
-Environment: Standard development machine
-Test: 1M messages processed
-
-Basic Publishing:
-- Throughput: 52,000 messages/second
-- Latency: 0.2ms average
-- Memory: 45MB constant
-
-Batch Publishing:
-- Throughput: 180,000 messages/second
-- Latency: 1.2ms average
-- Memory: 67MB constant
-
-Event Sourcing:
-- Throughput: 23,000 events/second
-- Latency: 0.8ms average
-- Memory: 78MB constant
-```
-
-## 🚧 Troubleshooting
-
-### Common Issues
-
-**Issue**: Connection failures
-```
-RabbitMQ.Client.Exceptions.BrokerUnreachableException
-```
-**Solution**: Check connection string and network connectivity:
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.ConnectionString = "amqp://guest:guest@localhost:5672";
-    options.Connection.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    options.Connection.AutomaticRecovery = true;
-});
-```
-
-**Issue**: Messages not being consumed
-```
-Messages accumulating in queue
-```
-**Solution**: Increase consumer concurrency:
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.Consumer.PrefetchCount = 100;
-    options.Consumer.ConcurrentConsumers = 10;
-});
-```
-
-**Issue**: High memory usage
-```
-Memory increasing during high load
-```
-**Solution**: Configure appropriate batch sizes and prefetch counts:
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.Producer.BatchSize = 100;
-    options.Producer.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
-    options.Consumer.PrefetchCount = 50; // Reduce if memory is constrained
-});
-```
-
-### Best Practices
-
-1. **Always use connection pooling** for high-throughput scenarios
-2. **Configure appropriate prefetch counts** based on your processing speed
-3. **Enable publisher confirmations** for critical messages
-4. **Use batch operations** for high-volume scenarios
-5. **Monitor connection health** with health checks
-6. **Implement proper error handling** with retry policies and dead letter queues
-7. **Use event sourcing** for audit trails and state reconstruction
-8. **Configure SSL/TLS** for production environments
-
-### Performance Tips
-
-1. **Batch Processing**: Use batch operations for better throughput
-2. **Connection Reuse**: Reuse connections and channels when possible
-3. **Async All The Way**: Use async/await throughout your application
-4. **Proper Serialization**: Choose appropriate serialization format
-5. **Monitor Metrics**: Track performance metrics and adjust accordingly
-
-## 📚 Documentation
-
-For detailed documentation and examples:
-
-- [Getting Started Guide](docs/getting-started.md)
-- [Configuration Reference](docs/configuration.md)
-- [Producer Guide](docs/producer.md)
-- [Consumer Guide](docs/consumer.md)
-- [Event-Driven Architecture](docs/event-driven.md)
-- [Event Sourcing](docs/event-sourcing.md)
-- [Saga Orchestration](docs/saga.md)
-- [Error Handling](docs/error-handling.md)
-- [Performance Tuning](docs/performance.md)
-- [Monitoring & Health Checks](docs/monitoring.md)
-- [Examples](docs/examples/)
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-```bash
-git clone https://github.com/furkansarikaya/FS.StreamFlow.git
-cd FS.StreamFlow
-dotnet restore
-dotnet build
-dotnet test
-```
-
-## 📦 Package Information
-
-| Package | Description | Version |
-|---------|-------------|---------|
-| FS.StreamFlow.Core | Core abstractions and interfaces | [![NuGet](https://img.shields.io/nuget/v/FS.StreamFlow.Core.svg)](https://www.nuget.org/packages/FS.StreamFlow.Core/) |
-| FS.StreamFlow.RabbitMQ | RabbitMQ implementation | [![NuGet](https://img.shields.io/nuget/v/FS.StreamFlow.RabbitMQ.svg)](https://www.nuget.org/packages/FS.StreamFlow.RabbitMQ/) |
-
-**Dependencies:**
-- .NET 9.0
-- RabbitMQ.Client 7.1.2 (for RabbitMQ provider)
-- Microsoft.Extensions.* (Hosting, DI, Configuration, Logging, Options)
-
-## 🌟 Support
-
-If you find this framework useful, please consider giving it a star on GitHub! It helps others discover the project.
-
-**Made with ❤️ by [Furkan Sarıkaya](https://github.com/furkansarikaya)**
-
-[![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/furkansarikaya)
-[![LinkedIn](https://img.shields.io/badge/linkedin-%230077B5.svg?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/furkansarikaya/)
-
----
-
-## Support & Issues
-
-If you encounter any issues or have questions:
-
-1. Check the [troubleshooting section](#troubleshooting)
-2. Review the [documentation](docs/)
-3. Search existing [GitHub issues](https://github.com/furkansarikaya/FS.StreamFlow/issues)
-4. Create a new issue with detailed information
-
-**Happy streaming! 🚀**
