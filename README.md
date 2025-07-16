@@ -85,6 +85,10 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 });
 
 var app = builder.Build();
+
+// Initialize the client
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
 ```
 
 ### Your First Message
@@ -99,6 +103,9 @@ public class OrderService
     
     public async Task CreateOrderAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Create exchange and queue with fluent API
         await _streamFlow.ExchangeManager.Exchange("orders")
             .AsTopic()
@@ -143,6 +150,9 @@ public class OrderProcessor
     
     public async Task StartProcessingAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await _streamFlow.Consumer.Queue<Order>("order-processing")
             .WithConcurrency(5)
             .WithPrefetchCount(100)
@@ -248,10 +258,37 @@ Built-in support for domain and integration events:
 
 ```csharp
 // Domain Event
-public record OrderCreated(Guid OrderId, string CustomerName, decimal Amount) : IDomainEvent;
+public record OrderCreated(Guid OrderId, string CustomerName, decimal Amount) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCreated);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => OrderId.ToString();
+    public string AggregateType => "Order";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
 
 // Integration Event  
-public record OrderShipped(Guid OrderId, string TrackingNumber) : IIntegrationEvent;
+public record OrderShipped(Guid OrderId, string TrackingNumber) : IIntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderShipped);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "order-service";
+    public string RoutingKey => "order.shipped";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+}
 
 // Event Handlers
 public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
