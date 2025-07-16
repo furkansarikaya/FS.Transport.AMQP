@@ -25,7 +25,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Port = 5672;
     options.ConnectionSettings.Username = "admin";
     options.ConnectionSettings.Password = "R@bb1tMQ_S3cure_P@55w0rd!!";
-    options.ConnectionSettings.VirtualHost = "development";
+    options.ConnectionSettings.VirtualHost = builder.Environment.EnvironmentName.ToLower();
     options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
     
     // Producer settings
