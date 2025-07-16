@@ -123,8 +123,21 @@ using FS.StreamFlow.Core.Features.Events.Interfaces;
 
 namespace OrderProcessing.Models.Events;
 
-public class OrderCreated : IntegrationEventBase
+public class OrderCreated : IIntegrationEvent
 {
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCreated);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "order-service";
+    public string RoutingKey => "order.created";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+    // Custom properties
     public Guid OrderId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerEmail { get; set; } = string.Empty;
@@ -134,8 +147,21 @@ public class OrderCreated : IntegrationEventBase
 }
 
 // Models/Events/InventoryReserved.cs
-public class InventoryReserved : IntegrationEventBase
+public class InventoryReserved : IIntegrationEvent
 {
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(InventoryReserved);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "inventory-service";
+    public string RoutingKey => "inventory.reserved";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+    // Custom properties
     public Guid OrderId { get; set; }
     public List<ReservedItem> ReservedItems { get; set; } = new();
     public DateTime ReservedAt { get; set; }
@@ -149,8 +175,21 @@ public class ReservedItem
 }
 
 // Models/Events/PaymentProcessed.cs
-public class PaymentProcessed : IntegrationEventBase
+public class PaymentProcessed : IIntegrationEvent
 {
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(PaymentProcessed);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "payment-service";
+    public string RoutingKey => "payment.processed";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+    // Custom properties
     public Guid OrderId { get; set; }
     public decimal Amount { get; set; }
     public string PaymentMethod { get; set; } = string.Empty;
@@ -159,14 +198,69 @@ public class PaymentProcessed : IntegrationEventBase
 }
 
 // Models/Events/OrderCompleted.cs
-public class OrderCompleted : IntegrationEventBase
+public class OrderCompleted : IIntegrationEvent
 {
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCompleted);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "order-service";
+    public string RoutingKey => "order.completed";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+    // Custom properties
     public Guid OrderId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerEmail { get; set; } = string.Empty;
     public decimal Total { get; set; }
     public DateTime CompletedAt { get; set; }
     public string TrackingNumber { get; set; } = string.Empty;
+}
+
+// Models/Events/InventoryReservationFailed.cs
+public class InventoryReservationFailed : IIntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(InventoryReservationFailed);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "inventory-service";
+    public string RoutingKey => "inventory.reservation.failed";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+    // Custom properties
+    public Guid OrderId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public DateTime FailedAt { get; set; }
+}
+
+// Models/Events/PaymentFailed.cs
+public class PaymentFailed : IIntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(PaymentFailed);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "payment-service";
+    public string RoutingKey => "payment.failed";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+    // Custom properties
+    public Guid OrderId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public DateTime FailedAt { get; set; }
 }
 ```
 
@@ -186,14 +280,17 @@ public class OrderService
     private readonly ILogger<OrderService> _logger;
     private readonly Dictionary<Guid, Order> _orders = new(); // In-memory storage for demo
 
-    public OrderService(IStreamFlowClient rabbitMQ, ILogger<OrderService> logger)
+    public OrderService(IStreamFlowClient streamFlow, ILogger<OrderService> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task<Order> CreateOrderAsync(CreateOrderRequest request)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var order = new Order
         {
             CustomerName = request.CustomerName,
@@ -209,16 +306,22 @@ public class OrderService
         _logger.LogInformation("Order created: {OrderId} for {CustomerName} - Total: {Total:C}", 
             order.Id, order.CustomerName, order.Total);
 
-        // Publish order created event
-        await _streamFlow.EventBus.PublishIntegrationEventAsync(new OrderCreated
-        {
-            OrderId = order.Id,
-            CustomerName = order.CustomerName,
-            CustomerEmail = order.CustomerEmail,
-            Items = order.Items,
-            Total = order.Total,
-            CreatedAt = order.CreatedAt
-        });
+        // Publish order created event with fluent API
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithCorrelationId(Guid.NewGuid().ToString())
+            .WithSource("order-service")
+            .WithVersion("1.0")
+            .WithAggregateId(order.Id.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new OrderCreated
+            {
+                OrderId = order.Id,
+                CustomerName = order.CustomerName,
+                CustomerEmail = order.CustomerEmail,
+                Items = order.Items,
+                Total = order.Total,
+                CreatedAt = order.CreatedAt
+            });
 
         return order;
     }
@@ -273,9 +376,9 @@ public class InventoryService : IEventHandler<OrderCreated>
     private readonly ILogger<InventoryService> _logger;
     private readonly Dictionary<string, int> _inventory = new(); // In-memory inventory
 
-    public InventoryService(IStreamFlowClient rabbitMQ, ILogger<InventoryService> logger)
+    public InventoryService(IStreamFlowClient streamFlow, ILogger<InventoryService> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Initialize some inventory
@@ -293,6 +396,9 @@ public class InventoryService : IEventHandler<OrderCreated>
 
     public async Task HandleAsync(OrderCreated eventData, EventContext context)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         _logger.LogInformation("Processing inventory reservation for order {OrderId}", eventData.OrderId);
 
         try
@@ -337,13 +443,19 @@ public class InventoryService : IEventHandler<OrderCreated>
 
             if (reservationSuccessful)
             {
-                // Publish inventory reserved event
-                await _streamFlow.EventBus.PublishIntegrationEventAsync(new InventoryReserved
-                {
-                    OrderId = eventData.OrderId,
-                    ReservedItems = reservedItems,
-                    ReservedAt = DateTime.UtcNow
-                });
+                // Publish inventory reserved event with fluent API
+                await _streamFlow.EventBus.Event<InventoryReserved>()
+                    .WithCorrelationId(eventData.CorrelationId)
+                    .WithCausationId(eventData.Id.ToString())
+                    .WithSource("inventory-service")
+                    .WithAggregateId(eventData.OrderId.ToString())
+                    .WithAggregateType("Order")
+                    .PublishAsync(new InventoryReserved
+                    {
+                        OrderId = eventData.OrderId,
+                        ReservedItems = reservedItems,
+                        ReservedAt = DateTime.UtcNow
+                    });
 
                 _logger.LogInformation("Inventory successfully reserved for order {OrderId}", eventData.OrderId);
             }
@@ -355,13 +467,19 @@ public class InventoryService : IEventHandler<OrderCreated>
                     _inventory[item.ProductSku] += item.Quantity;
                 }
 
-                // Publish inventory reservation failed event
-                await _streamFlow.EventBus.PublishIntegrationEventAsync(new InventoryReservationFailed
-                {
-                    OrderId = eventData.OrderId,
-                    Reason = "Insufficient inventory",
-                    FailedAt = DateTime.UtcNow
-                });
+                // Publish inventory reservation failed event with fluent API
+                await _streamFlow.EventBus.Event<InventoryReservationFailed>()
+                    .WithCorrelationId(eventData.CorrelationId)
+                    .WithCausationId(eventData.Id.ToString())
+                    .WithSource("inventory-service")
+                    .WithAggregateId(eventData.OrderId.ToString())
+                    .WithAggregateType("Order")
+                    .PublishAsync(new InventoryReservationFailed
+                    {
+                        OrderId = eventData.OrderId,
+                        Reason = "Insufficient inventory",
+                        FailedAt = DateTime.UtcNow
+                    });
 
                 _logger.LogError("Inventory reservation failed for order {OrderId}", eventData.OrderId);
             }
@@ -372,13 +490,6 @@ public class InventoryService : IEventHandler<OrderCreated>
             throw;
         }
     }
-}
-
-public class InventoryReservationFailed : IntegrationEventBase
-{
-    public Guid OrderId { get; set; }
-    public string Reason { get; set; } = string.Empty;
-    public DateTime FailedAt { get; set; }
 }
 ```
 
@@ -395,14 +506,17 @@ public class PaymentService : IEventHandler<InventoryReserved>
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PaymentService> _logger;
 
-    public PaymentService(IStreamFlowClient rabbitMQ, ILogger<PaymentService> logger)
+    public PaymentService(IStreamFlowClient streamFlow, ILogger<PaymentService> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task HandleAsync(InventoryReserved eventData, EventContext context)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         _logger.LogInformation("Processing payment for order {OrderId}", eventData.OrderId);
 
         try
@@ -418,15 +532,21 @@ public class PaymentService : IEventHandler<InventoryReserved>
 
             var transactionId = $"TXN-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(100000, 999999)}";
 
-            // Publish payment processed event
-            await _streamFlow.EventBus.PublishIntegrationEventAsync(new PaymentProcessed
-            {
-                OrderId = eventData.OrderId,
-                Amount = CalculateOrderTotal(eventData), // Simplified calculation
-                PaymentMethod = "Credit Card",
-                TransactionId = transactionId,
-                ProcessedAt = DateTime.UtcNow
-            });
+            // Publish payment processed event with fluent API
+            await _streamFlow.EventBus.Event<PaymentProcessed>()
+                .WithCorrelationId(eventData.CorrelationId)
+                .WithCausationId(eventData.Id.ToString())
+                .WithSource("payment-service")
+                .WithAggregateId(eventData.OrderId.ToString())
+                .WithAggregateType("Order")
+                .PublishAsync(new PaymentProcessed
+                {
+                    OrderId = eventData.OrderId,
+                    Amount = CalculateOrderTotal(eventData), // Simplified calculation
+                    PaymentMethod = "Credit Card",
+                    TransactionId = transactionId,
+                    ProcessedAt = DateTime.UtcNow
+                });
 
             _logger.LogInformation("Payment processed successfully for order {OrderId} - Transaction: {TransactionId}", 
                 eventData.OrderId, transactionId);
@@ -435,13 +555,19 @@ public class PaymentService : IEventHandler<InventoryReserved>
         {
             _logger.LogError(ex, "Payment failed for order {OrderId}", eventData.OrderId);
             
-            // Publish payment failed event
-            await _streamFlow.EventBus.PublishIntegrationEventAsync(new PaymentFailed
-            {
-                OrderId = eventData.OrderId,
-                Reason = ex.Message,
-                FailedAt = DateTime.UtcNow
-            });
+            // Publish payment failed event with fluent API
+            await _streamFlow.EventBus.Event<PaymentFailed>()
+                .WithCorrelationId(eventData.CorrelationId)
+                .WithCausationId(eventData.Id.ToString())
+                .WithSource("payment-service")
+                .WithAggregateId(eventData.OrderId.ToString())
+                .WithAggregateType("Order")
+                .PublishAsync(new PaymentFailed
+                {
+                    OrderId = eventData.OrderId,
+                    Reason = ex.Message,
+                    FailedAt = DateTime.UtcNow
+                });
         }
         catch (Exception ex)
         {
@@ -460,13 +586,6 @@ public class PaymentService : IEventHandler<InventoryReserved>
 public class PaymentException : Exception
 {
     public PaymentException(string message) : base(message) { }
-}
-
-public class PaymentFailed : IntegrationEventBase
-{
-    public Guid OrderId { get; set; }
-    public string Reason { get; set; } = string.Empty;
-    public DateTime FailedAt { get; set; }
 }
 ```
 
@@ -542,36 +661,33 @@ builder.Services.AddLogging(config =>
     config.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add FS.StreamFlow with event bus
-builder.Services.AddRabbitMQ()
-    .WithConnectionString("amqp://localhost")
-    .WithEventBus(config =>
-    {
-        config.DomainEventExchange = "domain-events";
-        config.IntegrationEventExchange = "integration-events";
-        config.EnableEventHandlerDiscovery = true;
-        config.EventHandlerAssemblies = new[] { typeof(Program).Assembly };
-    })
-    .WithErrorHandling(config =>
-    {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(5);
-    })
-    .WithProducer(config =>
-    {
-        config.EnableConfirmations = true;
-        config.ConfirmationTimeout = TimeSpan.FromSeconds(10);
-    })
-    .WithConsumer(config =>
-    {
-        config.PrefetchCount = 10;
-        config.ConcurrentConsumers = 2;
-        config.AutoAck = false;
-    })
-    .Build();
+// Add FS.StreamFlow with RabbitMQ
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Client configuration
+    options.ClientConfiguration.ClientName = "Order Processing System";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(10);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
+});
 
 // Add services
 builder.Services.AddSingleton<OrderService>();
@@ -591,8 +707,12 @@ Console.CancelKeyPress += (_, e) =>
 
 try
 {
+    // Initialize StreamFlow client
+    var streamFlow = host.Services.GetRequiredService<IStreamFlowClient>();
+    await streamFlow.InitializeAsync();
+    
     // Setup infrastructure
-    await SetupInfrastructureAsync(host.Services);
+    await SetupInfrastructureAsync(streamFlow);
 
     // Start event handlers
     await StartEventHandlersAsync(host.Services, cancellationTokenSource.Token);
@@ -621,36 +741,73 @@ finally
 }
 
 // Infrastructure setup
-static async Task SetupInfrastructureAsync(IServiceProvider services)
+static async Task SetupInfrastructureAsync(IStreamFlowClient streamFlow)
 {
-    var rabbitMQ = services.GetRequiredService<IStreamFlowClient>();
-    var logger = services.GetRequiredService<ILogger<Program>>();
+    var logger = LoggerFactory.Create(builder => builder.AddConsole())
+        .CreateLogger<Program>();
 
     logger.LogInformation("Setting up order processing infrastructure...");
 
-    // Setup exchanges
-    await rabbitMQ.ExchangeManager.DeclareExchangeAsync("integration-events", "topic", true, false);
-    await rabbitMQ.ExchangeManager.DeclareExchangeAsync("dlx", "topic", true, false);
+    // Setup exchanges with fluent API
+    await streamFlow.ExchangeManager.Exchange("integration-events")
+        .AsTopic()
+        .WithDurable(true)
+        .DeclareAsync();
+        
+    await streamFlow.ExchangeManager.Exchange("dlx")
+        .AsTopic()
+        .WithDurable(true)
+        .DeclareAsync();
 
-    // Setup queues
-    var queueArgs = new Dictionary<string, object>
-    {
-        ["x-dead-letter-exchange"] = "dlx",
-        ["x-dead-letter-routing-key"] = "failed"
-    };
+    // Setup queues with fluent API
+    await streamFlow.QueueManager.Queue("order-created")
+        .WithDurable(true)
+        .WithDeadLetterExchange("dlx")
+        .WithDeadLetterRoutingKey("failed")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("inventory-reserved")
+        .WithDurable(true)
+        .WithDeadLetterExchange("dlx")
+        .WithDeadLetterRoutingKey("failed")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("payment-processed")
+        .WithDurable(true)
+        .WithDeadLetterExchange("dlx")
+        .WithDeadLetterRoutingKey("failed")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("order-completed")
+        .WithDurable(true)
+        .WithDeadLetterExchange("dlx")
+        .WithDeadLetterRoutingKey("failed")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("dlq")
+        .WithDurable(true)
+        .DeclareAsync();
 
-    await rabbitMQ.QueueManager.DeclareQueueAsync("order-created", true, false, false, queueArgs);
-    await rabbitMQ.QueueManager.DeclareQueueAsync("inventory-reserved", true, false, false, queueArgs);
-    await rabbitMQ.QueueManager.DeclareQueueAsync("payment-processed", true, false, false, queueArgs);
-    await rabbitMQ.QueueManager.DeclareQueueAsync("order-completed", true, false, false, queueArgs);
-    await rabbitMQ.QueueManager.DeclareQueueAsync("dlq", true, false, false);
-
-    // Setup bindings
-    await rabbitMQ.QueueManager.BindQueueAsync("order-created", "integration-events", "OrderCreated");
-    await rabbitMQ.QueueManager.BindQueueAsync("inventory-reserved", "integration-events", "InventoryReserved");
-    await rabbitMQ.QueueManager.BindQueueAsync("payment-processed", "integration-events", "PaymentProcessed");
-    await rabbitMQ.QueueManager.BindQueueAsync("order-completed", "integration-events", "OrderCompleted");
-    await rabbitMQ.QueueManager.BindQueueAsync("dlq", "dlx", "#");
+    // Setup bindings with fluent API
+    await streamFlow.QueueManager.Queue("order-created")
+        .BindToExchange("integration-events", "order.created")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("inventory-reserved")
+        .BindToExchange("integration-events", "inventory.reserved")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("payment-processed")
+        .BindToExchange("integration-events", "payment.processed")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("order-completed")
+        .BindToExchange("integration-events", "order.completed")
+        .DeclareAsync();
+        
+    await streamFlow.QueueManager.Queue("dlq")
+        .BindToExchange("dlx", "#")
+        .DeclareAsync();
 
     logger.LogInformation("Infrastructure setup completed");
 }
@@ -658,49 +815,52 @@ static async Task SetupInfrastructureAsync(IServiceProvider services)
 // Start event handlers
 static async Task StartEventHandlersAsync(IServiceProvider services, CancellationToken cancellationToken)
 {
-    var rabbitMQ = services.GetRequiredService<IStreamFlowClient>();
+    var streamFlow = services.GetRequiredService<IStreamFlowClient>();
     var inventoryService = services.GetRequiredService<InventoryService>();
     var paymentService = services.GetRequiredService<PaymentService>();
     var notificationService = services.GetRequiredService<NotificationService>();
 
     // Start inventory service handler
-    _ = Task.Run(async () =>
-    {
-        await rabbitMQ.Consumer.ConsumeAsync<OrderCreated>(
-            "order-created",
-            async (evt, ctx) =>
-            {
-                await inventoryService.HandleAsync(evt, new EventContext());
-                return true;
-            },
-            cancellationToken);
-    });
+    await streamFlow.Consumer.Queue<OrderCreated>("order-created")
+        .WithConcurrency(3)
+        .WithPrefetchCount(50)
+        .WithErrorHandler(async (exception, context) =>
+        {
+            return exception is ConnectFailureException;
+        })
+        .ConsumeAsync(async (eventData, context) =>
+        {
+            await inventoryService.HandleAsync(eventData, new EventContext());
+            return true; // Acknowledge message
+        });
 
     // Start payment service handler
-    _ = Task.Run(async () =>
-    {
-        await rabbitMQ.Consumer.ConsumeAsync<InventoryReserved>(
-            "inventory-reserved",
-            async (evt, ctx) =>
-            {
-                await paymentService.HandleAsync(evt, new EventContext());
-                return true;
-            },
-            cancellationToken);
-    });
+    await streamFlow.Consumer.Queue<InventoryReserved>("inventory-reserved")
+        .WithConcurrency(2)
+        .WithPrefetchCount(20)
+        .WithErrorHandler(async (exception, context) =>
+        {
+            return exception is ConnectFailureException;
+        })
+        .ConsumeAsync(async (eventData, context) =>
+        {
+            await paymentService.HandleAsync(eventData, new EventContext());
+            return true; // Acknowledge message
+        });
 
     // Start notification service handlers
-    _ = Task.Run(async () =>
-    {
-        await rabbitMQ.Consumer.ConsumeAsync<PaymentProcessed>(
-            "payment-processed",
-            async (evt, ctx) =>
-            {
-                await notificationService.HandleAsync(evt, new EventContext());
-                return true;
-            },
-            cancellationToken);
-    });
+    await streamFlow.Consumer.Queue<PaymentProcessed>("payment-processed")
+        .WithConcurrency(2)
+        .WithPrefetchCount(20)
+        .WithErrorHandler(async (exception, context) =>
+        {
+            return exception is ConnectFailureException;
+        })
+        .ConsumeAsync(async (eventData, context) =>
+        {
+            await notificationService.HandleAsync(eventData, new EventContext());
+            return true; // Acknowledge message
+        });
 
     await Task.Delay(1000); // Allow handlers to start
 }
@@ -776,6 +936,8 @@ View the RabbitMQ Management UI at http://localhost:15672 to see:
 - ✅ **Error Handling**: Retry logic and dead letter queues
 - ✅ **Async Processing**: Non-blocking message handling
 - ✅ **Real-world Workflow**: Complete order processing pipeline
+- ✅ **Fluent API**: Clean and readable code
+- ✅ **InitializeAsync**: Proper client initialization
 
 ## 📈 Next Steps
 
