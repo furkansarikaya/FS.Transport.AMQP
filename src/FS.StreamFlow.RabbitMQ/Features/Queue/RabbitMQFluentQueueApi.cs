@@ -173,6 +173,16 @@ public class RabbitMQFluentQueueApi : IFluentQueueApi
     }
     
     /// <summary>
+    /// Binds the queue to an exchange without routing key
+    /// </summary>
+    /// <param name="exchange">Exchange name</param>
+    /// <returns>Fluent queue API for method chaining</returns>
+    public IFluentQueueApi BindToExchange(string exchange)
+    {
+        return BindToExchange(exchange, string.Empty, []);
+    }
+    
+    /// <summary>
     /// Binds the queue to an exchange
     /// </summary>
     /// <param name="exchange">Exchange name</param>
@@ -180,7 +190,7 @@ public class RabbitMQFluentQueueApi : IFluentQueueApi
     /// <returns>Fluent queue API for method chaining</returns>
     public IFluentQueueApi BindToExchange(string exchange, string routingKey)
     {
-        return BindToExchange(exchange, routingKey, new Dictionary<string, object>());
+        return BindToExchange(exchange, routingKey, []);
     }
     
     /// <summary>
@@ -195,14 +205,11 @@ public class RabbitMQFluentQueueApi : IFluentQueueApi
         if (string.IsNullOrEmpty(exchange))
             throw new ArgumentException("Exchange cannot be null or empty", nameof(exchange));
         
-        if (string.IsNullOrEmpty(routingKey))
-            throw new ArgumentException("Routing key cannot be null or empty", nameof(routingKey));
-        
         _bindings.Add(new FluentQueueBinding
         {
             Exchange = exchange,
             RoutingKey = routingKey,
-            Arguments = arguments ?? new Dictionary<string, object>()
+            Arguments = arguments ?? []
         });
         
         return this;

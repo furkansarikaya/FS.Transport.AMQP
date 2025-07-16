@@ -188,6 +188,12 @@ public static class ServiceCollectionExtensions
             var rabbitMQOptions = provider.GetRequiredService<IOptions<RabbitMQStreamFlowOptions>>();
             return Options.Create(rabbitMQOptions.Value.ConnectionSettings);
         });
+        
+        services.TryAddSingleton<IOptions<ConsumerSettings>>(provider =>
+        {
+            var rabbitMQOptions = provider.GetRequiredService<IOptions<RabbitMQStreamFlowOptions>>();
+            return Options.Create(rabbitMQOptions.Value.ConsumerSettings);
+        });
 
         services.TryAddSingleton<IOptions<ProducerSettings>>(provider =>
         {

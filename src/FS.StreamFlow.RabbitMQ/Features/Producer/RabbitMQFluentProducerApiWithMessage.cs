@@ -211,9 +211,6 @@ public class RabbitMQFluentProducerApiWithMessage<T> : IFluentProducerApi<T> whe
         if (string.IsNullOrEmpty(_exchange))
             throw new InvalidOperationException("Exchange must be configured before publishing");
 
-        if (string.IsNullOrEmpty(_routingKey))
-            throw new InvalidOperationException("Routing key must be configured before publishing");
-
         // Cast to RabbitMQProducer to access the PublishAsync method with MessageProperties
         if (_producer is RabbitMQProducer rabbitProducer)
         {

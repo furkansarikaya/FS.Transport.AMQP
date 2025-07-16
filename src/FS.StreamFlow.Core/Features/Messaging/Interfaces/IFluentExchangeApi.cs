@@ -80,6 +80,13 @@ public interface IFluentExchangeApi
     IFluentExchangeApi WithInternal(bool @internal = true);
     
     /// <summary>
+    /// Binds the exchange to another exchange without a routing key
+    /// </summary>
+    /// <param name="destinationExchange">Destination exchange name</param>
+    /// <returns>Fluent exchange API for method chaining</returns>
+    IFluentExchangeApi BindToExchange(string destinationExchange);
+    
+    /// <summary>
     /// Binds the exchange to another exchange
     /// </summary>
     /// <param name="destinationExchange">Destination exchange name</param>

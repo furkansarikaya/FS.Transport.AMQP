@@ -165,6 +165,16 @@ public class RabbitMQFluentExchangeApi : IFluentExchangeApi
     }
     
     /// <summary>
+    /// Binds the exchange to another exchange without routing key
+    /// </summary>
+    /// <param name="destinationExchange">Destination exchange name</param>
+    /// <returns>Fluent exchange API for method chaining</returns>
+    public IFluentExchangeApi BindToExchange(string destinationExchange)
+    {
+        return BindToExchange(destinationExchange, string.Empty, []);
+    }
+    
+    /// <summary>
     /// Binds the exchange to another exchange
     /// </summary>
     /// <param name="destinationExchange">Destination exchange name</param>
@@ -172,7 +182,7 @@ public class RabbitMQFluentExchangeApi : IFluentExchangeApi
     /// <returns>Fluent exchange API for method chaining</returns>
     public IFluentExchangeApi BindToExchange(string destinationExchange, string routingKey)
     {
-        return BindToExchange(destinationExchange, routingKey, new Dictionary<string, object>());
+        return BindToExchange(destinationExchange, routingKey, []);
     }
     
     /// <summary>
@@ -187,14 +197,11 @@ public class RabbitMQFluentExchangeApi : IFluentExchangeApi
         if (string.IsNullOrEmpty(destinationExchange))
             throw new ArgumentException("Destination exchange cannot be null or empty", nameof(destinationExchange));
         
-        if (string.IsNullOrEmpty(routingKey))
-            throw new ArgumentException("Routing key cannot be null or empty", nameof(routingKey));
-        
         _bindings.Add(new FluentExchangeBinding
         {
             DestinationExchange = destinationExchange,
             RoutingKey = routingKey,
-            Arguments = arguments ?? new Dictionary<string, object>()
+            Arguments = arguments ?? []
         });
         
         return this;

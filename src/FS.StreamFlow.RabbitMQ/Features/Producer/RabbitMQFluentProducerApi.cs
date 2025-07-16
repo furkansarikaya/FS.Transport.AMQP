@@ -208,9 +208,6 @@ public class RabbitMQFluentProducerApi<T> : IFluentProducerApi<T> where T : clas
         if (string.IsNullOrEmpty(_exchange))
             throw new InvalidOperationException("Exchange must be configured before publishing");
 
-        if (string.IsNullOrEmpty(_routingKey))
-            throw new InvalidOperationException("Routing key must be configured before publishing");
-
         // Cast to RabbitMQProducer to access the PublishAsync method with MessageProperties
         if (_producer is RabbitMQProducer rabbitProducer)
         {
@@ -236,7 +233,7 @@ public class RabbitMQFluentProducerApi<T> : IFluentProducerApi<T> where T : clas
     /// <returns>Publish result</returns>
     public PublishResult Publish()
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException("Parameterless Publish() is not supported for generic Message<T>(). Use Message(message) instead or pass the message to Publish(message).");
     }
 
     /// <summary>

@@ -233,6 +233,23 @@ public class RabbitMQExchangeManager : IExchangeManager
     }
 
     /// <summary>
+    /// Binds an exchange to another exchange without routing key
+    /// </summary>
+    /// <param name="source">Source exchange name</param>
+    /// <param name="destination">Destination exchange name</param>
+    /// <param name="arguments">Additional arguments</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the binding operation</returns>
+    public async Task<bool> BindAsync(
+        string source,
+        string destination,
+        IDictionary<string, object>? arguments = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await BindAsync(source, destination, string.Empty, arguments, cancellationToken);
+    }
+
+    /// <summary>
     /// Binds an exchange to another exchange
     /// </summary>
     /// <param name="source">Source exchange name</param>
@@ -253,9 +270,6 @@ public class RabbitMQExchangeManager : IExchangeManager
 
         if (string.IsNullOrWhiteSpace(destination))
             throw new ArgumentException("Destination exchange name cannot be null or empty", nameof(destination));
-
-        if (string.IsNullOrWhiteSpace(routingKey))
-            throw new ArgumentException("Routing key cannot be null or empty", nameof(routingKey));
 
         if (_disposed)
             throw new ObjectDisposedException(nameof(RabbitMQExchangeManager));
@@ -312,6 +326,23 @@ public class RabbitMQExchangeManager : IExchangeManager
     }
 
     /// <summary>
+    /// Unbinds an exchange from another exchange without routing key
+    /// </summary>
+    /// <param name="source">Source exchange name</param>
+    /// <param name="destination">Destination exchange name</param>
+    /// <param name="arguments">Additional arguments</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the unbinding operation</returns>
+    public async Task<bool> UnbindAsync(
+        string source,
+        string destination,
+        IDictionary<string, object>? arguments = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await UnbindAsync(source, destination, string.Empty, arguments, cancellationToken);
+    }
+
+    /// <summary>
     /// Unbinds an exchange from another exchange
     /// </summary>
     /// <param name="source">Source exchange name</param>
@@ -332,9 +363,6 @@ public class RabbitMQExchangeManager : IExchangeManager
 
         if (string.IsNullOrWhiteSpace(destination))
             throw new ArgumentException("Destination exchange name cannot be null or empty", nameof(destination));
-
-        if (string.IsNullOrWhiteSpace(routingKey))
-            throw new ArgumentException("Routing key cannot be null or empty", nameof(routingKey));
 
         if (_disposed)
             throw new ObjectDisposedException(nameof(RabbitMQExchangeManager));

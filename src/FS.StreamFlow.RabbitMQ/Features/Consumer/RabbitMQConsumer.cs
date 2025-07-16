@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Collections.Concurrent;
+using FS.StreamFlow.RabbitMQ.Features.Connection;
+using Microsoft.Extensions.Options;
 using RabbitMqChannel = RabbitMQ.Client.IChannel;
 
 namespace FS.StreamFlow.RabbitMQ.Features.Consumer;
@@ -93,11 +95,11 @@ public class RabbitMQConsumer : IConsumer
     /// <param name="logger">Logger</param>
     public RabbitMQConsumer(
         IConnectionManager connectionManager,
-        ConsumerSettings settings,
+        IOptions<ConsumerSettings> settings,
         ILogger<RabbitMQConsumer> logger)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _settings = settings.Value ?? throw new ArgumentNullException(nameof(settings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         
         _statistics = new ConsumerStatistics
@@ -134,12 +136,17 @@ public class RabbitMQConsumer : IConsumer
                 await _connectionManager.ConnectAsync(cancellationToken);
             }
 
-            _channel = await _connectionManager.GetChannelAsync(cancellationToken) as RabbitMqChannel;
-            if (_channel != null)
+            var abstractChannel = await _connectionManager.GetChannelAsync(cancellationToken);
+            _channel = ExtractRabbitMqChannel(abstractChannel);
+            
+            if (_channel == null)
             {
-                await ConfigureChannelAsync(_channel, cancellationToken);
+                throw new InvalidOperationException(
+                    "Failed to obtain RabbitMQ channel from connection manager. " +
+                    "Ensure RabbitMQ provider is properly configured.");
             }
 
+            await ConfigureChannelAsync(_channel, cancellationToken);
             ChangeStatus(ConsumerStatus.Running);
             _statistics.StartTime = DateTimeOffset.UtcNow;
             
@@ -664,6 +671,35 @@ public class RabbitMQConsumer : IConsumer
         {
             StatusChanged?.Invoke(this, new ConsumerStatusChangedEventArgs(
                 oldStatus, newStatus, _settings.ConsumerId));
+        }
+    }
+    
+    /// <summary>
+    /// Extracts the RabbitMQ channel from the abstract channel
+    /// </summary>
+    /// <param name="abstractChannel">Abstract channel</param>
+    /// <returns></returns>
+    private RabbitMqChannel? ExtractRabbitMqChannel(FS.StreamFlow.Core.Features.Messaging.Models.IChannel abstractChannel)
+    {
+        try
+        {
+            switch (abstractChannel)
+            {
+                // StreamFlow'un RabbitMQ implementation'ı ise
+                case RabbitMQChannel streamFlowChannel:
+                    return streamFlowChannel.GetNativeChannel();
+                case RabbitMqChannel directChannel:
+                    return directChannel;
+                default:
+                    _logger.LogError("Channel is not a RabbitMQ channel: {ChannelType}", 
+                        abstractChannel?.GetType().Name ?? "null");
+                    return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to extract RabbitMQ channel");
+            return null;
         }
     }
 }

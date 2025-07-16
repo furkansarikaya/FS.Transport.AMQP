@@ -86,6 +86,13 @@ public interface IFluentQueueApi
     IFluentQueueApi WithPriority(int priority);
     
     /// <summary>
+    /// Binds the queue to an exchange without a routing key
+    /// </summary>
+    /// <param name="exchange">Exchange name</param>
+    /// <returns>Fluent queue API for method chaining</returns>
+    IFluentQueueApi BindToExchange(string exchange);
+    
+    /// <summary>
     /// Binds the queue to an exchange
     /// </summary>
     /// <param name="exchange">Exchange name</param>

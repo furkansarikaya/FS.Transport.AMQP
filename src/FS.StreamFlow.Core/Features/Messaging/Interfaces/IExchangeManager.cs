@@ -63,6 +63,20 @@ public interface IExchangeManager : IDisposable
     Task<bool> DeleteAsync(string name, bool ifUnused = false, CancellationToken cancellationToken = default);
     
     /// <summary>
+    /// Binds an exchange to another exchange without a routing key
+    /// </summary>
+    /// <param name="source">Source exchange name</param>
+    /// <param name="destination">Destination exchange name</param>
+    /// <param name="arguments">Additional arguments</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the binding operation</returns>
+    Task<bool> BindAsync(
+        string source, 
+        string destination,
+        IDictionary<string, object>? arguments = null,
+        CancellationToken cancellationToken = default);
+    
+    /// <summary>
     /// Binds an exchange to another exchange
     /// </summary>
     /// <param name="source">Source exchange name</param>
@@ -75,6 +89,20 @@ public interface IExchangeManager : IDisposable
         string source, 
         string destination, 
         string routingKey, 
+        IDictionary<string, object>? arguments = null,
+        CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Unbinds an exchange from another exchange without a routing key
+    /// </summary>
+    /// <param name="source">Source exchange name</param>
+    /// <param name="destination">Destination exchange name</param>
+    /// <param name="arguments">Additional arguments</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the unbinding operation</returns>
+    Task<bool> UnbindAsync(
+        string source, 
+        string destination,
         IDictionary<string, object>? arguments = null,
         CancellationToken cancellationToken = default);
     
