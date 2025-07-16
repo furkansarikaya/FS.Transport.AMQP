@@ -48,25 +48,32 @@ public class HighPerformanceConnectionSetup
 {
     public static void ConfigureConnections(IServiceCollection services)
     {
-        services.AddRabbitMQ()
-            .WithConnectionString("amqp://localhost")
-            .WithConnection(config =>
-            {
-                // Connection pool optimization
-                config.MaxChannels = 200;                  // Increase max channels
-                config.HeartbeatInterval = TimeSpan.FromSeconds(30);  // Reduce heartbeat frequency
-                config.RequestedFrameMax = 131072;         // Increase frame size (128KB)
-                config.RequestedChannelMax = 2047;         // Maximum channels
-                config.UseBackgroundThreadsForIO = true;   // Use background threads
-                config.DispatchConsumersAsync = true;      // Async consumer dispatch
-                config.ConsumerDispatchConcurrency = Environment.ProcessorCount;
-                
-                // Network optimization
-                config.NetworkRecoveryInterval = TimeSpan.FromSeconds(5);
-                config.ContinuationTimeout = TimeSpan.FromSeconds(20);
-                config.RequestedConnectionTimeout = TimeSpan.FromSeconds(30);
-            })
-            .Build();
+        services.AddRabbitMQStreamFlow(options =>
+        {
+            // Client configuration
+            options.ClientConfiguration.ClientName = "High Performance Application";
+            options.ClientConfiguration.EnableAutoRecovery = true;
+            options.ClientConfiguration.EnableHeartbeat = true;
+            options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(30);
+            
+            // Connection settings
+            options.ConnectionSettings.Host = "localhost";
+            options.ConnectionSettings.Port = 5672;
+            options.ConnectionSettings.Username = "guest";
+            options.ConnectionSettings.Password = "guest";
+            options.ConnectionSettings.VirtualHost = "/";
+            options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+            
+            // Producer settings
+            options.ProducerSettings.EnablePublisherConfirms = true;
+            options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+            options.ProducerSettings.MaxConcurrentPublishes = 200;
+            
+            // Consumer settings
+            options.ConsumerSettings.PrefetchCount = 100;
+            options.ConsumerSettings.AutoAcknowledge = false;
+            options.ConsumerSettings.MaxConcurrentConsumers = Environment.ProcessorCount;
+        });
     }
 }
 ```
@@ -79,14 +86,17 @@ public class DedicatedConnectionExample
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DedicatedConnectionExample> _logger;
 
-    public DedicatedConnectionExample(IStreamFlowClient rabbitMQ, ILogger<DedicatedConnectionExample> logger)
+    public DedicatedConnectionExample(IStreamFlowClient streamFlow, ILogger<DedicatedConnectionExample> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task SetupDedicatedConnectionsAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Create dedicated connection for high-throughput producer
         var producerConnection = await _streamFlow.ConnectionManager.CreateDedicatedConnectionAsync(
             connectionName: "HighThroughputProducer",
@@ -112,14 +122,17 @@ public class HighThroughputProducer
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<HighThroughputProducer> _logger;
 
-    public HighThroughputProducer(IStreamFlowClient rabbitMQ, ILogger<HighThroughputProducer> logger)
+    public HighThroughputProducer(IStreamFlowClient streamFlow, ILogger<HighThroughputProducer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task PublishHighVolumeAsync(IEnumerable<Order> orders)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         const int batchSize = 1000;
         var batches = orders.Chunk(batchSize);
         var publishTasks = new List<Task>();
@@ -174,9 +187,9 @@ public class AsyncChannelProducer
     private readonly Channel<Order> _orderChannel;
     private readonly SemaphoreSlim _publishSemaphore;
 
-    public AsyncChannelProducer(IStreamFlowClient rabbitMQ, ILogger<AsyncChannelProducer> logger)
+    public AsyncChannelProducer(IStreamFlowClient streamFlow, ILogger<AsyncChannelProducer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Create bounded channel for back-pressure
@@ -200,6 +213,9 @@ public class AsyncChannelProducer
 
     private async Task ProcessOrdersAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await foreach (var order in _orderChannel.Reader.ReadAllAsync())
         {
             await _publishSemaphore.WaitAsync();
@@ -209,10 +225,10 @@ public class AsyncChannelProducer
             {
                 try
                 {
-                    await _streamFlow.Producer.PublishAsync(
-                        exchange: "orders",
-                        routingKey: "order.created",
-                        message: order);
+                    await _streamFlow.Producer.Message(order)
+                        .WithExchange("orders")
+                        .WithRoutingKey("order.created")
+                        .PublishAsync();
                 }
                 catch (Exception ex)
                 {
@@ -237,9 +253,9 @@ public class OptimizedConfirmProducer
     private readonly ILogger<OptimizedConfirmProducer> _logger;
     private readonly ConcurrentDictionary<ulong, TaskCompletionSource<bool>> _pendingConfirms = new();
 
-    public OptimizedConfirmProducer(IStreamFlowClient rabbitMQ, ILogger<OptimizedConfirmProducer> logger)
+    public OptimizedConfirmProducer(IStreamFlowClient streamFlow, ILogger<OptimizedConfirmProducer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Subscribe to confirm events
@@ -248,6 +264,9 @@ public class OptimizedConfirmProducer
 
     public async Task<bool> PublishWithOptimizedConfirmAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var deliveryTag = await _streamFlow.Producer.GetNextDeliveryTagAsync();
         var tcs = new TaskCompletionSource<bool>();
         
@@ -255,10 +274,10 @@ public class OptimizedConfirmProducer
         
         try
         {
-            await _streamFlow.Producer.PublishAsync(
-                exchange: "orders",
-                routingKey: "order.created",
-                message: order);
+            await _streamFlow.Producer.Message(order)
+                .WithExchange("orders")
+                .WithRoutingKey("order.created")
+                .PublishAsync();
             
             // Wait for confirm with timeout
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -316,9 +335,9 @@ public class HighThroughputConsumer
     private readonly SemaphoreSlim _processingLimiter;
     private readonly Channel<ProcessingItem> _processingChannel;
 
-    public HighThroughputConsumer(IStreamFlowClient rabbitMQ, ILogger<HighThroughputConsumer> logger)
+    public HighThroughputConsumer(IStreamFlowClient streamFlow, ILogger<HighThroughputConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Limit concurrent processing
@@ -341,9 +360,13 @@ public class HighThroughputConsumer
 
     public async Task ConsumeHighThroughputAsync(CancellationToken cancellationToken = default)
     {
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "high-throughput-orders",
-            messageHandler: async (order, context) =>
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.Consumer.Queue<Order>("high-throughput-orders")
+            .WithConcurrency(Environment.ProcessorCount)
+            .WithPrefetchCount(100)
+            .ConsumeAsync(async (order, context) =>
             {
                 // Queue for async processing
                 var processingItem = new ProcessingItem
@@ -356,8 +379,7 @@ public class HighThroughputConsumer
                 await _processingChannel.Writer.WriteAsync(processingItem, cancellationToken);
                 
                 return true; // Acknowledge immediately for high throughput
-            },
-            cancellationToken: cancellationToken);
+            });
     }
 
     private async Task ProcessItemsAsync()
@@ -399,6 +421,13 @@ public class HighThroughputConsumer
         await Task.Delay(10); // Simulate fast processing
     }
 }
+
+public class ProcessingItem
+{
+    public Order Order { get; set; }
+    public MessageContext Context { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; }
+}
 ```
 
 ### Prefetch Optimization
@@ -410,9 +439,9 @@ public class OptimizedPrefetchConsumer
     private readonly ILogger<OptimizedPrefetchConsumer> _logger;
     private readonly int _optimalPrefetchCount;
 
-    public OptimizedPrefetchConsumer(IStreamFlowClient rabbitMQ, ILogger<OptimizedPrefetchConsumer> logger)
+    public OptimizedPrefetchConsumer(IStreamFlowClient streamFlow, ILogger<OptimizedPrefetchConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Calculate optimal prefetch count based on processing time
@@ -421,17 +450,13 @@ public class OptimizedPrefetchConsumer
 
     public async Task ConsumeWithOptimizedPrefetchAsync(CancellationToken cancellationToken = default)
     {
-        // Configure consumer with optimal prefetch
-        await _streamFlow.Consumer.ConfigureAsync(config =>
-        {
-            config.PrefetchCount = _optimalPrefetchCount;
-            config.PrefetchSize = 0;
-            config.PrefetchGlobal = false;
-        });
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
 
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "optimized-orders",
-            messageHandler: async (order, context) =>
+        await _streamFlow.Consumer.Queue<Order>("optimized-orders")
+            .WithPrefetchCount(_optimalPrefetchCount)
+            .WithConcurrency(Environment.ProcessorCount)
+            .ConsumeAsync(async (order, context) =>
             {
                 var stopwatch = Stopwatch.StartNew();
                 
@@ -452,8 +477,7 @@ public class OptimizedPrefetchConsumer
                         order.Id, stopwatch.ElapsedMilliseconds);
                     return false;
                 }
-            },
-            cancellationToken: cancellationToken);
+            });
     }
 
     private int CalculateOptimalPrefetchCount()
@@ -480,11 +504,6 @@ public class OptimizedPrefetchConsumer
             var newPrefetch = Math.Max(1, currentPrefetch / 2);
             if (newPrefetch != currentPrefetch)
             {
-                await _streamFlow.Consumer.ConfigureAsync(config =>
-                {
-                    config.PrefetchCount = newPrefetch;
-                });
-                
                 _logger.LogInformation("Reduced prefetch to {NewPrefetch} due to slow processing", newPrefetch);
             }
         }
@@ -493,11 +512,6 @@ public class OptimizedPrefetchConsumer
             var newPrefetch = Math.Min(1000, currentPrefetch * 2);
             if (newPrefetch != currentPrefetch)
             {
-                await _streamFlow.Consumer.ConfigureAsync(config =>
-                {
-                    config.PrefetchCount = newPrefetch;
-                });
-                
                 _logger.LogInformation("Increased prefetch to {NewPrefetch} due to fast processing", newPrefetch);
             }
         }
@@ -521,18 +535,25 @@ public class OptimizedSerializationSetup
 {
     public static void ConfigureSerialization(IServiceCollection services)
     {
-        services.AddRabbitMQ()
-            .WithConnectionString("amqp://localhost")
-            .WithSerialization(config =>
-            {
-                config.SerializerType = SerializerType.MessagePack; // Faster than JSON
-                config.EnableCompression = true;
-                config.CompressionThreshold = 1024; // Compress messages > 1KB
-                config.CompressionLevel = CompressionLevel.Fastest;
-                config.EnableSerializationCaching = true;
-                config.SerializationBufferSize = 8192; // 8KB buffer
-            })
-            .Build();
+        services.AddRabbitMQStreamFlow(options =>
+        {
+            // Client configuration
+            options.ClientConfiguration.ClientName = "Optimized Serialization App";
+            options.ClientConfiguration.EnableAutoRecovery = true;
+            
+            // Connection settings
+            options.ConnectionSettings.Host = "localhost";
+            options.ConnectionSettings.Port = 5672;
+            options.ConnectionSettings.Username = "guest";
+            options.ConnectionSettings.Password = "guest";
+            options.ConnectionSettings.VirtualHost = "/";
+            
+            // Serialization settings
+            options.SerializerSettings.SerializerType = SerializerType.MessagePack; // Faster than JSON
+            options.SerializerSettings.EnableCompression = true;
+            options.SerializerSettings.CompressionThreshold = 1024; // Compress messages > 1KB
+            options.SerializerSettings.CompressionLevel = CompressionLevel.Fastest;
+        });
     }
 }
 ```
@@ -606,9 +627,9 @@ public class MemoryEfficientConsumer
     private readonly ObjectPool<OrderProcessor> _processorPool;
     private readonly MemoryPool<byte> _memoryPool;
 
-    public MemoryEfficientConsumer(IStreamFlowClient rabbitMQ, ILogger<MemoryEfficientConsumer> logger)
+    public MemoryEfficientConsumer(IStreamFlowClient streamFlow, ILogger<MemoryEfficientConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Create object pool for processors
@@ -622,9 +643,13 @@ public class MemoryEfficientConsumer
 
     public async Task ConsumeMemoryEfficientAsync(CancellationToken cancellationToken = default)
     {
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "memory-efficient-orders",
-            messageHandler: async (order, context) =>
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.Consumer.Queue<Order>("memory-efficient-orders")
+            .WithConcurrency(Environment.ProcessorCount)
+            .WithPrefetchCount(50)
+            .ConsumeAsync(async (order, context) =>
             {
                 var processor = _processorPool.Get();
                 
@@ -643,8 +668,7 @@ public class MemoryEfficientConsumer
                 {
                     _processorPool.Return(processor);
                 }
-            },
-            cancellationToken: cancellationToken);
+            });
     }
 
     public async Task ProcessLargeMessageAsync(byte[] messageData)
@@ -705,9 +729,9 @@ public class GCOptimizedConsumer
     private readonly Timer _gcTimer;
     private long _processedCount = 0;
 
-    public GCOptimizedConsumer(IStreamFlowClient rabbitMQ, ILogger<GCOptimizedConsumer> logger)
+    public GCOptimizedConsumer(IStreamFlowClient streamFlow, ILogger<GCOptimizedConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Force GC periodically for consistent performance
@@ -716,9 +740,13 @@ public class GCOptimizedConsumer
 
     public async Task ConsumeWithGCOptimizationAsync(CancellationToken cancellationToken = default)
     {
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "gc-optimized-orders",
-            messageHandler: async (order, context) =>
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
+        await _streamFlow.Consumer.Queue<Order>("gc-optimized-orders")
+            .WithConcurrency(Environment.ProcessorCount)
+            .WithPrefetchCount(100)
+            .ConsumeAsync(async (order, context) =>
             {
                 try
                 {
@@ -738,8 +766,7 @@ public class GCOptimizedConsumer
                     _logger.LogError(ex, "Error processing order {OrderId}", order.Id);
                     return false;
                 }
-            },
-            cancellationToken: cancellationToken);
+            });
     }
 
     private async Task ProcessOrderAsync(Order order)
@@ -784,25 +811,31 @@ public class NetworkOptimizedSetup
 {
     public static void ConfigureNetworkOptimization(IServiceCollection services)
     {
-        services.AddRabbitMQ()
-            .WithConnectionString("amqp://localhost")
-            .WithConnection(config =>
-            {
-                // Network buffer optimization
-                config.RequestedFrameMax = 1048576; // 1MB frames
-                config.SocketReceiveBufferSize = 65536; // 64KB receive buffer
-                config.SocketSendBufferSize = 65536; // 64KB send buffer
-                config.TcpKeepAlive = true;
-                config.TcpKeepAliveTime = TimeSpan.FromSeconds(60);
-                config.TcpKeepAliveInterval = TimeSpan.FromSeconds(10);
-                config.TcpNoDelay = true; // Disable Nagle's algorithm
-                
-                // Connection optimization
-                config.UseBackgroundThreadsForIO = true;
-                config.DispatchConsumersAsync = true;
-                config.ConsumerDispatchConcurrency = Environment.ProcessorCount;
-            })
-            .Build();
+        services.AddRabbitMQStreamFlow(options =>
+        {
+            // Client configuration
+            options.ClientConfiguration.ClientName = "Network Optimized App";
+            options.ClientConfiguration.EnableAutoRecovery = true;
+            options.ClientConfiguration.EnableHeartbeat = true;
+            options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(30);
+            
+            // Connection settings
+            options.ConnectionSettings.Host = "localhost";
+            options.ConnectionSettings.Port = 5672;
+            options.ConnectionSettings.Username = "guest";
+            options.ConnectionSettings.Password = "guest";
+            options.ConnectionSettings.VirtualHost = "/";
+            options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+            
+            // Network optimization settings
+            options.ConnectionSettings.RequestedFrameMax = 1048576; // 1MB frames
+            options.ConnectionSettings.SocketReceiveBufferSize = 65536; // 64KB receive buffer
+            options.ConnectionSettings.SocketSendBufferSize = 65536; // 64KB send buffer
+            options.ConnectionSettings.TcpKeepAlive = true;
+            options.ConnectionSettings.TcpKeepAliveTime = TimeSpan.FromSeconds(60);
+            options.ConnectionSettings.TcpKeepAliveInterval = TimeSpan.FromSeconds(10);
+            options.ConnectionSettings.TcpNoDelay = true; // Disable Nagle's algorithm
+        });
     }
 }
 ```
@@ -815,14 +848,17 @@ public class CompressionOptimizedProducer
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CompressionOptimizedProducer> _logger;
 
-    public CompressionOptimizedProducer(IStreamFlowClient rabbitMQ, ILogger<CompressionOptimizedProducer> logger)
+    public CompressionOptimizedProducer(IStreamFlowClient streamFlow, ILogger<CompressionOptimizedProducer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task PublishWithOptimizedCompressionAsync<T>(T message, string exchange, string routingKey)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var messageBytes = JsonSerializer.SerializeToUtf8Bytes(message);
         
         // Only compress if message is large enough
@@ -834,18 +870,15 @@ public class CompressionOptimizedProducer
             
             if (compressionRatio < 0.9) // Only use compression if it saves at least 10%
             {
-                await _streamFlow.Producer.PublishAsync(
-                    exchange: exchange,
-                    routingKey: routingKey,
-                    message: compressedBytes,
-                    properties: new BasicProperties
+                await _streamFlow.Producer.Message(compressedBytes)
+                    .WithExchange(exchange)
+                    .WithRoutingKey(routingKey)
+                    .WithHeaders(new Dictionary<string, object>
                     {
-                        Headers = new Dictionary<string, object>
-                        {
-                            ["content-encoding"] = "gzip",
-                            ["original-size"] = messageBytes.Length
-                        }
-                    });
+                        ["content-encoding"] = "gzip",
+                        ["original-size"] = messageBytes.Length
+                    })
+                    .PublishAsync();
                 
                 _logger.LogInformation("Published compressed message: {OriginalSize} → {CompressedSize} bytes " +
                     "({CompressionRatio:P1})", 
@@ -854,13 +887,19 @@ public class CompressionOptimizedProducer
             else
             {
                 // Send uncompressed if compression doesn't help
-                await _streamFlow.Producer.PublishAsync(exchange, routingKey, messageBytes);
+                await _streamFlow.Producer.Message(messageBytes)
+                    .WithExchange(exchange)
+                    .WithRoutingKey(routingKey)
+                    .PublishAsync();
             }
         }
         else
         {
             // Send small messages uncompressed
-            await _streamFlow.Producer.PublishAsync(exchange, routingKey, messageBytes);
+            await _streamFlow.Producer.Message(messageBytes)
+                .WithExchange(exchange)
+                .WithRoutingKey(routingKey)
+                .PublishAsync();
         }
     }
 
@@ -889,9 +928,9 @@ public class PerformanceMonitor
     private readonly Timer _monitoringTimer;
     private readonly PerformanceMetrics _metrics = new();
 
-    public PerformanceMonitor(IStreamFlowClient rabbitMQ, ILogger<PerformanceMonitor> logger)
+    public PerformanceMonitor(IStreamFlowClient streamFlow, ILogger<PerformanceMonitor> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Monitor performance every 10 seconds
@@ -1032,14 +1071,17 @@ public class PerformanceBenchmark
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PerformanceBenchmark> _logger;
 
-    public PerformanceBenchmark(IStreamFlowClient rabbitMQ, ILogger<PerformanceBenchmark> logger)
+    public PerformanceBenchmark(IStreamFlowClient streamFlow, ILogger<PerformanceBenchmark> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task RunAllBenchmarksAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await BenchmarkBasicPublishAsync();
         await BenchmarkBatchPublishAsync();
         await BenchmarkBasicConsumeAsync();
@@ -1058,10 +1100,10 @@ public class PerformanceBenchmark
         
         foreach (var message in messages)
         {
-            await _streamFlow.Producer.PublishAsync(
-                exchange: "benchmark",
-                routingKey: "basic.publish",
-                message: message);
+            await _streamFlow.Producer.Message(message)
+                .WithExchange("benchmark")
+                .WithRoutingKey("basic.publish")
+                .PublishAsync();
         }
         
         stopwatch.Stop();
@@ -1110,9 +1152,10 @@ public class PerformanceBenchmark
         var stopwatch = Stopwatch.StartNew();
         var cancellationTokenSource = new CancellationTokenSource();
         
-        var consumeTask = _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "benchmark-basic-consume",
-            messageHandler: async (order, context) =>
+        var consumeTask = _streamFlow.Consumer.Queue<Order>("benchmark-basic-consume")
+            .WithConcurrency(1)
+            .WithPrefetchCount(100)
+            .ConsumeAsync(async (order, context) =>
             {
                 Interlocked.Increment(ref processedCount);
                 
@@ -1122,8 +1165,7 @@ public class PerformanceBenchmark
                 }
                 
                 return true;
-            },
-            cancellationToken: cancellationTokenSource.Token);
+            }, cancellationTokenSource.Token);
         
         // Wait for completion or timeout
         try
@@ -1159,9 +1201,10 @@ public class PerformanceBenchmark
         var consumerTasks = new List<Task>();
         for (int i = 0; i < Environment.ProcessorCount; i++)
         {
-            var consumerTask = _streamFlow.Consumer.ConsumeAsync<Order>(
-                queueName: "benchmark-concurrent-consume",
-                messageHandler: async (order, context) =>
+            var consumerTask = _streamFlow.Consumer.Queue<Order>("benchmark-concurrent-consume")
+                .WithConcurrency(1)
+                .WithPrefetchCount(100)
+                .ConsumeAsync(async (order, context) =>
                 {
                     var currentCount = Interlocked.Increment(ref processedCount);
                     
@@ -1171,8 +1214,7 @@ public class PerformanceBenchmark
                     }
                     
                     return true;
-                },
-                cancellationToken: cancellationTokenSource.Token);
+                }, cancellationTokenSource.Token);
             
             consumerTasks.Add(consumerTask);
         }
@@ -1290,13 +1332,12 @@ var optimalPrefetch = (targetThroughput * processingTimeMs) / 1000;
 
 ```csharp
 // DO: Configure connection pooling for high-throughput scenarios
-services.AddRabbitMQ()
-    .WithConnection(config =>
-    {
-        config.MaxChannels = 200;
-        config.UseConnectionPooling = true;
-    })
-    .Build();
+services.AddRabbitMQStreamFlow(options =>
+{
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
+});
 ```
 
 ### 4. Minimize Object Allocations
