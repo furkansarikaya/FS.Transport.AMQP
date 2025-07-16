@@ -87,14 +87,14 @@ public class OrderProcessor
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                RetryPolicy = RetryPolicyType.ExponentialBackoff,
+                UseExponentialBackoff = true,
                 MaxRetryAttempts = 3,
-                RetryDelay = TimeSpan.FromSeconds(1)
+                InitialRetryDelay = TimeSpan.FromSeconds(1)
             })
             .WithDeadLetterQueue(new DeadLetterSettings
             {
-                DeadLetterExchange = "dlx",
-                DeadLetterQueue = "dlq"
+                ExchangeName = "dlx",
+                RoutingKey = "dlq"
             })
             .ConsumeAsync(ProcessOrderAsync, cancellationToken);
     }
@@ -144,9 +144,9 @@ public class SimpleConsumer
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                RetryPolicy = RetryPolicyType.Linear,
+                UseExponentialBackoff = false,
                 MaxRetryAttempts = 3,
-                RetryDelay = TimeSpan.FromSeconds(1)
+                InitialRetryDelay = TimeSpan.FromSeconds(1)
             })
             .WithDeadLetterQueue(new DeadLetterSettings
             {
@@ -266,9 +266,9 @@ public class AdvancedConsumer
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                RetryPolicy = RetryPolicyType.ExponentialBackoff,
+                UseExponentialBackoff = true,
                 MaxRetryAttempts = 5,
-                RetryDelay = TimeSpan.FromSeconds(1)
+                InitialRetryDelay = TimeSpan.FromSeconds(1)
             })
             .WithDeadLetterQueue(new DeadLetterSettings
             {
