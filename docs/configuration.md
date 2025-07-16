@@ -288,7 +288,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "RabbitMQ": {
+    "RabbitMQ": {
     "ConnectionSettings": {
       "Host": "localhost",
       "Port": 5671,
@@ -297,10 +297,10 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "VirtualHost": "/",
       "UseSsl": true
     },
-    "Ssl": {
-      "Enabled": true,
-      "CertificatePath": "/path/to/certificate.pfx",
-      "CertificatePassword": "password",
+      "Ssl": {
+        "Enabled": true,
+        "CertificatePath": "/path/to/certificate.pfx",
+        "CertificatePassword": "password",
       "VerifyCertificate": true,
       "ProtocolVersion": "Tls12"
     }
@@ -482,7 +482,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "RabbitMQ": {
+    "RabbitMQ": {
     "ConnectionSettings": {
       "Host": "localhost",
       "Port": 5672,
@@ -490,13 +490,13 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "Password": "guest",
       "VirtualHost": "/",
       "ConnectionTimeout": "00:00:30"
-    },
+      },
     "ProducerSettings": {
       "EnablePublisherConfirms": false,
       "MaxConcurrentPublishes": 10
-    },
+      },
     "ConsumerSettings": {
-      "PrefetchCount": 10,
+        "PrefetchCount": 10,
       "MaxConcurrentConsumers": 2,
       "AutoAcknowledge": false
     }
@@ -508,7 +508,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "RabbitMQ": {
+    "RabbitMQ": {
     "ConnectionSettings": {
       "Host": "rabbitmq.production.com",
       "Port": 5671,
@@ -517,20 +517,20 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "VirtualHost": "/",
       "ConnectionTimeout": "00:00:30",
       "UseSsl": true
-    },
-    "Ssl": {
-      "Enabled": true,
-      "CertificatePath": "/path/to/certificate.pfx",
+      },
+      "Ssl": {
+        "Enabled": true,
+        "CertificatePath": "/path/to/certificate.pfx",
       "VerifyCertificate": true,
       "ProtocolVersion": "Tls12"
-    },
+      },
     "ProducerSettings": {
       "EnablePublisherConfirms": true,
       "MaxConcurrentPublishes": 1000,
       "PublishTimeout": "00:00:30"
-    },
+      },
     "ConsumerSettings": {
-      "PrefetchCount": 100,
+        "PrefetchCount": 100,
       "MaxConcurrentConsumers": 10,
       "AutoAcknowledge": false
     }

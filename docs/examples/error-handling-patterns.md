@@ -39,12 +39,12 @@ using Microsoft.Extensions.Logging;
 
 public class ErrorProneService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<ErrorProneService> _logger;
 
-    public ErrorProneService(IRabbitMQClient rabbitMQ, ILogger<ErrorProneService> logger)
+    public ErrorProneService(IStreamFlowClient rabbitMQ, ILogger<ErrorProneService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 

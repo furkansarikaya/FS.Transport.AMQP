@@ -55,12 +55,12 @@ FS.StreamFlow provides several built-in retry policies:
 ```csharp
 public class LinearRetryExample
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<LinearRetryExample> _logger;
 
-    public LinearRetryExample(IRabbitMQClient rabbitMQ, ILogger<LinearRetryExample> logger)
+    public LinearRetryExample(IStreamFlowClient rabbitMQ, ILogger<LinearRetryExample> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -94,12 +94,12 @@ public class LinearRetryExample
 ```csharp
 public class ExponentialBackoffRetryExample
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<ExponentialBackoffRetryExample> _logger;
 
-    public ExponentialBackoffRetryExample(IRabbitMQClient rabbitMQ, ILogger<ExponentialBackoffRetryExample> logger)
+    public ExponentialBackoffRetryExample(IStreamFlowClient rabbitMQ, ILogger<ExponentialBackoffRetryExample> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -214,20 +214,20 @@ public class CustomRetryPolicy : IRetryPolicy
 ```csharp
 public class RetryConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly IRetryPolicy _retryPolicy;
     private readonly ILogger<RetryConsumer> _logger;
 
-    public RetryConsumer(IRabbitMQClient rabbitMQ, IRetryPolicy retryPolicy, ILogger<RetryConsumer> logger)
+    public RetryConsumer(IStreamFlowClient rabbitMQ, IRetryPolicy retryPolicy, ILogger<RetryConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _retryPolicy = retryPolicy;
         _logger = logger;
     }
 
     public async Task ConsumeWithRetryAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "order-processing",
             messageHandler: async (order, context) =>
             {
@@ -266,7 +266,7 @@ public class RetryConsumer
 
     private async Task SendToDeadLetterQueue(Order order, Exception exception)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "dlx",
             routingKey: "order.failed",
             message: new
@@ -295,13 +295,13 @@ The circuit breaker pattern prevents cascading failures by stopping calls to fai
 ```csharp
 public class CircuitBreakerExample
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ICircuitBreaker _circuitBreaker;
     private readonly ILogger<CircuitBreakerExample> _logger;
 
-    public CircuitBreakerExample(IRabbitMQClient rabbitMQ, ILogger<CircuitBreakerExample> logger)
+    public CircuitBreakerExample(IStreamFlowClient rabbitMQ, ILogger<CircuitBreakerExample> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         _circuitBreaker = new CircuitBreaker(
             failureThreshold: 5,
@@ -355,7 +355,7 @@ public class CircuitBreakerExample
         
         _logger.LogInformation("Queueing order {OrderId} for later processing", order.Id);
         
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "delayed-processing",
             routingKey: "order.delayed",
             message: order);
@@ -368,13 +368,13 @@ public class CircuitBreakerExample
 ```csharp
 public class AdvancedCircuitBreakerExample
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ICircuitBreaker _circuitBreaker;
     private readonly ILogger<AdvancedCircuitBreakerExample> _logger;
 
-    public AdvancedCircuitBreakerExample(IRabbitMQClient rabbitMQ, ILogger<AdvancedCircuitBreakerExample> logger)
+    public AdvancedCircuitBreakerExample(IStreamFlowClient rabbitMQ, ILogger<AdvancedCircuitBreakerExample> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         _circuitBreaker = new CircuitBreaker(
@@ -414,7 +414,7 @@ public class AdvancedCircuitBreakerExample
         _logger.LogError("Circuit breaker opened due to failures. Switching to degraded mode.");
         
         // Publish alert
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "circuit-breaker.opened",
             message: new
@@ -431,7 +431,7 @@ public class AdvancedCircuitBreakerExample
         _logger.LogInformation("Circuit breaker is half-open. Testing service recovery.");
         
         // Optionally notify that we're testing recovery
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "circuit-breaker.testing",
             message: new
@@ -447,7 +447,7 @@ public class AdvancedCircuitBreakerExample
         _logger.LogInformation("Circuit breaker closed. Service has recovered.");
         
         // Publish recovery notification
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "circuit-breaker.recovered",
             message: new
@@ -479,39 +479,39 @@ Dead letter queues handle messages that cannot be processed successfully.
 ```csharp
 public class DeadLetterQueueSetup
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DeadLetterQueueSetup> _logger;
 
-    public DeadLetterQueueSetup(IRabbitMQClient rabbitMQ, ILogger<DeadLetterQueueSetup> logger)
+    public DeadLetterQueueSetup(IStreamFlowClient rabbitMQ, ILogger<DeadLetterQueueSetup> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task SetupDeadLetterInfrastructureAsync()
     {
         // Declare dead letter exchange
-        await _rabbitMQ.ExchangeManager.DeclareExchangeAsync(
+        await _streamFlow.ExchangeManager.DeclareExchangeAsync(
             exchange: "dlx",
             type: "topic",
             durable: true,
             autoDelete: false);
 
         // Declare dead letter queue
-        await _rabbitMQ.QueueManager.DeclareQueueAsync(
+        await _streamFlow.QueueManager.DeclareQueueAsync(
             queue: "dlq",
             durable: true,
             exclusive: false,
             autoDelete: false);
 
         // Bind dead letter queue to exchange
-        await _rabbitMQ.QueueManager.BindQueueAsync(
+        await _streamFlow.QueueManager.BindQueueAsync(
             queue: "dlq",
             exchange: "dlx",
             routingKey: "#"); // Catch all dead letters
 
         // Declare main queue with dead letter configuration
-        await _rabbitMQ.QueueManager.DeclareQueueAsync(
+        await _streamFlow.QueueManager.DeclareQueueAsync(
             queue: "order-processing",
             durable: true,
             exclusive: false,
@@ -534,18 +534,18 @@ public class DeadLetterQueueSetup
 ```csharp
 public class DeadLetterQueueConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DeadLetterQueueConsumer> _logger;
 
-    public DeadLetterQueueConsumer(IRabbitMQClient rabbitMQ, ILogger<DeadLetterQueueConsumer> logger)
+    public DeadLetterQueueConsumer(IStreamFlowClient rabbitMQ, ILogger<DeadLetterQueueConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task ProcessDeadLetterMessagesAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<DeadLetterMessage>(
+        await _streamFlow.Consumer.ConsumeAsync<DeadLetterMessage>(
             queueName: "dlq",
             messageHandler: async (deadLetterMessage, context) =>
             {
@@ -637,7 +637,7 @@ public class DeadLetterQueueConsumer
             // Attempt to reprocess after delay
             await Task.Delay(TimeSpan.FromMinutes(5));
             
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: deathInfo.OriginalExchange,
                 routingKey: deathInfo.OriginalRoutingKey,
                 message: deadLetterMessage.OriginalMessage);
@@ -666,7 +666,7 @@ public class DeadLetterQueueConsumer
         _logger.LogInformation("Handling max length exceeded message: {MessageId}", deathInfo.MessageId);
         
         // Send to alternative queue with higher capacity
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "high-capacity",
             routingKey: deathInfo.OriginalRoutingKey,
             message: deadLetterMessage.OriginalMessage);
@@ -692,7 +692,7 @@ public class DeadLetterQueueConsumer
             ArchivedAt = DateTimeOffset.UtcNow
         };
 
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "archive",
             routingKey: "dead-letter.archived",
             message: archiveData);
@@ -802,20 +802,20 @@ public class ErrorClassifier
 ```csharp
 public class ClassifyingErrorConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ErrorClassifier _errorClassifier;
     private readonly ILogger<ClassifyingErrorConsumer> _logger;
 
-    public ClassifyingErrorConsumer(IRabbitMQClient rabbitMQ, ErrorClassifier errorClassifier, ILogger<ClassifyingErrorConsumer> logger)
+    public ClassifyingErrorConsumer(IStreamFlowClient rabbitMQ, ErrorClassifier errorClassifier, ILogger<ClassifyingErrorConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _errorClassifier = errorClassifier;
         _logger = logger;
     }
 
     public async Task ConsumeWithErrorClassificationAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "order-processing",
             messageHandler: async (order, context) =>
             {
@@ -905,7 +905,7 @@ public class ClassifyingErrorConsumer
             Expiration = delay.TotalMilliseconds.ToString()
         };
 
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "retry-exchange",
             routingKey: context.RoutingKey,
             message: order,
@@ -924,7 +924,7 @@ public class ClassifyingErrorConsumer
             _ => "unknown.error"
         };
 
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "dlx",
             routingKey: deadLetterRoutingKey,
             message: new
@@ -966,13 +966,13 @@ public interface ICustomErrorHandler
 
 public class CustomErrorHandler : ICustomErrorHandler
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CustomErrorHandler> _logger;
     private readonly ErrorClassifier _errorClassifier;
 
-    public CustomErrorHandler(IRabbitMQClient rabbitMQ, ILogger<CustomErrorHandler> logger, ErrorClassifier errorClassifier)
+    public CustomErrorHandler(IStreamFlowClient rabbitMQ, ILogger<CustomErrorHandler> logger, ErrorClassifier errorClassifier)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         _errorClassifier = errorClassifier;
     }
@@ -1087,7 +1087,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToDeadLetterQueue(ErrorContext context, string errorType)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "dlx",
             routingKey: errorType,
             message: new
@@ -1103,7 +1103,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToValidationErrorQueue(ErrorContext context)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "validation-errors",
             routingKey: "validation.failed",
             message: new
@@ -1116,7 +1116,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToAuthErrorQueue(ErrorContext context)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "auth-errors",
             routingKey: "auth.failed",
             message: new
@@ -1129,7 +1129,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToBusinessErrorQueue(ErrorContext context)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "business-errors",
             routingKey: "business.rule.violated",
             message: new
@@ -1142,7 +1142,7 @@ public class CustomErrorHandler : ICustomErrorHandler
 
     private async Task SendToSystemErrorQueue(ErrorContext context)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "system-errors",
             routingKey: "system.error",
             message: new
@@ -1193,14 +1193,14 @@ Monitor error patterns and set up alerting for critical issues.
 ```csharp
 public class ErrorMonitoringService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<ErrorMonitoringService> _logger;
     private readonly Dictionary<string, ErrorMetrics> _errorMetrics = new();
     private readonly Timer _monitoringTimer;
 
-    public ErrorMonitoringService(IRabbitMQClient rabbitMQ, ILogger<ErrorMonitoringService> logger)
+    public ErrorMonitoringService(IStreamFlowClient rabbitMQ, ILogger<ErrorMonitoringService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Monitor every minute
@@ -1281,7 +1281,7 @@ public class ErrorMonitoringService
 
     private async Task SendHighErrorRateAlert(ErrorMetrics metrics)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "error.high-rate",
             message: new
@@ -1298,7 +1298,7 @@ public class ErrorMonitoringService
 
     private async Task SendNewErrorTypeAlert(ErrorMetrics metrics)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "error.new-type",
             message: new
@@ -1315,7 +1315,7 @@ public class ErrorMonitoringService
 
     private async Task SendSystemErrorAlert(ErrorMetrics metrics)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: "error.system",
             message: new

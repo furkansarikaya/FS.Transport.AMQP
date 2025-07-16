@@ -40,19 +40,19 @@ using Microsoft.Extensions.Logging;
 
 public class BatchProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<BatchProducer> _logger;
 
-    public BatchProducer(IRabbitMQClient rabbitMQ, ILogger<BatchProducer> logger)
+    public BatchProducer(IStreamFlowClient rabbitMQ, ILogger<BatchProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task PublishBatchAsync(IEnumerable<object> messages)
     {
         // Batch publish logic
-        await _rabbitMQ.Producer.PublishBatchAsync(messages.Select(m =>
+        await _streamFlow.Producer.PublishBatchAsync(messages.Select(m =>
             new MessageContext("high-throughput-exchange", "batch", m)));
         _logger.LogInformation("Batch of {Count} messages published", messages.Count());
     }
@@ -68,18 +68,18 @@ using Microsoft.Extensions.Logging;
 
 public class HighThroughputConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<HighThroughputConsumer> _logger;
 
-    public HighThroughputConsumer(IRabbitMQClient rabbitMQ, ILogger<HighThroughputConsumer> logger)
+    public HighThroughputConsumer(IStreamFlowClient rabbitMQ, ILogger<HighThroughputConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task StartConsumingAsync(CancellationToken cancellationToken)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<object>(
+        await _streamFlow.Consumer.ConsumeAsync<object>(
             queueName: "high-throughput-queue",
             messageHandler: async (msg, ctx) =>
             {

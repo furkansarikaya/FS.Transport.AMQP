@@ -76,24 +76,24 @@ public class HighPerformanceConnectionSetup
 ```csharp
 public class DedicatedConnectionExample
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DedicatedConnectionExample> _logger;
 
-    public DedicatedConnectionExample(IRabbitMQClient rabbitMQ, ILogger<DedicatedConnectionExample> logger)
+    public DedicatedConnectionExample(IStreamFlowClient rabbitMQ, ILogger<DedicatedConnectionExample> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task SetupDedicatedConnectionsAsync()
     {
         // Create dedicated connection for high-throughput producer
-        var producerConnection = await _rabbitMQ.ConnectionManager.CreateDedicatedConnectionAsync(
+        var producerConnection = await _streamFlow.ConnectionManager.CreateDedicatedConnectionAsync(
             connectionName: "HighThroughputProducer",
             maxChannels: 50);
 
         // Create dedicated connection for high-throughput consumer
-        var consumerConnection = await _rabbitMQ.ConnectionManager.CreateDedicatedConnectionAsync(
+        var consumerConnection = await _streamFlow.ConnectionManager.CreateDedicatedConnectionAsync(
             connectionName: "HighThroughputConsumer",
             maxChannels: 100);
 
@@ -109,12 +109,12 @@ public class DedicatedConnectionExample
 ```csharp
 public class HighThroughputProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<HighThroughputProducer> _logger;
 
-    public HighThroughputProducer(IRabbitMQClient rabbitMQ, ILogger<HighThroughputProducer> logger)
+    public HighThroughputProducer(IStreamFlowClient rabbitMQ, ILogger<HighThroughputProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -151,7 +151,7 @@ public class HighThroughputProducer
         });
 
         var stopwatch = Stopwatch.StartNew();
-        var results = await _rabbitMQ.Producer.PublishBatchAsync(messageContexts);
+        var results = await _streamFlow.Producer.PublishBatchAsync(messageContexts);
         stopwatch.Stop();
 
         var successCount = results.Count(r => r.IsSuccess);
@@ -169,14 +169,14 @@ public class HighThroughputProducer
 ```csharp
 public class AsyncChannelProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<AsyncChannelProducer> _logger;
     private readonly Channel<Order> _orderChannel;
     private readonly SemaphoreSlim _publishSemaphore;
 
-    public AsyncChannelProducer(IRabbitMQClient rabbitMQ, ILogger<AsyncChannelProducer> logger)
+    public AsyncChannelProducer(IStreamFlowClient rabbitMQ, ILogger<AsyncChannelProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Create bounded channel for back-pressure
@@ -209,7 +209,7 @@ public class AsyncChannelProducer
             {
                 try
                 {
-                    await _rabbitMQ.Producer.PublishAsync(
+                    await _streamFlow.Producer.PublishAsync(
                         exchange: "orders",
                         routingKey: "order.created",
                         message: order);
@@ -233,29 +233,29 @@ public class AsyncChannelProducer
 ```csharp
 public class OptimizedConfirmProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OptimizedConfirmProducer> _logger;
     private readonly ConcurrentDictionary<ulong, TaskCompletionSource<bool>> _pendingConfirms = new();
 
-    public OptimizedConfirmProducer(IRabbitMQClient rabbitMQ, ILogger<OptimizedConfirmProducer> logger)
+    public OptimizedConfirmProducer(IStreamFlowClient rabbitMQ, ILogger<OptimizedConfirmProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Subscribe to confirm events
-        _rabbitMQ.Producer.MessageConfirmed += OnMessageConfirmed;
+        _streamFlow.Producer.MessageConfirmed += OnMessageConfirmed;
     }
 
     public async Task<bool> PublishWithOptimizedConfirmAsync(Order order)
     {
-        var deliveryTag = await _rabbitMQ.Producer.GetNextDeliveryTagAsync();
+        var deliveryTag = await _streamFlow.Producer.GetNextDeliveryTagAsync();
         var tcs = new TaskCompletionSource<bool>();
         
         _pendingConfirms[deliveryTag] = tcs;
         
         try
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order);
@@ -311,14 +311,14 @@ public class OptimizedConfirmProducer
 ```csharp
 public class HighThroughputConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<HighThroughputConsumer> _logger;
     private readonly SemaphoreSlim _processingLimiter;
     private readonly Channel<ProcessingItem> _processingChannel;
 
-    public HighThroughputConsumer(IRabbitMQClient rabbitMQ, ILogger<HighThroughputConsumer> logger)
+    public HighThroughputConsumer(IStreamFlowClient rabbitMQ, ILogger<HighThroughputConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Limit concurrent processing
@@ -341,7 +341,7 @@ public class HighThroughputConsumer
 
     public async Task ConsumeHighThroughputAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "high-throughput-orders",
             messageHandler: async (order, context) =>
             {
@@ -406,13 +406,13 @@ public class HighThroughputConsumer
 ```csharp
 public class OptimizedPrefetchConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OptimizedPrefetchConsumer> _logger;
     private readonly int _optimalPrefetchCount;
 
-    public OptimizedPrefetchConsumer(IRabbitMQClient rabbitMQ, ILogger<OptimizedPrefetchConsumer> logger)
+    public OptimizedPrefetchConsumer(IStreamFlowClient rabbitMQ, ILogger<OptimizedPrefetchConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Calculate optimal prefetch count based on processing time
@@ -422,14 +422,14 @@ public class OptimizedPrefetchConsumer
     public async Task ConsumeWithOptimizedPrefetchAsync(CancellationToken cancellationToken = default)
     {
         // Configure consumer with optimal prefetch
-        await _rabbitMQ.Consumer.ConfigureAsync(config =>
+        await _streamFlow.Consumer.ConfigureAsync(config =>
         {
             config.PrefetchCount = _optimalPrefetchCount;
             config.PrefetchSize = 0;
             config.PrefetchGlobal = false;
         });
 
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "optimized-orders",
             messageHandler: async (order, context) =>
             {
@@ -480,7 +480,7 @@ public class OptimizedPrefetchConsumer
             var newPrefetch = Math.Max(1, currentPrefetch / 2);
             if (newPrefetch != currentPrefetch)
             {
-                await _rabbitMQ.Consumer.ConfigureAsync(config =>
+                await _streamFlow.Consumer.ConfigureAsync(config =>
                 {
                     config.PrefetchCount = newPrefetch;
                 });
@@ -493,7 +493,7 @@ public class OptimizedPrefetchConsumer
             var newPrefetch = Math.Min(1000, currentPrefetch * 2);
             if (newPrefetch != currentPrefetch)
             {
-                await _rabbitMQ.Consumer.ConfigureAsync(config =>
+                await _streamFlow.Consumer.ConfigureAsync(config =>
                 {
                     config.PrefetchCount = newPrefetch;
                 });
@@ -601,14 +601,14 @@ public class HighPerformanceSerializer : IMessageSerializer
 ```csharp
 public class MemoryEfficientConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<MemoryEfficientConsumer> _logger;
     private readonly ObjectPool<OrderProcessor> _processorPool;
     private readonly MemoryPool<byte> _memoryPool;
 
-    public MemoryEfficientConsumer(IRabbitMQClient rabbitMQ, ILogger<MemoryEfficientConsumer> logger)
+    public MemoryEfficientConsumer(IStreamFlowClient rabbitMQ, ILogger<MemoryEfficientConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Create object pool for processors
@@ -622,7 +622,7 @@ public class MemoryEfficientConsumer
 
     public async Task ConsumeMemoryEfficientAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "memory-efficient-orders",
             messageHandler: async (order, context) =>
             {
@@ -700,14 +700,14 @@ public class OrderProcessorPooledObjectPolicy : IPooledObjectPolicy<OrderProcess
 ```csharp
 public class GCOptimizedConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<GCOptimizedConsumer> _logger;
     private readonly Timer _gcTimer;
     private long _processedCount = 0;
 
-    public GCOptimizedConsumer(IRabbitMQClient rabbitMQ, ILogger<GCOptimizedConsumer> logger)
+    public GCOptimizedConsumer(IStreamFlowClient rabbitMQ, ILogger<GCOptimizedConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Force GC periodically for consistent performance
@@ -716,7 +716,7 @@ public class GCOptimizedConsumer
 
     public async Task ConsumeWithGCOptimizationAsync(CancellationToken cancellationToken = default)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        await _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "gc-optimized-orders",
             messageHandler: async (order, context) =>
             {
@@ -812,12 +812,12 @@ public class NetworkOptimizedSetup
 ```csharp
 public class CompressionOptimizedProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CompressionOptimizedProducer> _logger;
 
-    public CompressionOptimizedProducer(IRabbitMQClient rabbitMQ, ILogger<CompressionOptimizedProducer> logger)
+    public CompressionOptimizedProducer(IStreamFlowClient rabbitMQ, ILogger<CompressionOptimizedProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -834,7 +834,7 @@ public class CompressionOptimizedProducer
             
             if (compressionRatio < 0.9) // Only use compression if it saves at least 10%
             {
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: exchange,
                     routingKey: routingKey,
                     message: compressedBytes,
@@ -854,13 +854,13 @@ public class CompressionOptimizedProducer
             else
             {
                 // Send uncompressed if compression doesn't help
-                await _rabbitMQ.Producer.PublishAsync(exchange, routingKey, messageBytes);
+                await _streamFlow.Producer.PublishAsync(exchange, routingKey, messageBytes);
             }
         }
         else
         {
             // Send small messages uncompressed
-            await _rabbitMQ.Producer.PublishAsync(exchange, routingKey, messageBytes);
+            await _streamFlow.Producer.PublishAsync(exchange, routingKey, messageBytes);
         }
     }
 
@@ -884,14 +884,14 @@ public class CompressionOptimizedProducer
 ```csharp
 public class PerformanceMonitor
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PerformanceMonitor> _logger;
     private readonly Timer _monitoringTimer;
     private readonly PerformanceMetrics _metrics = new();
 
-    public PerformanceMonitor(IRabbitMQClient rabbitMQ, ILogger<PerformanceMonitor> logger)
+    public PerformanceMonitor(IStreamFlowClient rabbitMQ, ILogger<PerformanceMonitor> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Monitor performance every 10 seconds
@@ -1029,12 +1029,12 @@ public class PerformanceMetrics
 ```csharp
 public class PerformanceBenchmark
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PerformanceBenchmark> _logger;
 
-    public PerformanceBenchmark(IRabbitMQClient rabbitMQ, ILogger<PerformanceBenchmark> logger)
+    public PerformanceBenchmark(IStreamFlowClient rabbitMQ, ILogger<PerformanceBenchmark> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -1058,7 +1058,7 @@ public class PerformanceBenchmark
         
         foreach (var message in messages)
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "benchmark",
                 routingKey: "basic.publish",
                 message: message);
@@ -1110,7 +1110,7 @@ public class PerformanceBenchmark
         var stopwatch = Stopwatch.StartNew();
         var cancellationTokenSource = new CancellationTokenSource();
         
-        var consumeTask = _rabbitMQ.Consumer.ConsumeAsync<Order>(
+        var consumeTask = _streamFlow.Consumer.ConsumeAsync<Order>(
             queueName: "benchmark-basic-consume",
             messageHandler: async (order, context) =>
             {
@@ -1159,7 +1159,7 @@ public class PerformanceBenchmark
         var consumerTasks = new List<Task>();
         for (int i = 0; i < Environment.ProcessorCount; i++)
         {
-            var consumerTask = _rabbitMQ.Consumer.ConsumeAsync<Order>(
+            var consumerTask = _streamFlow.Consumer.ConsumeAsync<Order>(
                 queueName: "benchmark-concurrent-consume",
                 messageHandler: async (order, context) =>
                 {
@@ -1237,7 +1237,7 @@ public class PerformanceBenchmark
             Message = message
         });
 
-        await _rabbitMQ.Producer.PublishBatchAsync(messageContexts);
+        await _streamFlow.Producer.PublishBatchAsync(messageContexts);
     }
 
     private List<Order> GenerateTestMessages(int count)

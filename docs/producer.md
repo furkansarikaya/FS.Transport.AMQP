@@ -319,16 +319,16 @@ public class InfrastructureSetup
 ```csharp
 public class AdvancedPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public AdvancedPublisher(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public AdvancedPublisher(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
 
     // Topic exchange routing
     public async Task PublishTopicMessageAsync(string region, string category, object message)
     {
         var routingKey = $"{region}.{category}";
         
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "topic-exchange",
             routingKey: routingKey,
             message: message);
@@ -337,7 +337,7 @@ public class AdvancedPublisher
     // Fanout exchange publishing
     public async Task PublishBroadcastMessageAsync(object message)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "fanout-exchange",
             routingKey: "", // Ignored for fanout
             message: message);
@@ -351,7 +351,7 @@ public class AdvancedPublisher
             Headers = headers
         };
 
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "headers-exchange",
             routingKey: "", // Ignored for headers
             message: message,
@@ -365,14 +365,14 @@ public class AdvancedPublisher
 ```csharp
 public class ScheduledPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public ScheduledPublisher(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public ScheduledPublisher(IStreamFlowClient streamFlow) => _streamFlow = streamFlow;
 
     // Schedule message for future delivery
     public async Task ScheduleMessageAsync(object message, TimeSpan delay)
     {
-        await _rabbitMQ.Producer.ScheduleAsync(
+        await _streamFlow.Producer.ScheduleAsync(
             message: message,
             delay: delay);
     }
@@ -383,7 +383,7 @@ public class ScheduledPublisher
         var delay = scheduleTime - DateTimeOffset.UtcNow;
         if (delay > TimeSpan.Zero)
         {
-            await _rabbitMQ.Producer.ScheduleAsync(
+            await _streamFlow.Producer.ScheduleAsync(
                 message: message,
                 delay: delay);
         }
@@ -396,7 +396,7 @@ public class ScheduledPublisher
         // In production, use a proper scheduling library or service
         using var timer = new Timer(async _ =>
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "scheduled",
                 routingKey: "recurring.message",
                 message: message);
@@ -415,12 +415,12 @@ public class ScheduledPublisher
 ```csharp
 public class ConfirmationPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<ConfirmationPublisher> _logger;
 
-    public ConfirmationPublisher(IRabbitMQClient rabbitMQ, ILogger<ConfirmationPublisher> logger)
+    public ConfirmationPublisher(IStreamFlowClient streamFlow, ILogger<ConfirmationPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -429,7 +429,7 @@ public class ConfirmationPublisher
         try
         {
             // Enable confirmations for this operation
-            var success = await _rabbitMQ.Producer.PublishAsync(
+            var success = await _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order,
@@ -459,17 +459,17 @@ public class ConfirmationPublisher
 ```csharp
 public class CallbackPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CallbackPublisher> _logger;
 
-    public CallbackPublisher(IRabbitMQClient rabbitMQ, ILogger<CallbackPublisher> logger)
+    public CallbackPublisher(IStreamFlowClient streamFlow, ILogger<CallbackPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Subscribe to confirmation events
-        _rabbitMQ.Producer.MessageConfirmed += OnMessageConfirmed;
-        _rabbitMQ.Producer.ErrorOccurred += OnErrorOccurred;
+        _streamFlow.Producer.MessageConfirmed += OnMessageConfirmed;
+        _streamFlow.Producer.ErrorOccurred += OnErrorOccurred;
     }
 
     private async Task OnMessageConfirmed(ulong deliveryTag, bool multiple)
@@ -485,7 +485,7 @@ public class CallbackPublisher
 
     public async Task PublishWithCallbackAsync(Order order)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "orders",
             routingKey: "order.created",
             message: order);
@@ -498,12 +498,12 @@ public class CallbackPublisher
 ```csharp
 public class BulkConfirmationPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<BulkConfirmationPublisher> _logger;
 
-    public BulkConfirmationPublisher(IRabbitMQClient rabbitMQ, ILogger<BulkConfirmationPublisher> logger)
+    public BulkConfirmationPublisher(IStreamFlowClient rabbitMQ, ILogger<BulkConfirmationPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -513,7 +513,7 @@ public class BulkConfirmationPublisher
 
         foreach (var order in orders)
         {
-            var task = _rabbitMQ.Producer.PublishAsync(
+            var task = _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order,
@@ -546,12 +546,12 @@ public class BulkConfirmationPublisher
 ```csharp
 public class BatchPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<BatchPublisher> _logger;
 
-    public BatchPublisher(IRabbitMQClient rabbitMQ, ILogger<BatchPublisher> logger)
+    public BatchPublisher(IStreamFlowClient rabbitMQ, ILogger<BatchPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -564,7 +564,7 @@ public class BatchPublisher
             Message = order
         });
 
-        var results = await _rabbitMQ.Producer.PublishBatchAsync(messageContexts);
+        var results = await _streamFlow.Producer.PublishBatchAsync(messageContexts);
         
         _logger.LogInformation("Published {Count} orders in batch", results.Count);
     }
@@ -576,12 +576,12 @@ public class BatchPublisher
 ```csharp
 public class AdvancedBatchPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<AdvancedBatchPublisher> _logger;
 
-    public AdvancedBatchPublisher(IRabbitMQClient rabbitMQ, ILogger<AdvancedBatchPublisher> logger)
+    public AdvancedBatchPublisher(IStreamFlowClient rabbitMQ, ILogger<AdvancedBatchPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -595,7 +595,7 @@ public class AdvancedBatchPublisher
             Properties = GetPropertiesForMessage(message)
         });
 
-        var results = await _rabbitMQ.Producer.PublishBatchAsync(messageContexts);
+        var results = await _streamFlow.Producer.PublishBatchAsync(messageContexts);
         
         foreach (var result in results)
         {
@@ -656,12 +656,12 @@ public class AdvancedBatchPublisher
 ```csharp
 public class PartitionedBatchPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PartitionedBatchPublisher> _logger;
 
-    public PartitionedBatchPublisher(IRabbitMQClient rabbitMQ, ILogger<PartitionedBatchPublisher> logger)
+    public PartitionedBatchPublisher(IStreamFlowClient rabbitMQ, ILogger<PartitionedBatchPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -695,7 +695,7 @@ public class PartitionedBatchPublisher
             Message = order
         });
 
-        await _rabbitMQ.Producer.PublishBatchAsync(messageContexts);
+        await _streamFlow.Producer.PublishBatchAsync(messageContexts);
     }
 }
 ```
@@ -707,26 +707,26 @@ public class PartitionedBatchPublisher
 ```csharp
 public class TransactionalPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<TransactionalPublisher> _logger;
 
-    public TransactionalPublisher(IRabbitMQClient rabbitMQ, ILogger<TransactionalPublisher> logger)
+    public TransactionalPublisher(IStreamFlowClient rabbitMQ, ILogger<TransactionalPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task PublishTransactionalAsync(Order order)
     {
-        await _rabbitMQ.Producer.PublishTransactionalAsync(async () =>
+        await _streamFlow.Producer.PublishTransactionalAsync(async () =>
         {
             // All operations within this block are transactional
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order);
 
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "audit",
                 routingKey: "audit.order.created",
                 message: new AuditEvent
@@ -746,12 +746,12 @@ public class TransactionalPublisher
 ```csharp
 public class AdvancedTransactionalPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<AdvancedTransactionalPublisher> _logger;
 
-    public AdvancedTransactionalPublisher(IRabbitMQClient rabbitMQ, ILogger<AdvancedTransactionalPublisher> logger)
+    public AdvancedTransactionalPublisher(IStreamFlowClient rabbitMQ, ILogger<AdvancedTransactionalPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -759,16 +759,16 @@ public class AdvancedTransactionalPublisher
     {
         try
         {
-            await _rabbitMQ.Producer.PublishTransactionalAsync(async () =>
+            await _streamFlow.Producer.PublishTransactionalAsync(async () =>
             {
                 // Publish order created event
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "orders",
                     routingKey: "order.created",
                     message: order);
 
                 // Publish inventory reservation request
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "inventory",
                     routingKey: "inventory.reserve",
                     message: new InventoryReservationRequest
@@ -778,7 +778,7 @@ public class AdvancedTransactionalPublisher
                     });
 
                 // Publish payment request
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "payments",
                     routingKey: "payment.process",
                     message: new PaymentRequest
@@ -789,7 +789,7 @@ public class AdvancedTransactionalPublisher
                     });
 
                 // Publish audit event
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "audit",
                     routingKey: "audit.order.workflow.started",
                     message: new AuditEvent
@@ -819,13 +819,13 @@ public class AdvancedTransactionalPublisher
 ```csharp
 public class FluentPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public FluentPublisher(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public FluentPublisher(IStreamFlowClient rabbitMQ) => _streamFlow = rabbitMQ;
 
     public async Task PublishWithFluentApiAsync(Order order)
     {
-        await _rabbitMQ.Producer
+        await _streamFlow.Producer
             .Message(order)
             .ToExchange("orders")
             .WithRoutingKey("order.created")
@@ -847,13 +847,13 @@ public class FluentPublisher
 ```csharp
 public class AdvancedFluentPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public AdvancedFluentPublisher(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public AdvancedFluentPublisher(IStreamFlowClient rabbitMQ) => _streamFlow = rabbitMQ;
 
     public async Task PublishComplexFluentAsync(Order order)
     {
-        var result = await _rabbitMQ.Producer
+        var result = await _streamFlow.Producer
             .Message(order)
             .ToExchange("orders")
             .WithRoutingKey($"order.created.{order.CustomerId}")
@@ -894,13 +894,13 @@ public class AdvancedFluentPublisher
 ```csharp
 public class FluentBatchPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public FluentBatchPublisher(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public FluentBatchPublisher(IStreamFlowClient rabbitMQ) => _streamFlow = rabbitMQ;
 
     public async Task PublishFluentBatchAsync(IEnumerable<Order> orders)
     {
-        var batchBuilder = _rabbitMQ.Producer.CreateBatch();
+        var batchBuilder = _streamFlow.Producer.CreateBatch();
 
         foreach (var order in orders)
         {
@@ -941,12 +941,12 @@ public class FluentBatchPublisher
 ```csharp
 public class RetryPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<RetryPublisher> _logger;
 
-    public RetryPublisher(IRabbitMQClient rabbitMQ, ILogger<RetryPublisher> logger)
+    public RetryPublisher(IStreamFlowClient rabbitMQ, ILogger<RetryPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -959,7 +959,7 @@ public class RetryPublisher
         {
             try
             {
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "orders",
                     routingKey: "order.created",
                     message: order);
@@ -990,13 +990,13 @@ public class RetryPublisher
 ```csharp
 public class CircuitBreakerPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CircuitBreakerPublisher> _logger;
     private readonly CircuitBreaker _circuitBreaker;
 
-    public CircuitBreakerPublisher(IRabbitMQClient rabbitMQ, ILogger<CircuitBreakerPublisher> logger)
+    public CircuitBreakerPublisher(IStreamFlowClient rabbitMQ, ILogger<CircuitBreakerPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         _circuitBreaker = new CircuitBreaker(
             failureThreshold: 5,
@@ -1009,7 +1009,7 @@ public class CircuitBreakerPublisher
         {
             await _circuitBreaker.ExecuteAsync(async () =>
             {
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "orders",
                     routingKey: "order.created",
                     message: order);
@@ -1059,12 +1059,12 @@ public class CircuitBreakerPublisher
 ```csharp
 public class DeadLetterPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DeadLetterPublisher> _logger;
 
-    public DeadLetterPublisher(IRabbitMQClient rabbitMQ, ILogger<DeadLetterPublisher> logger)
+    public DeadLetterPublisher(IStreamFlowClient rabbitMQ, ILogger<DeadLetterPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -1085,7 +1085,7 @@ public class DeadLetterPublisher
 
         try
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order,
@@ -1117,7 +1117,7 @@ public class DeadLetterPublisher
             }
         };
 
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "dlx",
             routingKey: "order.failed",
             message: order,
@@ -1133,13 +1133,13 @@ public class DeadLetterPublisher
 ```csharp
 public class HighPerformancePublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<HighPerformancePublisher> _logger;
     private readonly SemaphoreSlim _semaphore;
 
-    public HighPerformancePublisher(IRabbitMQClient rabbitMQ, ILogger<HighPerformancePublisher> logger)
+    public HighPerformancePublisher(IStreamFlowClient rabbitMQ, ILogger<HighPerformancePublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         _semaphore = new SemaphoreSlim(100, 100); // Limit concurrent operations
     }
@@ -1158,7 +1158,7 @@ public class HighPerformancePublisher
         await _semaphore.WaitAsync();
         try
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order);
@@ -1176,13 +1176,13 @@ public class HighPerformancePublisher
 ```csharp
 public class AsyncPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<AsyncPublisher> _logger;
     private readonly Channel<Order> _channel;
 
-    public AsyncPublisher(IRabbitMQClient rabbitMQ, ILogger<AsyncPublisher> logger)
+    public AsyncPublisher(IStreamFlowClient rabbitMQ, ILogger<AsyncPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         _channel = Channel.CreateUnbounded<Order>();
         
@@ -1201,7 +1201,7 @@ public class AsyncPublisher
         {
             try
             {
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "orders",
                     routingKey: "order.created",
                     message: order);
@@ -1226,12 +1226,12 @@ public class AsyncPublisher
 ```csharp
 public class MonitoredPublisher
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<MonitoredPublisher> _logger;
 
-    public MonitoredPublisher(IRabbitMQClient rabbitMQ, ILogger<MonitoredPublisher> logger)
+    public MonitoredPublisher(IStreamFlowClient rabbitMQ, ILogger<MonitoredPublisher> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -1241,7 +1241,7 @@ public class MonitoredPublisher
         
         try
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "orders",
                 routingKey: "order.created",
                 message: order);
@@ -1286,7 +1286,7 @@ public class MonitoredPublisher
 
     public void LogStatistics()
     {
-        var stats = _rabbitMQ.Producer.Statistics;
+        var stats = _streamFlow.Producer.Statistics;
         
         _logger.LogInformation("Producer Statistics: " +
             "Status={Status}, " +
@@ -1311,14 +1311,14 @@ public class MonitoredPublisher
 
 ```csharp
 // DO: Use confirmations for critical messages
-await _rabbitMQ.Producer.PublishAsync(
+await _streamFlow.Producer.PublishAsync(
     exchange: "orders",
     routingKey: "order.created",
     message: order,
     waitForConfirmation: true);
 
 // DON'T: Ignore confirmations for critical messages
-await _rabbitMQ.Producer.PublishAsync(
+await _streamFlow.Producer.PublishAsync(
     exchange: "orders",
     routingKey: "order.created",
     message: order);
@@ -1333,7 +1333,7 @@ var properties = new BasicProperties
     DeliveryMode = DeliveryMode.Persistent
 };
 
-await _rabbitMQ.Producer.PublishAsync(
+await _streamFlow.Producer.PublishAsync(
     exchange: "orders",
     routingKey: "order.created",
     message: order,
@@ -1348,7 +1348,7 @@ public async Task PublishOrderAsync(Order order)
 {
     try
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "orders",
             routingKey: "order.created",
             message: order);
@@ -1379,12 +1379,12 @@ var messageContexts = orders.Select(order => new MessageContext
     Message = order
 });
 
-await _rabbitMQ.Producer.PublishBatchAsync(messageContexts);
+await _streamFlow.Producer.PublishBatchAsync(messageContexts);
 
 // DON'T: Publish individual messages in a loop
 foreach (var order in orders)
 {
-    await _rabbitMQ.Producer.PublishAsync(
+    await _streamFlow.Producer.PublishAsync(
         exchange: "orders",
         routingKey: "order.created",
         message: order);
@@ -1400,7 +1400,7 @@ var properties = new BasicProperties
     Expiration = TimeSpan.FromMinutes(30).TotalMilliseconds.ToString()
 };
 
-await _rabbitMQ.Producer.PublishAsync(
+await _streamFlow.Producer.PublishAsync(
     exchange: "notifications",
     routingKey: "email.send",
     message: emailMessage,
@@ -1416,7 +1416,7 @@ var properties = new BasicProperties
     MessageId = order.Id.ToString()
 };
 
-await _rabbitMQ.Producer.PublishAsync(
+await _streamFlow.Producer.PublishAsync(
     exchange: "orders",
     routingKey: "order.created",
     message: order,
@@ -1429,14 +1429,14 @@ await _rabbitMQ.Producer.PublishAsync(
 // DO: Monitor producer performance
 public class ProducerHealthCheck : IHealthCheck
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public ProducerHealthCheck(IRabbitMQClient rabbitMQ) => _rabbitMQ = rabbitMQ;
+    public ProducerHealthCheck(IStreamFlowClient rabbitMQ) => _streamFlow = rabbitMQ;
 
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        var isHealthy = _rabbitMQ.Producer.IsReady;
-        var stats = _rabbitMQ.Producer.Statistics;
+        var isHealthy = _streamFlow.Producer.IsReady;
+        var stats = _streamFlow.Producer.Statistics;
         
         var data = new Dictionary<string, object>
         {

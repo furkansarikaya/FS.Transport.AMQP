@@ -34,12 +34,12 @@ Comprehensive monitoring is essential for production RabbitMQ applications. FS.S
 ```csharp
 public class RabbitMQHealthCheck : IHealthCheck
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<RabbitMQHealthCheck> _logger;
 
-    public RabbitMQHealthCheck(IRabbitMQClient rabbitMQ, ILogger<RabbitMQHealthCheck> logger)
+    public RabbitMQHealthCheck(IStreamFlowClient streamFlow, ILogger<RabbitMQHealthCheck> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -83,26 +83,26 @@ public class RabbitMQHealthCheck : IHealthCheck
 
     private async Task<bool> CheckConnectionHealthAsync()
     {
-        return _rabbitMQ.ConnectionManager.IsConnected;
+        return _streamFlow.ConnectionManager.IsConnected;
     }
 
     private async Task<bool> CheckProducerHealthAsync()
     {
-        return _rabbitMQ.Producer.IsReady;
+        return _streamFlow.Producer.IsReady;
     }
 
     private async Task<bool> CheckConsumerHealthAsync()
     {
-        return _rabbitMQ.Consumer.Status == ConsumerStatus.Running;
+        return _streamFlow.Consumer.Status == ConsumerStatus.Running;
     }
 
     private async Task<object> GetHealthStatisticsAsync()
     {
         return new
         {
-            ConnectionState = _rabbitMQ.ConnectionManager.State.ToString(),
-            ProducerStatistics = _rabbitMQ.Producer.Statistics,
-            ConsumerStatistics = _rabbitMQ.Consumer.Statistics,
+            ConnectionState = _streamFlow.ConnectionManager.State.ToString(),
+            ProducerStatistics = _streamFlow.Producer.Statistics,
+            ConsumerStatistics = _streamFlow.Consumer.Statistics,
             LastHealthCheck = DateTimeOffset.UtcNow
         };
     }
@@ -114,12 +114,12 @@ public class RabbitMQHealthCheck : IHealthCheck
 ```csharp
 public class DetailedRabbitMQHealthCheck : IHealthCheck
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DetailedRabbitMQHealthCheck> _logger;
 
-    public DetailedRabbitMQHealthCheck(IRabbitMQClient rabbitMQ, ILogger<DetailedRabbitMQHealthCheck> logger)
+    public DetailedRabbitMQHealthCheck(IStreamFlowClient streamFlow, ILogger<DetailedRabbitMQHealthCheck> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -182,7 +182,7 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
 
     private async Task<ProbeResult> ProbeConnectionHealthAsync()
     {
-        var connectionManager = _rabbitMQ.ConnectionManager;
+        var connectionManager = _streamFlow.ConnectionManager;
         var isConnected = connectionManager.IsConnected;
         var statistics = connectionManager.Statistics;
 
@@ -203,7 +203,7 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
 
     private async Task<ProbeResult> ProbeProducerHealthAsync()
     {
-        var producer = _rabbitMQ.Producer;
+        var producer = _streamFlow.Producer;
         var isReady = producer.IsReady;
         var statistics = producer.Statistics;
 
@@ -229,7 +229,7 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
 
     private async Task<ProbeResult> ProbeConsumerHealthAsync()
     {
-        var consumer = _rabbitMQ.Consumer;
+        var consumer = _streamFlow.Consumer;
         var status = consumer.Status;
         var statistics = consumer.Statistics;
 
@@ -256,7 +256,7 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
     {
         try
         {
-            var queueInfo = await _rabbitMQ.QueueManager.GetQueueInfoAsync("order-processing");
+            var queueInfo = await _streamFlow.QueueManager.GetQueueInfoAsync("order-processing");
             var messageCount = queueInfo.MessageCount;
             var consumerCount = queueInfo.ConsumerCount;
 
@@ -289,7 +289,7 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
 
     private async Task<ProbeResult> ProbeErrorRatesAsync()
     {
-        var statistics = _rabbitMQ.ErrorHandler.Statistics;
+        var statistics = _streamFlow.ErrorHandler.Statistics;
         var errorRate = statistics.TotalProcessed > 0 
             ? (double)statistics.TotalErrors / statistics.TotalProcessed * 100 
             : 0;
@@ -310,8 +310,8 @@ public class DetailedRabbitMQHealthCheck : IHealthCheck
 
     private async Task<ProbeResult> ProbePerformanceAsync()
     {
-        var producerStats = _rabbitMQ.Producer.Statistics;
-        var consumerStats = _rabbitMQ.Consumer.Statistics;
+        var producerStats = _streamFlow.Producer.Statistics;
+        var consumerStats = _streamFlow.Consumer.Statistics;
 
         // Calculate throughput over the last minute
         var timeWindow = TimeSpan.FromMinutes(1);
@@ -354,13 +354,13 @@ public class ProbeResult
 ```csharp
 public class RabbitMQMetricsCollector
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<RabbitMQMetricsCollector> _logger;
     private readonly Timer _metricsTimer;
 
-    public RabbitMQMetricsCollector(IRabbitMQClient rabbitMQ, ILogger<RabbitMQMetricsCollector> logger)
+    public RabbitMQMetricsCollector(IStreamFlowClient streamFlow, ILogger<RabbitMQMetricsCollector> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Collect metrics every 30 seconds
@@ -382,17 +382,17 @@ public class RabbitMQMetricsCollector
 
     private async Task<RabbitMQMetrics> CollectAllMetricsAsync()
     {
-        var connectionStats = _rabbitMQ.ConnectionManager.Statistics;
-        var producerStats = _rabbitMQ.Producer.Statistics;
-        var consumerStats = _rabbitMQ.Consumer.Statistics;
+        var connectionStats = _streamFlow.ConnectionManager.Statistics;
+        var producerStats = _streamFlow.Producer.Statistics;
+        var consumerStats = _streamFlow.Consumer.Statistics;
 
         return new RabbitMQMetrics
         {
             Timestamp = DateTimeOffset.UtcNow,
             Connection = new ConnectionMetrics
             {
-                IsConnected = _rabbitMQ.ConnectionManager.IsConnected,
-                State = _rabbitMQ.ConnectionManager.State.ToString(),
+                IsConnected = _streamFlow.ConnectionManager.IsConnected,
+                State = _streamFlow.ConnectionManager.State.ToString(),
                 ConnectionCount = connectionStats.ConnectionCount,
                 ChannelCount = connectionStats.ChannelCount,
                 RecoveryCount = connectionStats.RecoveryCount,
@@ -400,7 +400,7 @@ public class RabbitMQMetricsCollector
             },
             Producer = new ProducerMetrics
             {
-                IsReady = _rabbitMQ.Producer.IsReady,
+                IsReady = _streamFlow.Producer.IsReady,
                 Status = producerStats.Status.ToString(),
                 TotalPublished = producerStats.TotalPublished,
                 TotalConfirmed = producerStats.TotalConfirmed,
@@ -469,7 +469,7 @@ public class RabbitMQMetricsCollector
     private async Task PublishMetricsAsync(RabbitMQMetrics metrics)
     {
         // Publish metrics to monitoring system
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "monitoring",
             routingKey: "metrics.rabbitmq",
             message: metrics);
@@ -493,13 +493,13 @@ public class RabbitMQMetricsCollector
 ```csharp
 public class CustomMetricsCollector
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CustomMetricsCollector> _logger;
     private readonly ConcurrentDictionary<string, CustomMetric> _customMetrics = new();
 
-    public CustomMetricsCollector(IRabbitMQClient rabbitMQ, ILogger<CustomMetricsCollector> logger)
+    public CustomMetricsCollector(IStreamFlowClient streamFlow, ILogger<CustomMetricsCollector> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -566,7 +566,7 @@ public class CustomMetricsCollector
 
         foreach (var metric in metrics)
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "metrics",
                 routingKey: $"custom.{metric.Type.ToString().ToLower()}",
                 message: metric);
@@ -605,12 +605,12 @@ public enum MetricType
 public class RabbitMQLogger
 {
     private readonly ILogger<RabbitMQLogger> _logger;
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
 
-    public RabbitMQLogger(ILogger<RabbitMQLogger> logger, IRabbitMQClient rabbitMQ)
+    public RabbitMQLogger(ILogger<RabbitMQLogger> logger, IStreamFlowClient streamFlow)
     {
         _logger = logger;
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
     }
 
     public void LogMessagePublished(string messageId, string exchange, string routingKey, int size)
@@ -690,13 +690,13 @@ public class RabbitMQLogger
 ```csharp
 public class LogAggregator
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<LogAggregator> _logger;
     private readonly Channel<LogEntry> _logChannel;
 
-    public LogAggregator(IRabbitMQClient rabbitMQ, ILogger<LogAggregator> logger)
+    public LogAggregator(IStreamFlowClient streamFlow, ILogger<LogAggregator> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         _logChannel = Channel.CreateBounded<LogEntry>(new BoundedChannelOptions(10000)
@@ -747,7 +747,7 @@ public class LogAggregator
         try
         {
             // Send logs to centralized logging system
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "logs",
                 routingKey: "application.logs",
                 message: new LogBatch
@@ -788,13 +788,13 @@ public class LogBatch
 ```csharp
 public class AlertManager
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<AlertManager> _logger;
     private readonly Dictionary<string, Alert> _activeAlerts = new();
 
-    public AlertManager(IRabbitMQClient rabbitMQ, ILogger<AlertManager> logger)
+    public AlertManager(IStreamFlowClient streamFlow, ILogger<AlertManager> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -822,7 +822,7 @@ public class AlertManager
         _activeAlerts[alertKey] = alert;
 
         // Send alert
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "alerts",
             routingKey: $"alert.{severity.ToString().ToLower()}",
             message: alert);
@@ -920,12 +920,12 @@ public enum AlertSeverity
 ```csharp
 public class DashboardDataProvider
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DashboardDataProvider> _logger;
 
-    public DashboardDataProvider(IRabbitMQClient rabbitMQ, ILogger<DashboardDataProvider> logger)
+    public DashboardDataProvider(IStreamFlowClient streamFlow, ILogger<DashboardDataProvider> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -947,9 +947,9 @@ public class DashboardDataProvider
 
     private async Task<OverviewData> GetOverviewDataAsync()
     {
-        var connectionManager = _rabbitMQ.ConnectionManager;
-        var producer = _rabbitMQ.Producer;
-        var consumer = _rabbitMQ.Consumer;
+        var connectionManager = _streamFlow.ConnectionManager;
+        var producer = _streamFlow.Producer;
+        var consumer = _streamFlow.Consumer;
 
         return new OverviewData
         {
@@ -963,12 +963,12 @@ public class DashboardDataProvider
 
     private async Task<ProducerData> GetProducerDataAsync()
     {
-        var stats = _rabbitMQ.Producer.Statistics;
+        var stats = _streamFlow.Producer.Statistics;
         var runtime = DateTimeOffset.UtcNow - stats.StartTime;
 
         return new ProducerData
         {
-            IsReady = _rabbitMQ.Producer.IsReady,
+            IsReady = _streamFlow.Producer.IsReady,
             TotalPublished = stats.TotalPublished,
             TotalConfirmed = stats.TotalConfirmed,
             TotalFailed = stats.TotalFailed,
@@ -980,7 +980,7 @@ public class DashboardDataProvider
 
     private async Task<ConsumerData> GetConsumerDataAsync()
     {
-        var stats = _rabbitMQ.Consumer.Statistics;
+        var stats = _streamFlow.Consumer.Statistics;
         var runtime = DateTimeOffset.UtcNow - stats.StartTime;
 
         return new ConsumerData
@@ -1006,7 +1006,7 @@ public class DashboardDataProvider
             
             foreach (var queueName in queueNames)
             {
-                var queueInfo = await _rabbitMQ.QueueManager.GetQueueInfoAsync(queueName);
+                var queueInfo = await _streamFlow.QueueManager.GetQueueInfoAsync(queueName);
                 
                 queues.Add(new QueueData
                 {
@@ -1028,7 +1028,7 @@ public class DashboardDataProvider
 
     private async Task<ErrorData> GetErrorDataAsync()
     {
-        var errorStats = _rabbitMQ.ErrorHandler.Statistics;
+        var errorStats = _streamFlow.ErrorHandler.Statistics;
         var runtime = DateTimeOffset.UtcNow - errorStats.StartTime;
 
         return new ErrorData
@@ -1150,13 +1150,13 @@ public class PerformanceData
 ```csharp
 public class RabbitMQTracer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<RabbitMQTracer> _logger;
     private readonly ActivitySource _activitySource;
 
-    public RabbitMQTracer(IRabbitMQClient rabbitMQ, ILogger<RabbitMQTracer> logger)
+    public RabbitMQTracer(IStreamFlowClient streamFlow, ILogger<RabbitMQTracer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         _activitySource = new ActivitySource("FS.StreamFlow");
     }
@@ -1200,7 +1200,7 @@ public class RabbitMQTracer
                 headers["span-id"] = activity.SpanId.ToString();
             }
             
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: exchange,
                 routingKey: routingKey,
                 message: message,
@@ -1212,7 +1212,7 @@ public class RabbitMQTracer
 
     public async Task TraceConsumeAsync<T>(string queueName, Func<T, MessageContext, Task<bool>> handler)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<T>(
+        await _streamFlow.Consumer.ConsumeAsync<T>(
             queueName: queueName,
             messageHandler: async (message, context) =>
             {

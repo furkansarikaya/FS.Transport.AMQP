@@ -20,7 +20,7 @@ Event sourcing is a pattern where the state of your application is determined by
 
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
-{
+    {
     // Connection settings
     options.ConnectionSettings.Host = "localhost";
     options.ConnectionSettings.Port = 5672;

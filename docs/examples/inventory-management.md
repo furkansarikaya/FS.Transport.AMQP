@@ -53,26 +53,26 @@ using Microsoft.Extensions.Logging;
 
 public class InventoryService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<InventoryService> _logger;
 
-    public InventoryService(IRabbitMQClient rabbitMQ, ILogger<InventoryService> logger)
+    public InventoryService(IStreamFlowClient rabbitMQ, ILogger<InventoryService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task ReserveInventoryAsync(Guid orderId, List<string> items)
     {
         // Reserve inventory logic (omitted)
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new InventoryReserved(orderId, items));
         _logger.LogInformation("InventoryReserved event published for Order {OrderId}", orderId);
     }
 
     public async Task UpdateInventoryAsync(Guid productId, int newStock)
     {
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new InventoryUpdated(productId, newStock));
         _logger.LogInformation("InventoryUpdated event published for Product {ProductId}", productId);
     }

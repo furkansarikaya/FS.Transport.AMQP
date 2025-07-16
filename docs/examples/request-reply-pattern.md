@@ -40,19 +40,19 @@ using Microsoft.Extensions.Logging;
 
 public class RequesterService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<RequesterService> _logger;
 
-    public RequesterService(IRabbitMQClient rabbitMQ, ILogger<RequesterService> logger)
+    public RequesterService(IStreamFlowClient rabbitMQ, ILogger<RequesterService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task SendRequestAsync(object request, string replyTo)
     {
         var correlationId = Guid.NewGuid().ToString();
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "requests",
             routingKey: "calculate.sum",
             message: request,
@@ -71,24 +71,24 @@ using Microsoft.Extensions.Logging;
 
 public class ResponderService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<ResponderService> _logger;
 
-    public ResponderService(IRabbitMQClient rabbitMQ, ILogger<ResponderService> logger)
+    public ResponderService(IStreamFlowClient rabbitMQ, ILogger<ResponderService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task StartRespondingAsync(CancellationToken cancellationToken)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<object>(
+        await _streamFlow.Consumer.ConsumeAsync<object>(
             queueName: "calculate-requests",
             messageHandler: async (request, context) =>
             {
                 // Process request and send response
                 var result = new { Result = 42 }; // Simulated result
-                await _rabbitMQ.Producer.PublishAsync(
+                await _streamFlow.Producer.PublishAsync(
                     exchange: "",
                     routingKey: context.ReplyTo,
                     message: result,

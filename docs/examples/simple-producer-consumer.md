@@ -84,12 +84,12 @@ namespace SimpleProducerConsumer.Services;
 
 public class MessageProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<MessageProducer> _logger;
 
-    public MessageProducer(IRabbitMQClient rabbitMQ, ILogger<MessageProducer> logger)
+    public MessageProducer(IStreamFlowClient rabbitMQ, ILogger<MessageProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -104,7 +104,7 @@ public class MessageProducer
 
         try
         {
-            await _rabbitMQ.Producer.PublishAsync(
+            await _streamFlow.Producer.PublishAsync(
                 exchange: "simple-messages",
                 routingKey: "message.created",
                 message: message);
@@ -148,13 +148,13 @@ namespace SimpleProducerConsumer.Services;
 
 public class MessageConsumer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<MessageConsumer> _logger;
     private int _processedCount = 0;
 
-    public MessageConsumer(IRabbitMQClient rabbitMQ, ILogger<MessageConsumer> logger)
+    public MessageConsumer(IStreamFlowClient rabbitMQ, ILogger<MessageConsumer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -163,7 +163,7 @@ public class MessageConsumer
         _logger.LogInformation("Starting message consumer...");
 
         // Start consuming messages with fluent API
-        await _rabbitMQ.Consumer.Queue<SimpleMessage>("simple-queue")
+        await _streamFlow.Consumer.Queue<SimpleMessage>("simple-queue")
             .WithConcurrency(3)
             .WithPrefetchCount(10)
             .WithAutoAck(false)
@@ -319,7 +319,7 @@ finally
 // Infrastructure setup method
 static async Task SetupInfrastructureAsync(IServiceProvider services)
 {
-    var rabbitMQ = services.GetRequiredService<IRabbitMQClient>();
+    var rabbitMQ = services.GetRequiredService<IStreamFlowClient>();
     var logger = services.GetRequiredService<ILogger<Program>>();
 
     try

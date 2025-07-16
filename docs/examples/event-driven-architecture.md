@@ -54,12 +54,12 @@ using Microsoft.Extensions.Logging;
 
 public class UserService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<UserService> _logger;
 
-    public UserService(IRabbitMQClient rabbitMQ, ILogger<UserService> logger)
+    public UserService(IStreamFlowClient rabbitMQ, ILogger<UserService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -68,7 +68,7 @@ public class UserService
         var userId = Guid.NewGuid();
         var registeredAt = DateTime.UtcNow;
         // Save user to database (omitted)
-        await _rabbitMQ.EventBus.PublishDomainEventAsync(
+        await _streamFlow.EventBus.PublishDomainEventAsync(
             new UserRegistered(userId, email, registeredAt));
         _logger.LogInformation("UserRegistered event published for {Email}", email);
     }
@@ -84,19 +84,19 @@ using Microsoft.Extensions.Logging;
 
 public class EmailService : IEventHandler<UserRegistered>
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IRabbitMQClient rabbitMQ, ILogger<EmailService> logger)
+    public EmailService(IStreamFlowClient rabbitMQ, ILogger<EmailService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task HandleAsync(UserRegistered @event, EventContext context)
     {
         // Send welcome email (omitted)
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new EmailSent(@event.UserId, @event.Email, DateTime.UtcNow));
         _logger.LogInformation("EmailSent event published for {Email}", @event.Email);
     }

@@ -53,26 +53,26 @@ using Microsoft.Extensions.Logging;
 
 public class PaymentService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PaymentService> _logger;
 
-    public PaymentService(IRabbitMQClient rabbitMQ, ILogger<PaymentService> logger)
+    public PaymentService(IStreamFlowClient rabbitMQ, ILogger<PaymentService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task RequestPaymentAsync(Guid orderId, decimal amount)
     {
         // Payment request logic (omitted)
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new PaymentRequested(orderId, amount));
         _logger.LogInformation("PaymentRequested event published for Order {OrderId}", orderId);
     }
 
     public async Task ConfirmPaymentAsync(Guid orderId, string transactionId)
     {
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new PaymentProcessed(orderId, transactionId));
         _logger.LogInformation("PaymentProcessed event published for Order {OrderId}", orderId);
     }

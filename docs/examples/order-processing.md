@@ -182,13 +182,13 @@ namespace OrderProcessing.Services;
 
 public class OrderService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderService> _logger;
     private readonly Dictionary<Guid, Order> _orders = new(); // In-memory storage for demo
 
-    public OrderService(IRabbitMQClient rabbitMQ, ILogger<OrderService> logger)
+    public OrderService(IStreamFlowClient rabbitMQ, ILogger<OrderService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -210,7 +210,7 @@ public class OrderService
             order.Id, order.CustomerName, order.Total);
 
         // Publish order created event
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(new OrderCreated
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(new OrderCreated
         {
             OrderId = order.Id,
             CustomerName = order.CustomerName,
@@ -269,13 +269,13 @@ namespace OrderProcessing.Services;
 
 public class InventoryService : IEventHandler<OrderCreated>
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<InventoryService> _logger;
     private readonly Dictionary<string, int> _inventory = new(); // In-memory inventory
 
-    public InventoryService(IRabbitMQClient rabbitMQ, ILogger<InventoryService> logger)
+    public InventoryService(IStreamFlowClient rabbitMQ, ILogger<InventoryService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
         
         // Initialize some inventory
@@ -338,7 +338,7 @@ public class InventoryService : IEventHandler<OrderCreated>
             if (reservationSuccessful)
             {
                 // Publish inventory reserved event
-                await _rabbitMQ.EventBus.PublishIntegrationEventAsync(new InventoryReserved
+                await _streamFlow.EventBus.PublishIntegrationEventAsync(new InventoryReserved
                 {
                     OrderId = eventData.OrderId,
                     ReservedItems = reservedItems,
@@ -356,7 +356,7 @@ public class InventoryService : IEventHandler<OrderCreated>
                 }
 
                 // Publish inventory reservation failed event
-                await _rabbitMQ.EventBus.PublishIntegrationEventAsync(new InventoryReservationFailed
+                await _streamFlow.EventBus.PublishIntegrationEventAsync(new InventoryReservationFailed
                 {
                     OrderId = eventData.OrderId,
                     Reason = "Insufficient inventory",
@@ -392,12 +392,12 @@ namespace OrderProcessing.Services;
 
 public class PaymentService : IEventHandler<InventoryReserved>
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PaymentService> _logger;
 
-    public PaymentService(IRabbitMQClient rabbitMQ, ILogger<PaymentService> logger)
+    public PaymentService(IStreamFlowClient rabbitMQ, ILogger<PaymentService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
@@ -419,7 +419,7 @@ public class PaymentService : IEventHandler<InventoryReserved>
             var transactionId = $"TXN-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(100000, 999999)}";
 
             // Publish payment processed event
-            await _rabbitMQ.EventBus.PublishIntegrationEventAsync(new PaymentProcessed
+            await _streamFlow.EventBus.PublishIntegrationEventAsync(new PaymentProcessed
             {
                 OrderId = eventData.OrderId,
                 Amount = CalculateOrderTotal(eventData), // Simplified calculation
@@ -436,7 +436,7 @@ public class PaymentService : IEventHandler<InventoryReserved>
             _logger.LogError(ex, "Payment failed for order {OrderId}", eventData.OrderId);
             
             // Publish payment failed event
-            await _rabbitMQ.EventBus.PublishIntegrationEventAsync(new PaymentFailed
+            await _streamFlow.EventBus.PublishIntegrationEventAsync(new PaymentFailed
             {
                 OrderId = eventData.OrderId,
                 Reason = ex.Message,
@@ -623,7 +623,7 @@ finally
 // Infrastructure setup
 static async Task SetupInfrastructureAsync(IServiceProvider services)
 {
-    var rabbitMQ = services.GetRequiredService<IRabbitMQClient>();
+    var rabbitMQ = services.GetRequiredService<IStreamFlowClient>();
     var logger = services.GetRequiredService<ILogger<Program>>();
 
     logger.LogInformation("Setting up order processing infrastructure...");
@@ -658,7 +658,7 @@ static async Task SetupInfrastructureAsync(IServiceProvider services)
 // Start event handlers
 static async Task StartEventHandlersAsync(IServiceProvider services, CancellationToken cancellationToken)
 {
-    var rabbitMQ = services.GetRequiredService<IRabbitMQClient>();
+    var rabbitMQ = services.GetRequiredService<IStreamFlowClient>();
     var inventoryService = services.GetRequiredService<InventoryService>();
     var paymentService = services.GetRequiredService<PaymentService>();
     var notificationService = services.GetRequiredService<NotificationService>();

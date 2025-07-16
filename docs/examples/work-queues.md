@@ -40,18 +40,18 @@ using Microsoft.Extensions.Logging;
 
 public class TaskProducer
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<TaskProducer> _logger;
 
-    public TaskProducer(IRabbitMQClient rabbitMQ, ILogger<TaskProducer> logger)
+    public TaskProducer(IStreamFlowClient rabbitMQ, ILogger<TaskProducer> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task EnqueueTaskAsync(object task)
     {
-        await _rabbitMQ.Producer.PublishAsync(
+        await _streamFlow.Producer.PublishAsync(
             exchange: "",
             routingKey: "work-queue",
             message: task);
@@ -69,18 +69,18 @@ using Microsoft.Extensions.Logging;
 
 public class TaskWorker
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<TaskWorker> _logger;
 
-    public TaskWorker(IRabbitMQClient rabbitMQ, ILogger<TaskWorker> logger)
+    public TaskWorker(IStreamFlowClient rabbitMQ, ILogger<TaskWorker> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task StartWorkingAsync(CancellationToken cancellationToken)
     {
-        await _rabbitMQ.Consumer.ConsumeAsync<object>(
+        await _streamFlow.Consumer.ConsumeAsync<object>(
             queueName: "work-queue",
             messageHandler: async (task, ctx) =>
             {

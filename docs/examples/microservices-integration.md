@@ -58,19 +58,19 @@ using Microsoft.Extensions.Logging;
 
 public class OrderService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderService> _logger;
 
-    public OrderService(IRabbitMQClient rabbitMQ, ILogger<OrderService> logger)
+    public OrderService(IStreamFlowClient rabbitMQ, ILogger<OrderService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task CreateOrderAsync(Guid orderId, string customerId, List<string> items)
     {
         // Save order to database (omitted)
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new OrderCreated(orderId, customerId, items));
         _logger.LogInformation("OrderCreated event published for Order {OrderId}", orderId);
     }
@@ -86,19 +86,19 @@ using Microsoft.Extensions.Logging;
 
 public class InventoryService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<InventoryService> _logger;
 
-    public InventoryService(IRabbitMQClient rabbitMQ, ILogger<InventoryService> logger)
+    public InventoryService(IStreamFlowClient rabbitMQ, ILogger<InventoryService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task HandleOrderCreatedAsync(OrderCreated @event)
     {
         // Reserve inventory logic (omitted)
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new InventoryReserved(@event.OrderId, @event.Items));
         _logger.LogInformation("InventoryReserved event published for Order {OrderId}", @event.OrderId);
     }
@@ -114,19 +114,19 @@ using Microsoft.Extensions.Logging;
 
 public class PaymentService
 {
-    private readonly IRabbitMQClient _rabbitMQ;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PaymentService> _logger;
 
-    public PaymentService(IRabbitMQClient rabbitMQ, ILogger<PaymentService> logger)
+    public PaymentService(IStreamFlowClient rabbitMQ, ILogger<PaymentService> logger)
     {
-        _rabbitMQ = rabbitMQ;
+        _streamFlow = rabbitMQ;
         _logger = logger;
     }
 
     public async Task HandleInventoryReservedAsync(InventoryReserved @event)
     {
         // Process payment logic (omitted)
-        await _rabbitMQ.EventBus.PublishIntegrationEventAsync(
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(
             new PaymentProcessed(@event.OrderId, "TXN123456"));
         _logger.LogInformation("PaymentProcessed event published for Order {OrderId}", @event.OrderId);
     }
