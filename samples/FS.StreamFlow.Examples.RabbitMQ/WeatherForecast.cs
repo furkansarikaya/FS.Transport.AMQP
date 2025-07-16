@@ -1,4 +1,4 @@
-namespace RabbitMQSamples.API.Controllers;
+namespace FS.StreamFlow.Examples.RabbitMQ;
 
 public class WeatherForecast
 {

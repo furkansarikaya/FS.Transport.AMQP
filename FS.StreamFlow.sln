@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.Core", "src\F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.RabbitMQ", "src\FS.StreamFlow.RabbitMQ\FS.StreamFlow.RabbitMQ.csproj", "{1BF491FC-FECA-4F13-9A57-64865EDEA682}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{A937B220-A7D4-40A1-80AC-97E1FD114098}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.Examples.RabbitMQ", "samples\FS.StreamFlow.Examples.RabbitMQ\FS.StreamFlow.Examples.RabbitMQ.csproj", "{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +18,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{5C66FEF9-7B57-4E67-AC1B-23751BDD8AFC} = {4ED1239F-CBB8-4573-AB33-7D565E02F285}
 		{1BF491FC-FECA-4F13-9A57-64865EDEA682} = {4ED1239F-CBB8-4573-AB33-7D565E02F285}
+		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A} = {A937B220-A7D4-40A1-80AC-97E1FD114098}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{5C66FEF9-7B57-4E67-AC1B-23751BDD8AFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -24,5 +29,9 @@ Global
 		{1BF491FC-FECA-4F13-9A57-64865EDEA682}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1BF491FC-FECA-4F13-9A57-64865EDEA682}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1BF491FC-FECA-4F13-9A57-64865EDEA682}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
