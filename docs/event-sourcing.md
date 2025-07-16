@@ -34,26 +34,31 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```csharp
 // Append events to a stream with fluent API
+await _streamFlow.InitializeAsync();
 await _streamFlow.EventStore.Stream($"order-{orderId}")
     .AppendEvent(new OrderCreated(orderId, customerName, amount))
     .AppendEvent(new OrderItemAdded(orderId, itemId, quantity))
     .SaveAsync();
 
 // Read events from a stream with fluent API
+await _streamFlow.InitializeAsync();
 var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
     .FromVersion(0)
     .WithMaxCount(100)
     .ReadAsync();
 
 // Get stream metadata with fluent API
+await _streamFlow.InitializeAsync();
 var metadata = await _streamFlow.EventStore.Stream($"order-{orderId}")
     .GetMetadataAsync();
     
 // Check if stream exists with fluent API
+await _streamFlow.InitializeAsync();
 var exists = await _streamFlow.EventStore.Stream($"order-{orderId}")
     .ExistsAsync();
     
 // Get stream version with fluent API
+await _streamFlow.InitializeAsync();
 var version = await _streamFlow.EventStore.Stream($"order-{orderId}")
     .GetVersionAsync();
 ```
@@ -68,6 +73,7 @@ public class OrderEventStore
     
     public async Task<long> SaveOrderEventsAsync(Guid orderId, IEnumerable<object> events)
     {
+        await _streamFlow.InitializeAsync();
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .AppendEvents(events)
             .SaveAsync();
@@ -75,6 +81,7 @@ public class OrderEventStore
     
     public async Task<long> SaveOrderEventsWithExpectedVersionAsync(Guid orderId, IEnumerable<object> events, long expectedVersion)
     {
+        await _streamFlow.InitializeAsync();
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .AppendEventsWithExpectedVersion(events, expectedVersion)
             .SaveAsync();
@@ -82,6 +89,7 @@ public class OrderEventStore
     
     public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
     {
+        await _streamFlow.InitializeAsync();
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .FromVersion(fromVersion)
             .WithMaxCount(100)
@@ -90,6 +98,7 @@ public class OrderEventStore
     
     public async Task<IEnumerable<object>> GetRecentOrderEventsAsync(Guid orderId)
     {
+        await _streamFlow.InitializeAsync();
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .FromVersion(-1)
             .WithMaxCount(10)
@@ -98,12 +107,14 @@ public class OrderEventStore
     
     public async Task<bool> TruncateOrderStreamAsync(Guid orderId, long version)
     {
+        await _streamFlow.InitializeAsync();
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .TruncateAsync(version);
     }
     
     public async Task<bool> DeleteOrderStreamAsync(Guid orderId)
     {
+        await _streamFlow.InitializeAsync();
         return await _streamFlow.EventStore.Stream($"order-{orderId}")
             .DeleteAsync();
     }
@@ -120,6 +131,8 @@ public class LegacyEventStore
     
     public async Task LegacyOperationsAsync()
     {
+        await _streamFlow.InitializeAsync();
+        // NOTE: The following methods are not part of FS.StreamFlow public API, this is for illustration only.
         // Append events to a stream (legacy)
         await _streamFlow.EventStore.AppendToStreamAsync(
             streamName: $"order-{orderId}",
@@ -179,6 +192,7 @@ public class OrderAggregate
 // Load aggregate from event stream with fluent API
 public async Task<OrderAggregate> LoadOrderAggregateAsync(Guid orderId)
 {
+    await _streamFlow.InitializeAsync();
     var events = await _streamFlow.EventStore.Stream($"order-{orderId}")
         .FromVersion(0)
         .ReadAsync();
@@ -195,6 +209,7 @@ public async Task<OrderAggregate> LoadOrderAggregateAsync(Guid orderId)
 // Load aggregate with snapshot using fluent API
 public async Task<OrderAggregate> LoadOrderAggregateWithSnapshotAsync(Guid orderId)
 {
+    await _streamFlow.InitializeAsync();
     var snapshot = await _streamFlow.EventStore.Stream($"order-{orderId}")
         .GetSnapshotAsync();
     
@@ -242,15 +257,18 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```csharp
 // Save snapshot with fluent API
+await _streamFlow.InitializeAsync();
 await _streamFlow.EventStore.Stream($"order-{orderId}")
     .WithSnapshot(orderSnapshot, version: 100)
     .SaveSnapshotAsync();
 
 // Get snapshot with fluent API
+await _streamFlow.InitializeAsync();
 var snapshot = await _streamFlow.EventStore.Stream($"order-{orderId}")
     .GetSnapshotAsync();
 
 // Save events with snapshot in one operation
+await _streamFlow.InitializeAsync();
 await _streamFlow.EventStore.Stream($"order-{orderId}")
     .AppendEvents(newEvents)
     .WithSnapshot(orderSnapshot, version: 100)
@@ -266,6 +284,7 @@ public class OrderSnapshotManager
     
     public async Task<bool> ShouldCreateSnapshotAsync(Guid orderId)
     {
+        await _streamFlow.InitializeAsync();
         var version = await _streamFlow.EventStore.Stream($"order-{orderId}")
             .GetVersionAsync();
             
@@ -274,6 +293,7 @@ public class OrderSnapshotManager
     
     public async Task CreateSnapshotAsync(Guid orderId)
     {
+        await _streamFlow.InitializeAsync();
         // Load current aggregate
         var aggregate = await LoadOrderAggregateAsync(orderId);
         
@@ -285,6 +305,7 @@ public class OrderSnapshotManager
     
     public async Task<OrderAggregate> LoadAggregateWithSnapshotAsync(Guid orderId)
     {
+        await _streamFlow.InitializeAsync();
         var snapshot = await _streamFlow.EventStore.Stream($"order-{orderId}")
             .GetSnapshotAsync();
         
@@ -346,63 +367,71 @@ public class OrderSnapshotManager
 ```csharp
 public class OrderService
 {
-    private readonly IEventStore _eventStore;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly IEventBus _eventBus;
 
     public async Task CreateOrderAsync(CreateOrderRequest request)
     {
+        await _streamFlow.InitializeAsync();
         var orderId = Guid.NewGuid();
         var streamName = $"order-{orderId}";
 
+        // NOTE: IEvent interface and LoadAggregateAsync method are not part of FS.StreamFlow public API, this is for illustration only.
         // Create and append events
-        var events = new IEvent[]
+        var events = new object[]
         {
             new OrderCreated(orderId, request.CustomerName, request.Total),
             new OrderItemAdded(orderId, request.ItemId, request.Quantity)
         };
 
-        await _eventStore.AppendToStreamAsync(streamName, 0, events);
+        await _streamFlow.EventStore.Stream(streamName)
+            .AppendEvents(events)
+            .SaveAsync();
 
         // Publish domain events
         foreach (var @event in events)
         {
-            await _eventBus.PublishDomainEventAsync(@event);
+            await _streamFlow.EventBus.Event<object>()
+                .PublishAsync(@event);
         }
     }
 
     public async Task UpdateOrderAsync(UpdateOrderRequest request)
     {
+        await _streamFlow.InitializeAsync();
         var streamName = $"order-{request.OrderId}";
 
+        // NOTE: LoadAggregateAsync method is not part of FS.StreamFlow public API, this is for illustration only.
         // Load current state
-        var order = await _eventStore.LoadAggregateAsync<OrderAggregate>(
-            streamName,
-            useSnapshot: true);
+        var order = await LoadOrderAggregateAsync(request.OrderId);
 
         // Generate and append new events
-        var events = new IEvent[]
+        var events = new object[]
         {
             new OrderItemAdded(request.OrderId, request.ItemId, request.Quantity)
         };
 
-        await _eventStore.AppendToStreamAsync(
-            streamName,
-            order.Version,
-            events);
+        await _streamFlow.EventStore.Stream(streamName)
+            .AppendEventsWithExpectedVersion(events, order.Version)
+            .SaveAsync();
 
         // Publish domain events
         foreach (var @event in events)
         {
-            await _eventBus.PublishDomainEventAsync(@event);
+            await _streamFlow.EventBus.Event<object>()
+                .PublishAsync(@event);
         }
     }
 
     public async Task GetOrderHistoryAsync(Guid orderId)
     {
+        await _streamFlow.InitializeAsync();
         var streamName = $"order-{orderId}";
 
         // Read all events
-        var events = await _eventStore.ReadStreamAsync(streamName);
+        var events = await _streamFlow.EventStore.Stream(streamName)
+            .FromVersion(0)
+            .ReadAsync();
 
         // Process events
         foreach (var @event in events)
@@ -429,6 +458,7 @@ public class OrderService
 ```csharp
 public async Task UpdateOrderAsync(UpdateOrderRequest request)
 {
+    await _streamFlow.InitializeAsync();
     var streamName = $"order-{request.OrderId}";
     var maxRetries = 3;
     var currentRetry = 0;
@@ -437,26 +467,25 @@ public async Task UpdateOrderAsync(UpdateOrderRequest request)
     {
         try
         {
+            // NOTE: LoadAggregateAsync and ConcurrencyException are not part of FS.StreamFlow public API, this is for illustration only.
             // Load aggregate
-            var order = await _eventStore.LoadAggregateAsync<OrderAggregate>(
-                streamName);
+            var order = await LoadOrderAggregateAsync(request.OrderId);
 
             // Generate new events
-            var events = new IEvent[]
+            var events = new object[]
             {
                 new OrderItemAdded(request.OrderId, request.ItemId, request.Quantity)
             };
 
             // Append events with expected version
-            await _eventStore.AppendToStreamAsync(
-                streamName,
-                order.Version,
-                events);
+            await _streamFlow.EventStore.Stream(streamName)
+                .AppendEventsWithExpectedVersion(events, order.Version)
+                .SaveAsync();
 
             // Success - exit loop
             break;
         }
-        catch (ConcurrencyException)
+        catch (Exception ex) // NOTE: ConcurrencyException is not part of FS.StreamFlow public API
         {
             currentRetry++;
             if (currentRetry >= maxRetries)
@@ -474,27 +503,29 @@ public async Task UpdateOrderAsync(UpdateOrderRequest request)
 ```csharp
 public class SnapshotManager
 {
-    private readonly IEventStore _eventStore;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<SnapshotManager> _logger;
 
     public async Task ManageSnapshotsAsync(string streamName)
     {
+        await _streamFlow.InitializeAsync();
         try
         {
+            // NOTE: GetStreamMetadataAsync and CreateSnapshotAsync are not part of FS.StreamFlow public API, this is for illustration only.
             // Get stream info
-            var metadata = await _eventStore.GetStreamMetadataAsync(streamName);
+            var version = await _streamFlow.EventStore.Stream(streamName)
+                .GetVersionAsync();
 
             // Check if snapshot needed
-            if (metadata.EventCount >= 100) // Snapshot interval
+            if (version >= 100) // Snapshot interval
             {
                 // Load aggregate
-                var aggregate = await _eventStore.LoadAggregateAsync<OrderAggregate>(
-                    streamName);
+                var aggregate = await LoadOrderAggregateAsync(Guid.Parse(streamName.Replace("order-", "")));
 
                 // Create snapshot
-                await _eventStore.CreateSnapshotAsync(
-                    streamName,
-                    aggregate);
+                await _streamFlow.EventStore.Stream(streamName)
+                    .WithSnapshot(aggregate, aggregate.Version)
+                    .SaveSnapshotAsync();
 
                 _logger.LogInformation(
                     "Created snapshot for stream {StreamName} at version {Version}",

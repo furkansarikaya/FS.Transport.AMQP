@@ -89,6 +89,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```csharp
 // Publishing domain events with fluent API
+await _streamFlow.InitializeAsync();
 await _streamFlow.EventBus.Event<OrderCreated>()
     .WithMetadata(metadata =>
     {
@@ -101,6 +102,7 @@ await _streamFlow.EventBus.Event<OrderCreated>()
     .PublishAsync(new OrderCreated(orderId, customerName, amount));
 
 // Publishing integration events with fluent API
+await _streamFlow.InitializeAsync();
 await _streamFlow.EventBus.Event<PaymentProcessed>()
     .WithMetadata(metadata =>
     {
@@ -114,20 +116,22 @@ await _streamFlow.EventBus.Event<PaymentProcessed>()
     .PublishAsync(new PaymentProcessed(orderId, transactionId, amount));
 
 // Batch event publishing
-var events = new IEvent[]
+await _streamFlow.InitializeAsync();
+// NOTE: PublishBatchAsync and IEvent are not part of FS.StreamFlow public API, this is for illustration only.
+var events = new object[]
 {
     new OrderCreated(orderId1, customerName1, amount1),
     new OrderCreated(orderId2, customerName2, amount2),
     new OrderCreated(orderId3, customerName3, amount3)
 };
-
-await _streamFlow.EventBus.PublishBatchAsync(events);
+await _streamFlow.EventBus.PublishBatchAsync(events); // If not available, use a foreach loop and PublishAsync
 ```
 
 ### Subscribing to Events with Fluent API
 
 ```csharp
 // Subscribe to domain events using dedicated queues
+await _streamFlow.InitializeAsync();
 await _streamFlow.Consumer.Queue<OrderCreated>("order-created-events")
     .WithConcurrency(3)
     .WithPrefetchCount(50)
@@ -154,6 +158,7 @@ await _streamFlow.Consumer.Queue<OrderCreated>("order-created-events")
     });
 
 // Subscribe to integration events using dedicated queues
+await _streamFlow.InitializeAsync();
 await _streamFlow.Consumer.Queue<PaymentProcessed>("payment-processed-events")
     .WithConcurrency(5)
     .WithPrefetchCount(100)
@@ -179,6 +184,7 @@ public class LegacyEventPublisher
     
     public async Task PublishLegacyStyleAsync()
     {
+        await _streamFlow.InitializeAsync();
         // Publishing domain events (legacy)
         await _streamFlow.EventBus.PublishDomainEventAsync(
             new OrderCreated(orderId, customerName, amount));
@@ -222,6 +228,7 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
+        await _streamFlow.InitializeAsync();
         // Send confirmation email
         await _emailService.SendOrderConfirmationAsync(
             @event.OrderId,
@@ -258,6 +265,7 @@ public class AdvancedEventHandler : IAsyncEventHandler<OrderCreated>
     
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
+        await _streamFlow.InitializeAsync();
         // Setup infrastructure if needed
         await SetupInfrastructureAsync();
         
@@ -267,6 +275,7 @@ public class AdvancedEventHandler : IAsyncEventHandler<OrderCreated>
     
     private async Task SetupInfrastructureAsync()
     {
+        await _streamFlow.InitializeAsync();
         // Create exchanges for follow-up events
         await _streamFlow.ExchangeManager.Exchange("inventory-events")
             .AsTopic()
@@ -288,6 +297,7 @@ public class AdvancedEventHandler : IAsyncEventHandler<OrderCreated>
     
     private async Task ProcessEventAsync(OrderCreated @event, EventContext context)
     {
+        await _streamFlow.InitializeAsync();
         try
         {
             // Business logic
@@ -399,6 +409,7 @@ public class OrderCreatedHandler : IEventHandler<OrderCreated>
 
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
+        // NOTE: IEventHandler and IAsyncEventHandler are not part of FS.StreamFlow public API, this is for illustration only.
         // Reserve inventory
         var reserved = await _inventoryService.ReserveItemsAsync(@event.OrderId);
 
@@ -415,6 +426,7 @@ public class InventoryReservedHandler : IEventHandler<InventoryReserved>
 
     public async Task HandleAsync(InventoryReserved @event, EventContext context)
     {
+        // NOTE: IEventHandler and IAsyncEventHandler are not part of FS.StreamFlow public API, this is for illustration only.
         // Process payment
         var payment = await _paymentService.ProcessPaymentAsync(@event.OrderId);
 
@@ -439,19 +451,10 @@ public class OrderCreatedHandler : IEventHandler<OrderCreated>
         {
             await ProcessOrderAsync(@event);
         }
-        catch (TemporaryException ex)
-        {
-            // Retry later
-            throw new RetryableEventException(
-                "Temporary error processing order",
-                ex);
-        }
         catch (Exception ex)
         {
-            // Move to dead letter queue
-            throw new NonRetryableEventException(
-                "Permanent error processing order",
-                ex);
+            // NOTE: RetryableEventException and NonRetryableEventException are not part of FS.StreamFlow public API, this is for illustration only.
+            throw;
         }
     }
 }
@@ -491,5 +494,4 @@ public class MonitoredEventHandler<T> : IEventHandler<T> where T : IEvent
             throw;
         }
     }
-}
-``` 
+} 
