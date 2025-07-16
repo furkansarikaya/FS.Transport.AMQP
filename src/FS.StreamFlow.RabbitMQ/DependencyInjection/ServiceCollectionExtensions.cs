@@ -282,7 +282,7 @@ public class RabbitMQStreamFlowOptions
     /// <summary>
     /// Gets or sets additional feature-specific settings.
     /// </summary>
-    public Dictionary<string, object> FeatureSettings { get; set; } = new();
+    public Dictionary<string, object> FeatureSettings { get; set; } = [];
 }
 
 /// <summary>
