@@ -74,6 +74,14 @@ public class OrderService
             .DeclareAsync();
             
         // Publish with fluent API
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+        await _streamFlow.Producer.Message(order)
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
         await _streamFlow.Producer.Message<Order>()
             .WithExchange("orders")
             .WithRoutingKey("order.created")
@@ -97,6 +105,13 @@ public class MessageService
     // Publish a simple message with fluent API
     public async Task PublishSimpleMessageAsync()
     {
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+        await _streamFlow.Producer.Message("Hello, World!")
+            .WithExchange("notifications")
+            .WithRoutingKey("email.send")
+            .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
         await _streamFlow.Producer.Message<string>()
             .WithExchange("notifications")
             .WithRoutingKey("email.send")
@@ -106,6 +121,16 @@ public class MessageService
     // Publish a complex object with fluent API
     public async Task PublishOrderAsync(Order order)
     {
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+        await _streamFlow.Producer.Message(order)
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .WithExpiration(TimeSpan.FromHours(24))
+            .WithPriority(5)
+            .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
         await _streamFlow.Producer.Message<Order>()
             .WithExchange("orders")
             .WithRoutingKey("order.created")
@@ -118,6 +143,14 @@ public class MessageService
     // Publish with byte array
     public async Task PublishBytesAsync(byte[] data)
     {
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+        await _streamFlow.Producer.Message(data)
+            .WithExchange("data")
+            .WithRoutingKey("binary.data")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
         await _streamFlow.Producer.Message<byte[]>()
             .WithExchange("data")
             .WithRoutingKey("binary.data")
@@ -132,7 +165,8 @@ public class MessageService
 ```csharp
 public async Task PublishAdvancedMessageAsync(Order order)
 {
-    var result = await _streamFlow.Producer.Message<Order>()
+    // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+    var result = await _streamFlow.Producer.Message(order)
         .WithExchange("orders")
         .WithRoutingKey("order.created")
         .WithDeliveryMode(DeliveryMode.Persistent)
@@ -148,7 +182,26 @@ public async Task PublishAdvancedMessageAsync(Order order)
         .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
         .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
         .WithTransaction(enabled: true)
-        .PublishAsync(order);
+        .PublishAsync();
+
+    // Option 2: With generic type (MUST pass message to PublishAsync)
+    // var result = await _streamFlow.Producer.Message<Order>()
+    //     .WithExchange("orders")
+    //     .WithRoutingKey("order.created")
+    //     .WithDeliveryMode(DeliveryMode.Persistent)
+    //     .WithExpiration(TimeSpan.FromMinutes(30))
+    //     .WithPriority(5)
+    //     .WithHeaders(new Dictionary<string, object>
+    //     {
+    //         ["source"] = "order-service",
+    //         ["version"] = "1.0",
+    //         ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+    //         ["correlation-id"] = Guid.NewGuid().ToString()
+    //     })
+    //     .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+    //     .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
+    //     .WithTransaction(enabled: true)
+    //     .PublishAsync(order);
         
     if (result.IsSuccess)
     {
@@ -199,6 +252,14 @@ public async Task PublishWithPropertiesAsync(Order order)
 // Publish directly to a queue using default exchange
 public async Task PublishToQueueAsync(string queueName, object message)
 {
+    // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+    await _streamFlow.Producer.Message(message)
+        .WithExchange("") // Default exchange
+        .WithRoutingKey(queueName)
+        .WithDeliveryMode(DeliveryMode.Persistent)
+        .PublishAsync();
+
+    // Option 2: With generic type (MUST pass message to PublishAsync)
     await _streamFlow.Producer.Message<object>()
         .WithExchange("") // Default exchange
         .WithRoutingKey(queueName)
@@ -1405,6 +1466,64 @@ You've now learned how to use the FS.StreamFlow Producer effectively:
 ✅ **Performance optimization techniques**  
 ✅ **Monitoring and metrics**  
 ✅ **Production-ready best practices**  
+
+## 🔧 Troubleshooting
+
+### Common Producer Issues
+
+**Problem**: `PublishAsync()` throws "Exchange must be configured before publishing"  
+**Solution**: Always declare exchanges before publishing:
+```csharp
+await _streamFlow.ExchangeManager.Exchange("orders")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
+```
+
+**Problem**: `Message<T>()` with `.PublishAsync()` throws compilation error  
+**Solution**: Use the correct overload:
+```csharp
+// ❌ Wrong - Message<T>() requires message parameter in PublishAsync
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(); // COMPILATION ERROR!
+
+// ✅ Correct - Message<T>() MUST pass message to PublishAsync
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(order); // Correct!
+
+// ✅ Alternative - Message(order) can use PublishAsync() without parameters
+await _streamFlow.Producer.Message(order)
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(); // Correct!
+```
+
+**Problem**: Messages not being confirmed  
+**Solution**: Enable publisher confirmations:
+```csharp
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(10);
+});
+```
+
+**Problem**: High latency in publishing  
+**Solution**: Use batch operations for multiple messages:
+```csharp
+var messages = orders.Select(order => new MessageContext
+{
+    Exchange = "orders",
+    RoutingKey = "order.created",
+    Message = order
+});
+
+await _streamFlow.Producer.PublishBatchAsync(messages);
+```
 
 ## 🎯 Next Steps
 

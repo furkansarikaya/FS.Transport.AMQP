@@ -185,6 +185,16 @@ public class RabbitMQFluentProducerApi<T> : IFluentProducerApi<T> where T : clas
     }
 
     /// <summary>
+    /// Publishes the pre-configured message with the configured settings
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the publish operation with results</returns>
+    public Task<PublishResult> PublishAsync(CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Parameterless PublishAsync() is not supported for generic Message<T>(). Use Message(message) instead or pass the message to PublishAsync(message).");
+    }
+
+    /// <summary>
     /// Publishes the message with the configured settings
     /// </summary>
     /// <param name="message">Message to publish</param>
@@ -218,6 +228,15 @@ public class RabbitMQFluentProducerApi<T> : IFluentProducerApi<T> where T : clas
             CorrelationId = _properties.CorrelationId,
             Timestamp = DateTimeOffset.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Publishes the pre-configured message with the configured settings
+    /// </summary>
+    /// <returns>Publish result</returns>
+    public PublishResult Publish()
+    {
+        throw new NotImplementedException();
     }
 
     /// <summary>

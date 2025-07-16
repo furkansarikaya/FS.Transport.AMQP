@@ -108,12 +108,25 @@ public interface IFluentProducerApi<T> where T : class
     IFluentProducerApi<T> WithConfirmationTimeout(TimeSpan timeout);
     
     /// <summary>
+    /// Publishes the pre-configured message with the configured settings
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the publish operation with results</returns>
+    Task<PublishResult> PublishAsync(CancellationToken cancellationToken = default);
+    
+    /// <summary>
     /// Publishes the message with the configured settings
     /// </summary>
     /// <param name="message">Message to publish</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the publish operation with results</returns>
     Task<PublishResult> PublishAsync(T message, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Publishes the pre-configured message with the configured settings
+    /// </summary>
+    /// <returns>Publish result</returns>
+    PublishResult Publish();
     
     /// <summary>
     /// Publishes the message synchronously with the configured settings

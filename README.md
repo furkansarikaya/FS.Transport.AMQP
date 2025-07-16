@@ -112,11 +112,25 @@ public class OrderService
             .DeclareAsync();
         
         // Publish a message with fluent API
+        // Exchange must be declared before publishing!
+        await _streamFlow.ExchangeManager.Exchange("orders")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
+
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
         await _streamFlow.Producer.Message(order)
             .WithExchange("orders")
             .WithRoutingKey("order.created")
             .WithDeliveryMode(DeliveryMode.Persistent)
             .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
+        await _streamFlow.Producer.Message<Order>()
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync(order);
     }
 }
 
@@ -147,6 +161,72 @@ public class OrderProcessor
 ```
 
 That's it! You now have a production-ready messaging system with automatic recovery, health monitoring, and comprehensive error handling.
+
+## 🔧 Troubleshooting
+
+### Common Producer Issues
+
+**Problem**: `PublishAsync()` throws "Exchange must be configured before publishing"  
+**Solution**: Always declare exchanges before publishing:
+```csharp
+await _streamFlow.ExchangeManager.Exchange("orders")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
+```
+
+**Problem**: `PublishAsync()` throws "Routing key must be configured before publishing"  
+**Solution**: Always set both exchange and routing key:
+```csharp
+await _streamFlow.Producer.Message(order)
+    .WithExchange("orders")      // Required
+    .WithRoutingKey("order.created")  // Required
+    .PublishAsync();
+```
+
+**Problem**: `Message<T>()` with `.PublishAsync()` throws compilation error  
+**Solution**: Use the correct overload:
+```csharp
+// ❌ Wrong - Message<T>() requires message parameter in PublishAsync
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(); // COMPILATION ERROR!
+
+// ✅ Correct - Message<T>() MUST pass message to PublishAsync
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(order); // Correct!
+
+// ✅ Alternative - Message(order) can use PublishAsync() without parameters
+await _streamFlow.Producer.Message(order)
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(); // Correct!
+```
+
+### Common Consumer Issues
+
+**Problem**: Consumer not receiving messages  
+**Solution**: Check queue bindings and routing keys:
+```csharp
+await _streamFlow.QueueManager.Queue("order-processing")
+    .BindToExchange("orders", "order.created")  // Must match producer routing key
+    .DeclareAsync();
+```
+
+**Problem**: Messages not being acknowledged  
+**Solution**: Return `true` from your message handler:
+```csharp
+await _streamFlow.Consumer.Queue<Order>("order-processing")
+    .ConsumeAsync(async (order, context) =>
+    {
+        await ProcessOrderAsync(order);
+        return true; // ✅ Acknowledge message
+        // return false; // ❌ Reject message
+    });
+```
 
 ## 🌟 Key Features
 
@@ -770,7 +850,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "ConnectionTimeout": "00:00:30",
       "RequestTimeout": "00:00:30",
       "UseSsl": false
-    },
+      },
     "ProducerSettings": {
       "EnablePublisherConfirms": true,
       "ConfirmationTimeout": "00:00:10",
@@ -778,7 +858,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "PublishTimeout": "00:00:30",
       "DefaultExchange": "",
       "DefaultRoutingKey": ""
-    },
+      },
     "ConsumerSettings": {
       "PrefetchCount": 50,
       "AutoAcknowledge": false,

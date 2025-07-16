@@ -21,7 +21,7 @@ FS.StreamFlow follows a layered architecture:
 │        Your Application             │
 ├─────────────────────────────────────┤
 │      FS.StreamFlow.Core             │
-│   (Abstractions & Interfaces)      │
+│   (Abstractions & Interfaces)       │
 ├─────────────────────────────────────┤
 │    FS.StreamFlow.RabbitMQ           │
 │   (RabbitMQ Implementation)         │
@@ -181,6 +181,14 @@ public class OrderService
             .DeclareAsync();
         
         // Publish a message with fluent API
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+        await _streamFlow.Producer.Message(order)
+            .WithExchange("orders")
+            .WithRoutingKey("order.created")
+            .WithDeliveryMode(DeliveryMode.Persistent)
+            .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
         await _streamFlow.Producer.Message<Order>()
             .WithExchange("orders")
             .WithRoutingKey("order.created")
@@ -232,13 +240,23 @@ public class OrderPublisher
         await SetupInfrastructureAsync();
         
         // Publish with fluent API
-        var result = await _streamFlow.Producer.Message<Order>()
+        // Option 1: With pre-configured message (can use PublishAsync() without parameters)
+        var result = await _streamFlow.Producer.Message(order)
             .WithExchange("orders")
             .WithRoutingKey("order.created")
             .WithDeliveryMode(DeliveryMode.Persistent)
             .WithExpiration(TimeSpan.FromHours(24))
             .WithPriority(5)
-            .PublishAsync(order);
+            .PublishAsync();
+
+        // Option 2: With generic type (MUST pass message to PublishAsync)
+         var result = await _streamFlow.Producer.Message<Order>()
+        //     .WithExchange("orders")
+        //     .WithRoutingKey("order.created")
+        //     .WithDeliveryMode(DeliveryMode.Persistent)
+        //     .WithExpiration(TimeSpan.FromHours(24))
+        //     .WithPriority(5)
+        //     .PublishAsync(order);
         
         if (result.IsSuccess)
         {
@@ -814,7 +832,50 @@ Now that you have the basics working, explore these advanced features:
 5. **[Performance Tuning](performance.md)** - Optimize for high throughput
 6. **[Monitoring](monitoring.md)** - Set up monitoring and observability
 
-## Common Issues
+## 🔧 Troubleshooting
+
+### Common Producer Issues
+
+**Problem**: `PublishAsync()` throws "Exchange must be configured before publishing"  
+**Solution**: Always declare exchanges before publishing:
+```csharp
+await _streamFlow.ExchangeManager.Exchange("orders")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
+```
+
+**Problem**: `Message<T>()` with `.PublishAsync()` throws compilation error  
+**Solution**: Use the correct overload:
+```csharp
+// ❌ Wrong - Message<T>() requires message parameter in PublishAsync
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(); // COMPILATION ERROR!
+
+// ✅ Correct - Message<T>() MUST pass message to PublishAsync
+await _streamFlow.Producer.Message<Order>()
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(order); // Correct!
+
+// ✅ Alternative - Message(order) can use PublishAsync() without parameters
+await _streamFlow.Producer.Message(order)
+    .WithExchange("orders")
+    .WithRoutingKey("order.created")
+    .PublishAsync(); // Correct!
+```
+
+### Common Consumer Issues
+
+**Problem**: Consumer not receiving messages  
+**Solution**: Check queue bindings and routing keys:
+```csharp
+await _streamFlow.QueueManager.Queue("order-processing")
+    .BindToExchange("orders", "order.created")  // Must match producer routing key
+    .DeclareAsync();
+```
 
 ### Connection Issues
 
@@ -834,17 +895,6 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     // Client configuration
     options.ClientConfiguration.EnableAutoRecovery = true;
 });
-```
-
-### Queue Declaration
-
-To automatically declare queues:
-
-```csharp
-// This will be handled automatically by the framework
-await _streamFlow.Consumer.ConsumeAsync<Order>(
-    queueName: "order-processing",
-    messageHandler: async (order, context) => { /* ... */ });
 ```
 
 ### Serialization Issues
