@@ -57,17 +57,8 @@ app.MapControllers();
 
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-lifetime.ApplicationStarted.Register(async void () =>
-{
-    try
-    {
-        await streamFlow.InitializeAsync();
-    }
-    catch (Exception e)
-    {
-        Console.WriteLine(e);
-    }
-});
+
+await streamFlow.InitializeAsync();
 lifetime.ApplicationStopping.Register(async void () =>
 {
     try
