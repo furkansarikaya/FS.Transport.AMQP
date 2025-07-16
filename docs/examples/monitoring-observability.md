@@ -137,24 +137,50 @@ public class StreamFlowHealthCheck : IHealthCheck
     {
         try
         {
-            // Check connection health
-            var healthResult = await _streamFlow.HealthChecker.CheckHealthAsync();
+            // Initialize the client first
+            await _streamFlow.InitializeAsync(cancellationToken);
             
-            if (healthResult.IsHealthy)
+            // Check connection health using FS.StreamFlow's built-in health checker
+            var healthResult = await _streamFlow.HealthChecker.CheckHealthAsync(cancellationToken);
+            
+            if (healthResult.Status == HealthStatus.Healthy)
             {
                 _logger.LogInformation("StreamFlow health check passed");
-                return HealthCheckResult.Healthy("StreamFlow connection is healthy");
+                return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(
+                    "StreamFlow connection is healthy", 
+                    new Dictionary<string, object>
+                    {
+                        ["description"] = healthResult.Description,
+                        ["duration"] = healthResult.Duration.TotalMilliseconds,
+                        ["timestamp"] = healthResult.Timestamp
+                    });
             }
             else
             {
                 _logger.LogWarning("StreamFlow health check failed: {Reason}", healthResult.Description);
-                return HealthCheckResult.Unhealthy("StreamFlow connection is unhealthy", healthResult.Exception);
+                return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(
+                    "StreamFlow connection is unhealthy", 
+                    healthResult.Exception,
+                    new Dictionary<string, object>
+                    {
+                        ["description"] = healthResult.Description,
+                        ["status"] = healthResult.Status.ToString(),
+                        ["duration"] = healthResult.Duration.TotalMilliseconds,
+                        ["timestamp"] = healthResult.Timestamp
+                    });
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during StreamFlow health check");
-            return HealthCheckResult.Unhealthy("StreamFlow health check failed", ex);
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(
+                "StreamFlow health check failed", 
+                ex,
+                new Dictionary<string, object>
+                {
+                    ["error"] = ex.Message,
+                    ["timestamp"] = DateTimeOffset.UtcNow
+                });
         }
     }
 }
