@@ -193,7 +193,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    options.ConnectionSettings.RequestTimeout = TimeSpan.FromSeconds(30);
+
     options.ConnectionSettings.UseSsl = false;
 });
 ```
@@ -209,19 +209,7 @@ options.ConnectionSettings.Password = "password";
 options.ConnectionSettings.VirtualHost = "/myvhost";
 ```
 
-### Connection Pool Settings
 
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    // Connection pool configuration
-    options.ConnectionSettings.MaxChannels = 100;
-    options.ConnectionSettings.ChannelPoolSize = 10;
-    options.ConnectionSettings.ConnectionPoolSize = 5;
-    options.ConnectionSettings.MaxConnectionRetries = 3;
-    options.ConnectionSettings.ConnectionRetryDelay = TimeSpan.FromSeconds(5);
-});
-```
 
 ## SSL/TLS Configuration
 
@@ -313,14 +301,8 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     // Producer configuration
     options.ProducerSettings.EnablePublisherConfirms = true;
     options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-    options.ProducerSettings.BatchSize = 100;
-    options.ProducerSettings.MaxBatchWaitTime = TimeSpan.FromSeconds(1);
-    options.ProducerSettings.EnableTransactions = false;
-    options.ProducerSettings.TransactionTimeout = TimeSpan.FromSeconds(30);
-    options.ProducerSettings.MaxRetryAttempts = 3;
-    options.ProducerSettings.RetryDelay = TimeSpan.FromSeconds(1);
-    options.ProducerSettings.EnableCompression = false;
-    options.ProducerSettings.CompressionLevel = CompressionLevel.Fastest;
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    options.ProducerSettings.PublishTimeout = TimeSpan.FromSeconds(30);
 });
 ```
 
@@ -331,12 +313,8 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 {
     // High-throughput settings
     options.ProducerSettings.EnablePublisherConfirms = true;
-    options.ProducerSettings.BatchSize = 1000;
-    options.ProducerSettings.MaxBatchWaitTime = TimeSpan.FromMilliseconds(100);
     options.ProducerSettings.MaxConcurrentPublishes = 100;
     options.ProducerSettings.PublishTimeout = TimeSpan.FromSeconds(10);
-    options.ProducerSettings.UseBackgroundThreads = true;
-    options.ProducerSettings.ChannelPoolSize = 10;
 });
 ```
 
@@ -345,13 +323,14 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.ProducerSettings.RetryPolicy = new ExponentialBackoffRetryPolicy
+    options.ProducerSettings.RetryPolicy = new RetryPolicySettings
     {
         MaxRetryAttempts = 5,
-        InitialDelay = TimeSpan.FromMilliseconds(500),
-        MaxDelay = TimeSpan.FromSeconds(30),
-        BackoffMultiplier = 2.0,
-        Jitter = true
+        InitialRetryDelay = TimeSpan.FromMilliseconds(500),
+        MaxRetryDelay = TimeSpan.FromSeconds(30),
+        RetryDelayMultiplier = 2.0,
+        UseExponentialBackoff = true,
+        UseJitter = true
     };
 });
 ```
@@ -365,12 +344,8 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 options.ConsumerSettings.PrefetchCount = 50;
 options.ConsumerSettings.MaxConcurrentConsumers = 5;
 options.ConsumerSettings.AutoAcknowledge = false;
-options.ConsumerSettings.RequeueOnFailure = true;
-options.ConsumerSettings.MaxConsumerConcurrency = 10;
 options.ConsumerSettings.ConsumerTag = "my-consumer";
-options.ConsumerSettings.Priority = 0;
 options.ConsumerSettings.Exclusive = false;
-options.ConsumerSettings.Arguments = new Dictionary<string, object>();
 ```
 
 ### Consumer Performance Tuning
@@ -381,10 +356,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     // High-throughput consumer settings
     options.ConsumerSettings.PrefetchCount = 100;
     options.ConsumerSettings.MaxConcurrentConsumers = 10;
-    options.ConsumerSettings.MaxConsumerConcurrency = 20;
-    options.ConsumerSettings.ProcessingTimeout = TimeSpan.FromSeconds(30);
-    options.ConsumerSettings.UseBackgroundThreads = true;
-    options.ConsumerSettings.ChannelPoolSize = 5;
+    options.ConsumerSettings.MessageProcessingTimeout = TimeSpan.FromSeconds(30);
 });
 ```
 
@@ -614,25 +586,22 @@ builder.Services.AddRabbitMQStreamFlow(options =>
   "StreamFlow": {
     "RabbitMQ": {
       "ConnectionString": "amqp://guest:guest@localhost:5672",
-      "Connection": {
-        "AutomaticRecovery": true,
-        "HeartbeatInterval": "00:00:30"
+      "ConnectionSettings": {
+        "Host": "localhost",
+        "Port": 5672,
+        "Username": "guest",
+        "Password": "guest",
+        "VirtualHost": "/",
+        "ConnectionTimeout": "00:00:30"
       },
-      "Producer": {
-        "EnableConfirmations": false,
-        "BatchSize": 10
+      "ProducerSettings": {
+        "EnablePublisherConfirms": false,
+        "MaxConcurrentPublishes": 10
       },
-      "Consumer": {
+      "ConsumerSettings": {
         "PrefetchCount": 10,
-        "ConcurrentConsumers": 2
-      },
-      "ErrorHandling": {
-        "EnableDeadLetterQueue": false,
-        "MaxRetryAttempts": 1
-      },
-      "Logging": {
-        "EnableVerboseLogging": true,
-        "LogLevel": "Debug"
+        "MaxConcurrentConsumers": 2,
+        "AutoAcknowledge": false
       }
     }
   }
@@ -646,11 +615,14 @@ builder.Services.AddRabbitMQStreamFlow(options =>
   "StreamFlow": {
     "RabbitMQ": {
       "ConnectionString": "amqps://username:password@rabbitmq.production.com:5671",
-      "Connection": {
-        "AutomaticRecovery": true,
-        "HeartbeatInterval": "00:01:00",
-        "MaxChannels": 200,
-        "ConnectionTimeout": "00:00:30"
+      "ConnectionSettings": {
+        "Host": "rabbitmq.production.com",
+        "Port": 5671,
+        "Username": "username",
+        "Password": "password",
+        "VirtualHost": "/",
+        "ConnectionTimeout": "00:00:30",
+        "UseSsl": true
       },
       "Ssl": {
         "Enabled": true,
@@ -658,32 +630,18 @@ builder.Services.AddRabbitMQStreamFlow(options =>
         "CertificatePath": "/path/to/certificate.pfx",
         "CheckCertificateRevocation": true
       },
-      "Producer": {
-        "EnableConfirmations": true,
-        "BatchSize": 1000,
-        "MaxBatchWaitTime": "00:00:00.100"
+      "ProducerSettings": {
+        "EnablePublisherConfirms": true,
+        "MaxConcurrentPublishes": 1000,
+        "PublishTimeout": "00:00:30"
       },
-      "Consumer": {
+      "ConsumerSettings": {
         "PrefetchCount": 100,
-        "ConcurrentConsumers": 10,
-        "MaxConsumerConcurrency": 20
+        "MaxConcurrentConsumers": 10,
+        "AutoAcknowledge": false
       },
-      "ErrorHandling": {
-        "EnableDeadLetterQueue": true,
-        "RetryPolicy": "ExponentialBackoff",
-        "MaxRetryAttempts": 5,
-        "CircuitBreaker": {
-          "Enabled": true,
-          "FailureThreshold": 10,
-          "RecoveryTimeout": "00:05:00"
-        }
-      },
-      "EnableHealthChecks": true,
-      "EnableMonitoring": true,
-      "Logging": {
-        "LogLevel": "Information",
-        "LogMessagePayload": false
-      }
+
+
     }
   }
 }
@@ -703,10 +661,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     
-    // Additional configuration options
-    options.EnableConfigurationValidation = true;
-    options.ValidateOnStart = true;
-    options.ThrowOnValidationErrors = true;
+
 });
 ```
 
@@ -722,28 +677,10 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     
-    options.CustomValidators.Add(new CustomConfigurationValidator());
+
 });
 
-public class CustomConfigurationValidator : IConfigurationValidator
-{
-    public ValidationResult Validate(RabbitMQStreamFlowOptions options)
-    {
-        var errors = new List<string>();
-        
-        if (options.ConsumerSettings.PrefetchCount > 1000)
-        {
-            errors.Add("PrefetchCount should not exceed 1000 for optimal performance");
-        }
-        
-        if (options.ProducerSettings.MaxConcurrentPublishes > 10000)
-        {
-            errors.Add("MaxConcurrentPublishes should not exceed 10000");
-        }
-        
-        return new ValidationResult(errors);
-    }
-}
+
 ```
 
 ## Advanced Configuration Scenarios
@@ -795,9 +732,9 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```csharp
 // Environment variables
-// STREAMFLOW_RABBITMQ_CONNECTIONSTRING=amqp://localhost
-// STREAMFLOW_RABBITMQ_PRODUCER_BATCHSIZE=100
-// STREAMFLOW_RABBITMQ_CONSUMER_PREFETCHCOUNT=50
+// STREAMFLOW_RABBITMQ_CONNECTIONSETTINGS__HOST=localhost
+// STREAMFLOW_RABBITMQ_PRODUCERSETTINGS__MAXCONCURRENTPUBLISHES=100
+// STREAMFLOW_RABBITMQ_CONSUMERSETTINGS__PREFETCHCOUNT=50
 
 builder.Configuration.AddEnvironmentVariables("STREAMFLOW_");
 

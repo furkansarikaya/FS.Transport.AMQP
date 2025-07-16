@@ -501,12 +501,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConsumerSettings.PrefetchCount = 50;
     options.ConsumerSettings.AutoAcknowledge = false;
     options.ConsumerSettings.MaxConcurrentConsumers = 5;
-    options.ErrorHandling.EnableDeadLetterQueue = true;
-    options.ErrorHandling.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-    options.ErrorHandling.MaxRetryAttempts = 3;
-    options.EnableHealthChecks = true;
-    options.EnableEventBus = true;
-    options.EnableMonitoring = true;
+
 });
 
 // Add your services
