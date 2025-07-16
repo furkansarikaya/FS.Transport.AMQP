@@ -61,6 +61,9 @@ public class OrderService
 
     public async Task CreateOrderAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Setup infrastructure with fluent API
         await _streamFlow.ExchangeManager.Exchange("orders")
             .AsTopic()
@@ -105,6 +108,9 @@ public class MessageService
     // Publish a simple message with fluent API
     public async Task PublishSimpleMessageAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Option 1: With pre-configured message (can use PublishAsync() without parameters)
         await _streamFlow.Producer.Message("Hello, World!")
             .WithExchange("notifications")
@@ -121,6 +127,9 @@ public class MessageService
     // Publish a complex object with fluent API
     public async Task PublishOrderAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Option 1: With pre-configured message (can use PublishAsync() without parameters)
         await _streamFlow.Producer.Message(order)
             .WithExchange("orders")
@@ -143,6 +152,9 @@ public class MessageService
     // Publish with byte array
     public async Task PublishBytesAsync(byte[] data)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Option 1: With pre-configured message (can use PublishAsync() without parameters)
         await _streamFlow.Producer.Message(data)
             .WithExchange("data")
@@ -165,6 +177,9 @@ public class MessageService
 ```csharp
 public async Task PublishAdvancedMessageAsync(Order order)
 {
+    // Initialize the client first
+    await _streamFlow.InitializeAsync();
+    
     // Option 1: With pre-configured message (can use PublishAsync() without parameters)
     var result = await _streamFlow.Producer.Message(order)
         .WithExchange("orders")
@@ -177,11 +192,10 @@ public async Task PublishAdvancedMessageAsync(Order order)
             ["source"] = "order-service",
             ["version"] = "1.0",
             ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            ["correlation-id"] = Guid.NewGuid().ToString()
+            ["correlation-id"] = Guid.NewGuid().ToString(),
+            ["retry-policy"] = "exponential-backoff",
+            ["confirmation-timeout"] = TimeSpan.FromSeconds(5).TotalMilliseconds
         })
-        .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-        .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
-        .WithTransaction(enabled: true)
         .PublishAsync();
 
     // Option 2: With generic type (MUST pass message to PublishAsync)
@@ -198,9 +212,6 @@ public async Task PublishAdvancedMessageAsync(Order order)
     //         ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
     //         ["correlation-id"] = Guid.NewGuid().ToString()
     //     })
-    //     .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-    //     .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
-    //     .WithTransaction(enabled: true)
     //     .PublishAsync(order);
         
     if (result.IsSuccess)
@@ -220,6 +231,9 @@ public async Task PublishAdvancedMessageAsync(Order order)
 // Legacy API - still supported but fluent API is recommended
 public async Task PublishWithPropertiesAsync(Order order)
 {
+    // Initialize the client first
+    await _streamFlow.InitializeAsync();
+    
     var properties = new BasicProperties
     {
         MessageId = Guid.NewGuid().ToString(),
@@ -252,6 +266,9 @@ public async Task PublishWithPropertiesAsync(Order order)
 // Publish directly to a queue using default exchange
 public async Task PublishToQueueAsync(string queueName, object message)
 {
+    // Initialize the client first
+    await _streamFlow.InitializeAsync();
+    
     // Option 1: With pre-configured message (can use PublishAsync() without parameters)
     await _streamFlow.Producer.Message(message)
         .WithExchange("") // Default exchange
@@ -278,6 +295,9 @@ public class InfrastructureSetup
     
     public async Task SetupOrderInfrastructureAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Create main exchange
         await _streamFlow.ExchangeManager.Exchange("orders")
             .AsTopic()
@@ -326,6 +346,9 @@ public class AdvancedPublisher
     // Topic exchange routing
     public async Task PublishTopicMessageAsync(string region, string category, object message)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var routingKey = $"{region}.{category}";
         
         await _streamFlow.Producer.PublishAsync(
@@ -337,6 +360,9 @@ public class AdvancedPublisher
     // Fanout exchange publishing
     public async Task PublishBroadcastMessageAsync(object message)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await _streamFlow.Producer.PublishAsync(
             exchange: "fanout-exchange",
             routingKey: "", // Ignored for fanout
@@ -346,6 +372,9 @@ public class AdvancedPublisher
     // Headers exchange publishing
     public async Task PublishHeadersMessageAsync(object message, Dictionary<string, object> headers)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var properties = new BasicProperties
         {
             Headers = headers
@@ -372,6 +401,9 @@ public class ScheduledPublisher
     // Schedule message for future delivery
     public async Task ScheduleMessageAsync(object message, TimeSpan delay)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await _streamFlow.Producer.ScheduleAsync(
             message: message,
             delay: delay);
@@ -380,6 +412,9 @@ public class ScheduledPublisher
     // Schedule message for specific time
     public async Task ScheduleMessageAsync(object message, DateTimeOffset scheduleTime)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var delay = scheduleTime - DateTimeOffset.UtcNow;
         if (delay > TimeSpan.Zero)
         {
@@ -392,6 +427,9 @@ public class ScheduledPublisher
     // Schedule recurring message
     public async Task ScheduleRecurringMessageAsync(object message, TimeSpan interval)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Note: This is a simplified example
         // In production, use a proper scheduling library or service
         using var timer = new Timer(async _ =>
@@ -426,6 +464,9 @@ public class ConfirmationPublisher
 
     public async Task PublishWithConfirmationAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         try
         {
             // Enable confirmations for this operation
@@ -485,6 +526,9 @@ public class CallbackPublisher
 
     public async Task PublishWithCallbackAsync(Order order)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         await _streamFlow.Producer.PublishAsync(
             exchange: "orders",
             routingKey: "order.created",
@@ -509,6 +553,9 @@ public class BulkConfirmationPublisher
 
     public async Task PublishBulkWithConfirmationsAsync(IEnumerable<Order> orders)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var publishTasks = new List<Task<bool>>();
 
         foreach (var order in orders)
@@ -557,6 +604,9 @@ public class BatchPublisher
 
     public async Task PublishBatchAsync(IEnumerable<Order> orders)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var messageContexts = orders.Select(order => new MessageContext
         {
             Exchange = "orders",
@@ -587,6 +637,9 @@ public class AdvancedBatchPublisher
 
     public async Task PublishMixedBatchAsync(IEnumerable<object> messages)
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         var messageContexts = messages.Select(message => new MessageContext
         {
             Exchange = GetExchangeForMessage(message),
