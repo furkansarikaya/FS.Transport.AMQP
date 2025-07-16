@@ -46,6 +46,11 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConsumerSettings.AutoAcknowledge = false;
     options.ConsumerSettings.MaxConcurrentConsumers = 5;
 });
+
+// Initialize the client
+var app = builder.Build();
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
 ```
 
 ### Configuration from appsettings.json
@@ -66,6 +71,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
       "Password": "guest",
       "VirtualHost": "/",
       "ConnectionTimeout": "00:00:30",
+      "RequestTimeout": "00:00:30",
       "UseSsl": false
       },
     "ProducerSettings": {
@@ -87,9 +93,14 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 // Program.cs
 builder.Services.Configure<RabbitMQStreamFlowOptions>(
-    builder.Configuration.GetSection("StreamFlow:RabbitMQ"));
+    builder.Configuration.GetSection("RabbitMQ"));
 
 builder.Services.AddRabbitMQStreamFlow();
+
+// Initialize the client
+var app = builder.Build();
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
 ```
 
 ### Using Fluent APIs After Configuration
@@ -108,6 +119,9 @@ public class StartupService
     
     public async Task InitializeAsync()
     {
+        // Initialize the client first
+        await _streamFlow.InitializeAsync();
+        
         // Setup infrastructure with fluent APIs
         await SetupExchangesAsync();
         await SetupQueuesAsync();
@@ -123,7 +137,6 @@ public class StartupService
         await _streamFlow.ExchangeManager.Exchange("orders")
             .AsTopic()
             .WithDurable(true)
-            .WithAlternateExchange("alt-orders")
             .DeclareAsync();
             
         await _streamFlow.ExchangeManager.Exchange("notifications")
@@ -161,9 +174,12 @@ public class StartupService
         {
             await _streamFlow.Consumer.Queue<Order>("order-processing")
                 .WithConcurrency(5)
-                .WithPrefetch(100)
-                .WithErrorHandling(ErrorHandlingStrategy.Retry)
-                .HandleAsync(async (order, context) =>
+                .WithPrefetchCount(100)
+                .WithErrorHandler(async (exception, context) =>
+                {
+                    return exception is ConnectFailureException || exception is BrokerUnreachableException;
+                })
+                .ConsumeAsync(async (order, context) =>
                 {
                     await ProcessOrderAsync(order);
                     return true;
@@ -193,7 +209,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
-
+    options.ConnectionSettings.RequestTimeout = TimeSpan.FromSeconds(30);
     options.ConnectionSettings.UseSsl = false;
 });
 ```
@@ -208,8 +224,6 @@ options.ConnectionSettings.Username = "username";
 options.ConnectionSettings.Password = "password";
 options.ConnectionSettings.VirtualHost = "/myvhost";
 ```
-
-
 
 ## SSL/TLS Configuration
 
@@ -274,18 +288,21 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "StreamFlow": {
-    "RabbitMQ": {
-      "ConnectionString": "amqps://localhost:5671",
-      "Ssl": {
-        "Enabled": true,
-        "ServerName": "rabbitmq.example.com",
-        "CertificatePath": "/path/to/certificate.pfx",
-        "CertificatePassword": "password",
-        "AcceptablePolicyErrors": "None",
-        "Version": "Tls12,Tls13",
-        "CheckCertificateRevocation": true
-      }
+  "RabbitMQ": {
+    "ConnectionSettings": {
+      "Host": "localhost",
+      "Port": 5671,
+      "Username": "guest",
+      "Password": "guest",
+      "VirtualHost": "/",
+      "UseSsl": true
+    },
+    "Ssl": {
+      "Enabled": true,
+      "CertificatePath": "/path/to/certificate.pfx",
+      "CertificatePassword": "password",
+      "VerifyCertificate": true,
+      "ProtocolVersion": "Tls12"
     }
   }
 }
@@ -340,12 +357,15 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ### Basic Consumer Settings
 
 ```csharp
-// Consumer configuration
-options.ConsumerSettings.PrefetchCount = 50;
-options.ConsumerSettings.MaxConcurrentConsumers = 5;
-options.ConsumerSettings.AutoAcknowledge = false;
-options.ConsumerSettings.ConsumerTag = "my-consumer";
-options.ConsumerSettings.Exclusive = false;
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Consumer configuration
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.ConsumerTag = "my-consumer";
+    options.ConsumerSettings.Exclusive = false;
+});
 ```
 
 ### Consumer Performance Tuning
@@ -423,8 +443,6 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 });
 ```
 
-
-
 ## Serialization Configuration
 
 ### JSON Serialization
@@ -452,128 +470,9 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.Serialization.Format = SerializationFormat.Binary;
-    options.Serialization.UseCompression = true;
-    options.Serialization.EnableTypeInformation = true;
-});
-```
-
-### MessagePack Serialization
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.Serialization.Format = SerializationFormat.MessagePack;
-    options.Serialization.MessagePackOptions = MessagePackSerializerOptions.Standard
-        .WithCompression(MessagePackCompression.Lz4Block);
-});
-```
-
-## Event Bus Configuration
-
-### Basic Event Bus Settings
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.EnableEventBus = true;
-    options.EventBus.DomainEventExchange = "domain-events";
-    options.EventBus.IntegrationEventExchange = "integration-events";
-    options.EventBus.EventTypeHeaderName = "event-type";
-    options.EventBus.CorrelationIdHeaderName = "correlation-id";
-    options.EventBus.CausationIdHeaderName = "causation-id";
-    options.EventBus.EnableEventTypeDiscovery = true;
-    options.EventBus.EventTypesAssembly = typeof(Program).Assembly;
-});
-```
-
-### Event Store Configuration
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.EnableEventStore = true;
-    options.EventStore.StreamPrefix = "eventstore";
-    options.EventStore.SnapshotInterval = 100;
-    options.EventStore.EnableSnapshots = true;
-    options.EventStore.SnapshotPrefix = "snapshot";
-    options.EventStore.MaxEventsPerRead = 1000;
-    options.EventStore.EnableEventTypeDiscovery = true;
-    options.EventStore.EventTypesAssembly = typeof(Program).Assembly;
-});
-```
-
-## Health Checks Configuration
-
-### Basic Health Check Settings
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.EnableHealthChecks = true;
-    options.HealthCheck.Enabled = true;
-    options.HealthCheck.Interval = TimeSpan.FromSeconds(30);
-    options.HealthCheck.Timeout = TimeSpan.FromSeconds(5);
-    options.HealthCheck.FailureThreshold = 3;
-    options.HealthCheck.SuccessThreshold = 2;
-    options.HealthCheck.CheckConnection = true;
-    options.HealthCheck.CheckQueues = true;
-    options.HealthCheck.CheckExchanges = true;
-    options.HealthCheck.CheckConsumers = true;
-});
-```
-
-### Custom Health Check Configuration
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.HealthCheck.CustomChecks.Add("queue-depth", new QueueDepthHealthCheck
-    {
-        QueueName = "critical-queue",
-        MaxDepth = 1000,
-        WarningThreshold = 500
-    });
-    
-    options.HealthCheck.CustomChecks.Add("consumer-lag", new ConsumerLagHealthCheck
-    {
-        QueueName = "processing-queue",
-        MaxLag = TimeSpan.FromMinutes(5)
-    });
-});
-```
-
-## Monitoring Configuration
-
-### Metrics Collection
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.EnableMonitoring = true;
-    options.Monitoring.EnableMetrics = true;
-    options.Monitoring.MetricsInterval = TimeSpan.FromSeconds(60);
-    options.Monitoring.EnableStatistics = true;
-    options.Monitoring.StatisticsInterval = TimeSpan.FromSeconds(30);
-    options.Monitoring.EnablePerformanceCounters = true;
-    options.Monitoring.MetricsPrefix = "streamflow";
-    options.Monitoring.IncludeHostname = true;
-    options.Monitoring.IncludeApplicationName = true;
-});
-```
-
-### Logging Configuration
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.Logging.EnableVerboseLogging = false;
-    options.Logging.LogLevel = LogLevel.Information;
-    options.Logging.LogMessagePayload = false;
-    options.Logging.LogMessageHeaders = true;
-    options.Logging.LogConnectionEvents = true;
-    options.Logging.LogChannelEvents = true;
-    options.Logging.MaxPayloadLength = 1000;
+    options.ProducerSettings.Serialization.Format = SerializationFormat.Binary;
+    options.ProducerSettings.Serialization.EnableCompression = true;
+    options.ProducerSettings.Serialization.IncludeTypeInformation = true;
 });
 ```
 
@@ -583,26 +482,23 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "StreamFlow": {
-    "RabbitMQ": {
-      "ConnectionString": "amqp://guest:guest@localhost:5672",
-      "ConnectionSettings": {
-        "Host": "localhost",
-        "Port": 5672,
-        "Username": "guest",
-        "Password": "guest",
-        "VirtualHost": "/",
-        "ConnectionTimeout": "00:00:30"
-      },
-      "ProducerSettings": {
-        "EnablePublisherConfirms": false,
-        "MaxConcurrentPublishes": 10
-      },
-      "ConsumerSettings": {
-        "PrefetchCount": 10,
-        "MaxConcurrentConsumers": 2,
-        "AutoAcknowledge": false
-      }
+  "RabbitMQ": {
+    "ConnectionSettings": {
+      "Host": "localhost",
+      "Port": 5672,
+      "Username": "guest",
+      "Password": "guest",
+      "VirtualHost": "/",
+      "ConnectionTimeout": "00:00:30"
+    },
+    "ProducerSettings": {
+      "EnablePublisherConfirms": false,
+      "MaxConcurrentPublishes": 10
+    },
+    "ConsumerSettings": {
+      "PrefetchCount": 10,
+      "MaxConcurrentConsumers": 2,
+      "AutoAcknowledge": false
     }
   }
 }
@@ -612,36 +508,31 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```json
 {
-  "StreamFlow": {
-    "RabbitMQ": {
-      "ConnectionString": "amqps://username:password@rabbitmq.production.com:5671",
-      "ConnectionSettings": {
-        "Host": "rabbitmq.production.com",
-        "Port": 5671,
-        "Username": "username",
-        "Password": "password",
-        "VirtualHost": "/",
-        "ConnectionTimeout": "00:00:30",
-        "UseSsl": true
-      },
-      "Ssl": {
-        "Enabled": true,
-        "ServerName": "rabbitmq.production.com",
-        "CertificatePath": "/path/to/certificate.pfx",
-        "CheckCertificateRevocation": true
-      },
-      "ProducerSettings": {
-        "EnablePublisherConfirms": true,
-        "MaxConcurrentPublishes": 1000,
-        "PublishTimeout": "00:00:30"
-      },
-      "ConsumerSettings": {
-        "PrefetchCount": 100,
-        "MaxConcurrentConsumers": 10,
-        "AutoAcknowledge": false
-      },
-
-
+  "RabbitMQ": {
+    "ConnectionSettings": {
+      "Host": "rabbitmq.production.com",
+      "Port": 5671,
+      "Username": "username",
+      "Password": "password",
+      "VirtualHost": "/",
+      "ConnectionTimeout": "00:00:30",
+      "UseSsl": true
+    },
+    "Ssl": {
+      "Enabled": true,
+      "CertificatePath": "/path/to/certificate.pfx",
+      "VerifyCertificate": true,
+      "ProtocolVersion": "Tls12"
+    },
+    "ProducerSettings": {
+      "EnablePublisherConfirms": true,
+      "MaxConcurrentPublishes": 1000,
+      "PublishTimeout": "00:00:30"
+    },
+    "ConsumerSettings": {
+      "PrefetchCount": 100,
+      "MaxConcurrentConsumers": 10,
+      "AutoAcknowledge": false
     }
   }
 }
@@ -660,27 +551,14 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Username = "guest";
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
     
-
+    // Client configuration
+    options.ClientConfiguration.ClientName = "My Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
 });
-```
-
-### Custom Validation
-
-```csharp
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    // Connection settings
-    options.ConnectionSettings.Host = "localhost";
-    options.ConnectionSettings.Port = 5672;
-    options.ConnectionSettings.Username = "guest";
-    options.ConnectionSettings.Password = "guest";
-    options.ConnectionSettings.VirtualHost = "/";
-    
-
-});
-
-
 ```
 
 ## Advanced Configuration Scenarios
@@ -732,11 +610,11 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```csharp
 // Environment variables
-// STREAMFLOW_RABBITMQ_CONNECTIONSETTINGS__HOST=localhost
-// STREAMFLOW_RABBITMQ_PRODUCERSETTINGS__MAXCONCURRENTPUBLISHES=100
-// STREAMFLOW_RABBITMQ_CONSUMERSETTINGS__PREFETCHCOUNT=50
+// RABBITMQ_CONNECTIONSETTINGS__HOST=localhost
+// RABBITMQ_PRODUCERSETTINGS__MAXCONCURRENTPUBLISHES=100
+// RABBITMQ_CONSUMERSETTINGS__PREFETCHCOUNT=50
 
-builder.Configuration.AddEnvironmentVariables("STREAMFLOW_");
+builder.Configuration.AddEnvironmentVariables("RABBITMQ_");
 
 builder.Services.Configure<RabbitMQStreamFlowOptions>(
     builder.Configuration.GetSection("RabbitMQ"));
@@ -777,8 +655,12 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.EnableConfigurationValidation = true;
-    options.ValidateOnStart = true;
+    // Validate required settings
+    if (string.IsNullOrEmpty(options.ConnectionSettings.Host))
+        throw new InvalidOperationException("Host is required");
+    
+    if (options.ConnectionSettings.Port <= 0)
+        throw new InvalidOperationException("Port must be greater than 0");
 });
 ```
 
@@ -858,7 +740,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
 
 ```csharp
 builder.Services.Configure<RabbitMQStreamFlowOptions>(
-    builder.Configuration.GetSection("StreamFlow:RabbitMQ"));
+    builder.Configuration.GetSection("RabbitMQ"));
 
 builder.Services.AddSingleton<IOptionsMonitor<RabbitMQStreamFlowOptions>>();
 ```
@@ -909,17 +791,16 @@ builder.Services.AddSingleton<IOptionsMonitor<RabbitMQStreamFlowOptions>>();
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    options.EnableConfigurationValidation = true;
-    options.Logging.EnableVerboseLogging = true;
-    
     // Log configuration on startup
-    options.LogConfigurationOnStartup = true;
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("RabbitMQ Configuration: Host={Host}, Port={Port}", 
+        options.ConnectionSettings.Host, options.ConnectionSettings.Port);
 });
 ```
 
 ## Configuration Schema Reference
 
-For a complete reference of all configuration options, see the [RabbitMQStreamFlowOptions class](https://github.com/furkansarikaya/FS.StreamFlow/blob/main/src/FS.StreamFlow.RabbitMQ/Configuration/RabbitMQStreamFlowOptions.cs).
+For a complete reference of all configuration options, see the [RabbitMQStreamFlowOptions class](https://github.com/furkansarikaya/FS.StreamFlow/blob/main/src/FS.StreamFlow.RabbitMQ/DependencyInjection/ServiceCollectionExtensions.cs).
 
 ## Next Steps
 

@@ -80,8 +80,7 @@ public class OrderProcessor
             .WithAutoAck(false)
             .WithErrorHandler(async (exception, context) =>
             {
-                // Custom error handling
-                return exception is TransientException;
+                return exception is ConnectFailureException || exception is BrokerUnreachableException;
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
@@ -135,7 +134,7 @@ public class SimpleConsumer
             .WithErrorHandler(async (exception, context) =>
             {
                 // Custom error handling
-                return exception is TransientException;
+                return exception is ConnectFailureException || exception is BrokerUnreachableException;
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
@@ -579,9 +578,9 @@ public class ManualAckConsumer
                     
                     return true;
                 }
-                catch (TransientException ex)
+                catch (ConnectFailureException ex)
                 {
-                    _logger.LogWarning(ex, "Transient error processing order {OrderId}. Rejecting for retry", order.Id);
+                    _logger.LogWarning(ex, "Connection failure processing order {OrderId}. Rejecting for retry", order.Id);
                     
                     // Reject the message and requeue for retry
                     await context.NackAsync(requeue: true);
@@ -609,9 +608,9 @@ public class ManualAckConsumer
             throw new PermanentException("Invalid order amount");
         }
 
-        if (DateTime.UtcNow.Second % 10 == 0) // Simulate occasional transient errors
+        if (DateTime.UtcNow.Second % 10 == 0) // Simulate occasional connection failures
         {
-            throw new TransientException("Temporary service unavailable");
+            throw new ConnectFailureException("Temporary service unavailable");
         }
 
         await Task.Delay(1000);
@@ -694,7 +693,7 @@ public class ConditionalAckConsumer
         {
             return new ProcessingResult
             {
-                Status = ex is TransientException ? ProcessingStatus.RetryableFailure : ProcessingStatus.PermanentFailure,
+                Status = ex is ConnectFailureException ? ProcessingStatus.RetryableFailure : ProcessingStatus.PermanentFailure,
                 Error = ex.Message
             };
         }
@@ -778,7 +777,7 @@ public class AutoRetryConsumer
                 
                 return true; // Success
             }
-            catch (TransientException ex)
+            catch (ConnectFailureException ex)
             {
                 retryCount++;
                 
@@ -786,7 +785,7 @@ public class AutoRetryConsumer
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, retryCount - 1)); // Exponential backoff
                     
-                    _logger.LogWarning(ex, "Transient error processing order {OrderId} on attempt {Attempt}. " +
+                    _logger.LogWarning(ex, "Connection failure processing order {OrderId} on attempt {Attempt}. " +
                         "Retrying in {Delay}s", order.Id, retryCount, delay.TotalSeconds);
                     
                     await Task.Delay(delay);
@@ -817,9 +816,9 @@ public class AutoRetryConsumer
         // Simulate processing with occasional failures
         var random = new Random();
         
-        if (random.Next(1, 5) == 1) // 25% chance of transient failure
+        if (random.Next(1, 5) == 1) // 25% chance of connection failure
         {
-            throw new TransientException("Temporary service unavailable");
+            throw new ConnectFailureException("Temporary service unavailable");
         }
         
         if (random.Next(1, 20) == 1) // 5% chance of permanent failure

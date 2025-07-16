@@ -148,8 +148,7 @@ public class OrderProcessor
             .WithPrefetchCount(100)
             .WithErrorHandler(async (exception, context) =>
             {
-                // Handle error and return true to requeue, false to reject
-                return exception is TransientException;
+                return exception is ConnectFailureException || exception is BrokerUnreachableException;
             })
             .ConsumeAsync(async (order, context) =>
             {
@@ -419,7 +418,7 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
     .WithConcurrency(5)
     .WithErrorHandler(async (exception, context) =>
     {
-        if (exception is TransientException)
+        if (exception is ConnectFailureException)
             return true; // Requeue
         
         await _deadLetterService.SendAsync(context.Message);
@@ -664,7 +663,7 @@ public class InventoryService
             .WithErrorHandler(async (exception, context) =>
             {
                 // Custom error handling
-                return exception is TransientException;
+                return exception is ConnectFailureException;
             })
             .ConsumeAsync(async (orderCreated, context) =>
             {
@@ -972,7 +971,7 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
     .WithConcurrency(5)
     .WithErrorHandler(async (exception, context) =>
     {
-        if (exception is TransientException)
+        if (exception is ConnectFailureException)
             return true; // Requeue
         
         await _deadLetterService.SendAsync(context.Message);

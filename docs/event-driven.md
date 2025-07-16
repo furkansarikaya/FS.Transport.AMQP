@@ -134,7 +134,7 @@ await _streamFlow.Consumer.Queue<OrderCreated>("order-created-events")
     .WithErrorHandler(async (exception, context) =>
     {
         // Custom error handling
-        return exception is TransientException;
+        return exception is ConnectFailureException || exception is BrokerUnreachableException;
     })
     .WithRetryPolicy(new RetryPolicySettings
     {
@@ -160,7 +160,7 @@ await _streamFlow.Consumer.Queue<PaymentProcessed>("payment-processed-events")
     .WithErrorHandler(async (exception, context) =>
     {
         // Custom error handling for payment events
-        return exception is TransientException;
+        return exception is ConnectFailureException || exception is BrokerUnreachableException;
     })
     .ConsumeAsync(async (paymentProcessed, context) =>
     {

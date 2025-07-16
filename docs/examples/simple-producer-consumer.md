@@ -169,8 +169,7 @@ public class MessageConsumer
             .WithAutoAck(false)
             .WithErrorHandler(async (exception, context) =>
             {
-                _logger.LogError(exception, "Error processing message");
-                return exception is TransientException;
+                return exception is ConnectFailureException || exception is BrokerUnreachableException;
             })
             .ConsumeAsync(async (message, context) =>
             {
