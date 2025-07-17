@@ -87,14 +87,20 @@ public class OrderProcessor
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                UseExponentialBackoff = true,
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
                 MaxRetryAttempts = 3,
-                InitialRetryDelay = TimeSpan.FromSeconds(1)
+                InitialRetryDelay = TimeSpan.FromSeconds(1),
+                MaxRetryDelay = TimeSpan.FromSeconds(30),
+                RetryDelayMultiplier = 2.0,
+                UseJitter = true
             })
             .WithDeadLetterQueue(new DeadLetterSettings
             {
                 ExchangeName = "dlx",
-                RoutingKey = "dlq"
+                RoutingKey = "dlq",
+                Enabled = true,
+                MaxRetries = 3,
+                MessageTtl = TimeSpan.FromHours(24)
             })
             .ConsumeAsync(ProcessOrderAsync, cancellationToken);
     }
@@ -144,14 +150,20 @@ public class SimpleConsumer
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                UseExponentialBackoff = false,
+                RetryPolicy = RetryPolicyType.Linear,
                 MaxRetryAttempts = 3,
-                InitialRetryDelay = TimeSpan.FromSeconds(1)
+                InitialRetryDelay = TimeSpan.FromSeconds(1),
+                MaxRetryDelay = TimeSpan.FromSeconds(30),
+                RetryDelayMultiplier = 1.0,
+                UseJitter = false
             })
             .WithDeadLetterQueue(new DeadLetterSettings
             {
-                DeadLetterExchange = "dlx",
-                DeadLetterQueue = "dlq"
+                ExchangeName = "dlx",
+                RoutingKey = "dlq",
+                Enabled = true,
+                MaxRetries = 3,
+                MessageTtl = TimeSpan.FromHours(24)
             })
             .ConsumeAsync(async (order, context) =>
             {

@@ -91,12 +91,16 @@ public class RabbitMQHealthCheck : IHealthCheck
 
     private async Task<bool> CheckProducerHealthAsync()
     {
-        return _streamFlow.Producer.IsReady;
+        // Check if producer is available and healthy
+        var stats = _streamFlow.Producer.Statistics;
+        return stats.TotalMessagesPublished > 0 || stats.PublishSuccessRate > 0.95;
     }
 
     private async Task<bool> CheckConsumerHealthAsync()
     {
-        return _streamFlow.Consumer.Status == ConsumerStatus.Running;
+        // Check if consumer is available and healthy
+        var stats = _streamFlow.Consumer.Statistics;
+        return stats.TotalMessagesConsumed > 0 || stats.ProcessingSuccessRate > 0.95;
     }
 
     private async Task<object> GetHealthStatisticsAsync()

@@ -162,7 +162,7 @@ public class MessageConsumer
         _logger = logger;
     }
 
-    public async Task StartConsumingAsync(CancellationToken cancellationToken = default)
+    public async Task StartConsumingAsync()
     {
         _logger.LogInformation("Starting message consumer...");
 

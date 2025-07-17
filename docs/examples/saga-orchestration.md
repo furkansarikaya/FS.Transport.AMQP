@@ -93,7 +93,29 @@ public class OrderProcessingSaga : ISaga
         State = SagaState.NotStarted;
     }
 
-    public async Task HandleAsync(OrderCreated @event, CancellationToken cancellationToken = default)
+    public async Task HandleEventAsync(IEvent @event, CancellationToken cancellationToken = default)
+    {
+        switch (@event)
+        {
+            case OrderCreated orderCreated:
+                await HandleOrderCreatedAsync(orderCreated, cancellationToken);
+                break;
+            case InventoryReserved inventoryReserved:
+                await HandleInventoryReservedAsync(inventoryReserved, cancellationToken);
+                break;
+            case PaymentProcessed paymentProcessed:
+                await HandlePaymentProcessedAsync(paymentProcessed, cancellationToken);
+                break;
+            case OrderShipped orderShipped:
+                await HandleOrderShippedAsync(orderShipped, cancellationToken);
+                break;
+            default:
+                _logger.LogWarning("Unknown event type: {EventType}", @event.GetType().Name);
+                break;
+        }
+    }
+
+    private async Task HandleOrderCreatedAsync(OrderCreated @event, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -127,7 +149,7 @@ public class OrderProcessingSaga : ISaga
         }
     }
 
-    public async Task HandleAsync(InventoryReserved @event, CancellationToken cancellationToken = default)
+    private async Task HandleInventoryReservedAsync(InventoryReserved @event, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -157,7 +179,7 @@ public class OrderProcessingSaga : ISaga
         }
     }
 
-    public async Task HandleAsync(PaymentProcessed @event, CancellationToken cancellationToken = default)
+    private async Task HandlePaymentProcessedAsync(PaymentProcessed @event, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -187,7 +209,7 @@ public class OrderProcessingSaga : ISaga
         }
     }
 
-    public async Task HandleAsync(OrderShipped @event, CancellationToken cancellationToken = default)
+    private async Task HandleOrderShippedAsync(OrderShipped @event, CancellationToken cancellationToken = default)
     {
         try
         {

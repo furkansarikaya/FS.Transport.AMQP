@@ -76,14 +76,20 @@ public class ErrorProneService
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                UseExponentialBackoff = true,
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
                 MaxRetryAttempts = 3,
-                InitialRetryDelay = TimeSpan.FromSeconds(1)
+                InitialRetryDelay = TimeSpan.FromSeconds(1),
+                MaxRetryDelay = TimeSpan.FromSeconds(30),
+                RetryDelayMultiplier = 2.0,
+                UseJitter = true
             })
             .WithDeadLetterQueue(new DeadLetterSettings
             {
                 ExchangeName = "dlx",
-                RoutingKey = "error-prone.failed"
+                RoutingKey = "error-prone.failed",
+                Enabled = true,
+                MaxRetries = 3,
+                MessageTtl = TimeSpan.FromHours(24)
             })
             .ConsumeAsync(async (message, context) =>
             {
@@ -153,7 +159,7 @@ public class CustomErrorHandler : IErrorHandler
         RetryDelay = TimeSpan.FromSeconds(1),
         UseExponentialBackoff = true,
         EnableDeadLetterQueue = true,
-        Strategy = ErrorHandlingStrategy.Custom
+        Strategy = ErrorHandlingStrategy.Requeue
     };
 
     public event EventHandler<ErrorHandledEventArgs>? ErrorHandled;

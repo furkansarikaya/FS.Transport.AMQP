@@ -147,7 +147,7 @@ public class TaskWorker
         _workerId = $"worker-{Guid.NewGuid():N}"[..8];
     }
 
-    public async Task StartWorkingAsync(CancellationToken cancellationToken)
+    public async Task StartWorkingAsync()
     {
         _logger.LogInformation("Worker {WorkerId} starting to process tasks...", _workerId);
         

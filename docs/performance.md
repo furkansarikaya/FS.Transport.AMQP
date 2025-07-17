@@ -318,7 +318,7 @@ public class HighThroughputConsumer
         }
     }
 
-    public async Task ConsumeHighThroughputAsync(CancellationToken cancellationToken = default)
+    public async Task ConsumeHighThroughputAsync()
     {
         // Initialize the client first
         await _streamFlow.InitializeAsync();
@@ -336,7 +336,7 @@ public class HighThroughputConsumer
                     ReceivedAt = DateTimeOffset.UtcNow
                 };
 
-                await _processingChannel.Writer.WriteAsync(processingItem, cancellationToken);
+                await _processingChannel.Writer.WriteAsync(processingItem);
                 
                 return true; // Acknowledge immediately for high throughput
             });
@@ -408,7 +408,7 @@ public class OptimizedPrefetchConsumer
         _optimalPrefetchCount = CalculateOptimalPrefetchCount();
     }
 
-    public async Task ConsumeWithOptimizedPrefetchAsync(CancellationToken cancellationToken = default)
+    public async Task ConsumeWithOptimizedPrefetchAsync()
     {
         // Initialize the client first
         await _streamFlow.InitializeAsync();
@@ -578,7 +578,7 @@ public class MemoryEfficientConsumer
         _memoryPool = MemoryPool<byte>.Shared;
     }
 
-    public async Task ConsumeMemoryEfficientAsync(CancellationToken cancellationToken = default)
+    public async Task ConsumeMemoryEfficientAsync()
     {
         // Initialize the client first
         await _streamFlow.InitializeAsync();

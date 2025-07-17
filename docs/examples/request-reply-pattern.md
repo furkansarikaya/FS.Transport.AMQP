@@ -89,7 +89,7 @@ public class ResponderService
         _logger = logger;
     }
 
-    public async Task StartRespondingAsync(CancellationToken cancellationToken)
+    public async Task StartRespondingAsync()
     {
         // Initialize the client first
         await _streamFlow.InitializeAsync();
@@ -113,7 +113,7 @@ public class ResponderService
                     .PublishAsync();
                     
                 return true; // Acknowledge message
-            }, cancellationToken);
+            });
     }
 }
 ```
@@ -181,7 +181,7 @@ await streamFlow.QueueManager.Queue("calculate-requests")
 
 // Start responder service
 var responderService = host.Services.GetRequiredService<ResponderService>();
-await responderService.StartRespondingAsync(CancellationToken.None);
+await responderService.StartRespondingAsync();
 
 // Simulate request-reply pattern
 var requesterService = host.Services.GetRequiredService<RequesterService>();

@@ -29,18 +29,30 @@ FS.StreamFlow provides multiple layers of error handling to ensure message proce
 ```csharp
 builder.Services.AddRabbitMQStreamFlow(options =>
 {
-    // Error handling settings
-    options.ConsumerSettings.ErrorHandling = new ErrorHandlingSettings
-    {
-        Strategy = ErrorHandlingStrategy.Requeue,
-        MaxRetries = 3,
-        RetryDelay = TimeSpan.FromSeconds(1),
-        UseExponentialBackoff = true,
-        LogErrors = true,
-        ContinueOnError = true
-    };
+    // Connection settings
+    options.ConnectionSettings.Host = "localhost";
+    options.ConnectionSettings.Port = 5672;
+    options.ConnectionSettings.Username = "guest";
+    options.ConnectionSettings.Password = "guest";
+    options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
     
-    // Dead letter queue settings
+    // Client configuration
+    options.ClientConfiguration.ClientName = "Error Handling Example";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
+    options.ConsumerSettings.EnableDeadLetterQueue = true;
     options.ConsumerSettings.DeadLetterSettings = new DeadLetterSettings
     {
         ExchangeName = "dlx",
@@ -50,15 +62,24 @@ builder.Services.AddRabbitMQStreamFlow(options =>
         MessageTtl = TimeSpan.FromHours(24)
     };
     
-    // Retry policy settings
-    options.ConsumerSettings.RetryPolicy = new RetryPolicySettings
+    // Error handling settings
+    options.ErrorHandlingSettings = new ErrorHandlingSettings
     {
-        MaxRetryAttempts = 3,
-        InitialRetryDelay = TimeSpan.FromSeconds(1),
-        MaxRetryDelay = TimeSpan.FromMinutes(5),
-        RetryDelayMultiplier = 2.0,
+        MaxRetries = 3,
+        RetryDelay = TimeSpan.FromSeconds(1),
         UseExponentialBackoff = true,
-        UseJitter = true
+        EnableDeadLetterQueue = true,
+        Strategy = ErrorHandlingStrategy.Requeue
+    };
+    
+    // Dead letter settings
+    options.DeadLetterSettings = new DeadLetterSettings
+    {
+        ExchangeName = "dlx",
+        RoutingKey = "failed",
+        Enabled = true,
+        MaxRetries = 3,
+        MessageTtl = TimeSpan.FromHours(24)
     };
 });
 ```
@@ -95,7 +116,7 @@ public class LinearRetryExample
         await retryPolicy.ExecuteAsync(async () =>
         {
             await ProcessOrderAsync(order);
-        });
+        }, cancellationToken);
     }
 
     private async Task ProcessOrderAsync(Order order)
@@ -140,7 +161,7 @@ public class ExponentialBackoffRetryExample
         await retryPolicy.ExecuteAsync(async () =>
         {
             await ProcessOrderAsync(order);
-        });
+        }, cancellationToken);
     }
 
     private async Task ProcessOrderAsync(Order order)
@@ -159,18 +180,28 @@ public class ExponentialBackoffRetryExample
 ### Custom Retry Policy
 
 ```csharp
-public class CustomRetryPolicy : RetryPolicyBase
+public class CustomRetryPolicy : IRetryPolicy
 {
+    private readonly RetryPolicySettings _settings;
+    private readonly ILogger<CustomRetryPolicy> _logger;
     private readonly Random _random = new();
+    private int _currentAttempt;
 
-    public CustomRetryPolicy(RetryPolicySettings settings, ILogger<CustomRetryPolicy> logger) 
-        : base(settings, logger)
+    public CustomRetryPolicy(RetryPolicySettings settings, ILogger<CustomRetryPolicy> logger)
     {
+        _settings = settings;
+        _logger = logger;
     }
 
-    public override string Name => "Custom";
+    public string Name => "Custom";
+    public int MaxRetryAttempts => _settings.MaxRetryAttempts;
+    public RetryPolicySettings Settings => _settings;
+    public int CurrentAttempt => _currentAttempt;
 
-    public override bool ShouldRetry(Exception exception, int attemptNumber)
+    public event EventHandler<RetryAttemptEventArgs>? RetryAttempt;
+    public event EventHandler<RetryExhaustedEventArgs>? RetryExhausted;
+
+    public bool ShouldRetry(Exception exception, int attemptNumber)
     {
         // Don't retry if max attempts reached
         if (attemptNumber >= MaxRetryAttempts)
@@ -190,16 +221,88 @@ public class CustomRetryPolicy : RetryPolicyBase
         return true;
     }
 
-    public override TimeSpan CalculateDelay(int attemptNumber)
+    public TimeSpan CalculateDelay(int attemptNumber)
     {
-        var delay = TimeSpan.FromMilliseconds(Settings.InitialRetryDelay.TotalMilliseconds * Math.Pow(Settings.RetryDelayMultiplier, attemptNumber));
+        var delay = TimeSpan.FromMilliseconds(_settings.InitialRetryDelay.TotalMilliseconds * Math.Pow(_settings.RetryDelayMultiplier, attemptNumber));
         
         // Add jitter to prevent thundering herd
         var jitter = TimeSpan.FromMilliseconds(_random.Next(0, (int)(delay.TotalMilliseconds * 0.1)));
         delay = delay.Add(jitter);
         
         // Cap at maximum delay
-        return delay > Settings.MaxRetryDelay ? Settings.MaxRetryDelay : delay;
+        return delay > _settings.MaxRetryDelay ? _settings.MaxRetryDelay : delay;
+    }
+
+    public async Task ExecuteAsync(Func<Task> action, CancellationToken cancellationToken = default)
+    {
+        _currentAttempt = 0;
+        var startTime = DateTimeOffset.UtcNow;
+
+        while (true)
+        {
+            try
+            {
+                await action();
+                return; // Success
+            }
+            catch (Exception ex)
+            {
+                _currentAttempt++;
+
+                if (!ShouldRetry(ex, _currentAttempt))
+                {
+                    var totalRetryTime = DateTimeOffset.UtcNow - startTime;
+                    RetryExhausted?.Invoke(this, new RetryExhaustedEventArgs(_currentAttempt, ex, Name, totalRetryTime));
+                    throw;
+                }
+
+                var delay = CalculateDelay(_currentAttempt);
+                RetryAttempt?.Invoke(this, new RetryAttemptEventArgs(_currentAttempt, ex, delay, Name));
+
+                _logger.LogWarning("Retry attempt {Attempt} for {Policy}: {Exception}", 
+                    _currentAttempt, Name, ex.Message);
+
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
+    }
+
+    public async Task<T> ExecuteAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default)
+    {
+        _currentAttempt = 0;
+        var startTime = DateTimeOffset.UtcNow;
+
+        while (true)
+        {
+            try
+            {
+                return await action();
+            }
+            catch (Exception ex)
+            {
+                _currentAttempt++;
+
+                if (!ShouldRetry(ex, _currentAttempt))
+                {
+                    var totalRetryTime = DateTimeOffset.UtcNow - startTime;
+                    RetryExhausted?.Invoke(this, new RetryExhaustedEventArgs(_currentAttempt, ex, Name, totalRetryTime));
+                    throw;
+                }
+
+                var delay = CalculateDelay(_currentAttempt);
+                RetryAttempt?.Invoke(this, new RetryAttemptEventArgs(_currentAttempt, ex, delay, Name));
+
+                _logger.LogWarning("Retry attempt {Attempt} for {Policy}: {Exception}", 
+                    _currentAttempt, Name, ex.Message);
+
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
+    }
+
+    public void Reset()
+    {
+        _currentAttempt = 0;
     }
 
     private bool IsPermanentError(Exception exception)
@@ -210,7 +313,6 @@ public class CustomRetryPolicy : RetryPolicyBase
             ArgumentNullException => true,
             InvalidOperationException => true,
             NotSupportedException => true,
-            ValidationException => true,
             _ => false
         };
     }
@@ -273,7 +375,7 @@ public class RetryConsumer
             {
                 await ProcessOrderAsync(order);
                 return true; // Acknowledge message
-            }, cancellationToken);
+            });
     }
 
     private async Task ProcessOrderAsync(Order order)
@@ -393,12 +495,13 @@ public class CircuitBreakerExample
 public class AdvancedCircuitBreakerExample
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly ICircuitBreaker _circuitBreaker;
+    private readonly IRetryPolicyFactory _retryPolicyFactory;
     private readonly ILogger<AdvancedCircuitBreakerExample> _logger;
 
-    public AdvancedCircuitBreakerExample(IStreamFlowClient rabbitMQ, ILogger<AdvancedCircuitBreakerExample> logger)
+    public AdvancedCircuitBreakerExample(IStreamFlowClient streamFlow, IRetryPolicyFactory retryPolicyFactory, ILogger<AdvancedCircuitBreakerExample> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
+        _retryPolicyFactory = retryPolicyFactory;
         _logger = logger;
         
         _circuitBreaker = new CircuitBreaker(

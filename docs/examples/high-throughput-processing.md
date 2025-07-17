@@ -121,7 +121,7 @@ public class HighThroughputConsumer
         _semaphore = new SemaphoreSlim(Environment.ProcessorCount * 2); // Optimize for CPU cores
     }
 
-    public async Task StartConsumingAsync(CancellationToken cancellationToken)
+    public async Task StartConsumingAsync()
     {
         // Initialize the client first
         await _streamFlow.InitializeAsync();
@@ -142,13 +142,16 @@ public class HighThroughputConsumer
             })
             .WithRetryPolicy(new RetryPolicySettings
             {
-                UseExponentialBackoff = true,
+                RetryPolicy = RetryPolicyType.ExponentialBackoff,
                 MaxRetryAttempts = 2, // Fewer retries for high throughput
-                InitialRetryDelay = TimeSpan.FromMilliseconds(100)
+                InitialRetryDelay = TimeSpan.FromMilliseconds(100),
+                MaxRetryDelay = TimeSpan.FromSeconds(1),
+                RetryDelayMultiplier = 2.0,
+                UseJitter = true
             })
             .ConsumeAsync(async (message, context) =>
             {
-                await _semaphore.WaitAsync(cancellationToken);
+                await _semaphore.WaitAsync();
                 
                 try
                 {
