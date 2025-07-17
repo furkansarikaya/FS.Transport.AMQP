@@ -29,9 +29,6 @@
         <Copyright>Copyright © 2025 Furkan Sarıkaya</Copyright>
         <AssemblyTitle>FS.StreamFlow.Core</AssemblyTitle>
         <AssemblyDescription>Core abstractions and interfaces for FS.StreamFlow messaging framework</AssemblyDescription>
-        <AssemblyCompany>Furkan Sarıkaya</AssemblyCompany>
-        <AssemblyProduct>FS.StreamFlow</AssemblyProduct>
-        <AssemblyCopyright>Copyright © 2025 Furkan Sarıkaya</AssemblyCopyright>
 
         <!-- Package Description -->
         <Description>Core abstractions, interfaces, and models for FS.StreamFlow messaging framework. Provides provider-agnostic APIs for messaging, event-driven architecture, and stream processing.</Description>
@@ -67,11 +64,7 @@
         <!-- Repository Information -->
         <PackageProjectUrl>https://github.com/furkansarikaya/FS.StreamFlow</PackageProjectUrl>
         <RepositoryUrl>https://github.com/furkansarikaya/FS.StreamFlow</RepositoryUrl>
-        <RepositoryBranch>main</RepositoryBranch>
         <RepositoryType>git</RepositoryType>
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
-        <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
 
         <!-- License Configuration -->
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -80,20 +73,6 @@
         <!-- Symbol Configuration -->
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
-        <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <DebugType>embedded</DebugType>
-        <DebugSymbols>true</DebugSymbols>
-
-        <!-- Warning Configuration -->
-        <NoWarn>1701;1702</NoWarn>
-        <WarningsAsErrors/>
-        <WarningsNotAsErrors/>
-        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-        <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
-        <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <AnalysisLevel>latest</AnalysisLevel>
-        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     </PropertyGroup>
 
     <ItemGroup>
@@ -117,5 +96,17 @@
         <!-- Health Checks -->
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0"/>
     </ItemGroup>
+
+    <!-- Development Dependencies (not included in package) -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <!-- Compiler Configuration for Performance -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <Optimize>true</Optimize>
+        <DebugType>pdbonly</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+    </PropertyGroup>
 
 </Project>
