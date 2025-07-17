@@ -26,11 +26,37 @@ Domain events represent something significant that happened within your domain:
 public record OrderCreated(
     Guid OrderId,
     string CustomerName,
-    decimal Amount) : IDomainEvent;
+    decimal Amount) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCreated);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => OrderId.ToString();
+    public string AggregateType => "Order";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
 
 public record OrderCancelled(
     Guid OrderId,
-    string Reason) : IDomainEvent;
+    string Reason) : IDomainEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(OrderCancelled);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string AggregateId => OrderId.ToString();
+    public string AggregateType => "Order";
+    public long AggregateVersion { get; set; }
+    public string? InitiatedBy { get; set; }
+}
 ```
 
 ### 2. Integration Events
@@ -41,11 +67,39 @@ Integration events are used for communication between different services:
 public record PaymentProcessed(
     Guid OrderId,
     string TransactionId,
-    decimal Amount) : IIntegrationEvent;
+    decimal Amount) : IIntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(PaymentProcessed);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "payment-service";
+    public string RoutingKey => "payment.processed";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+}
 
 public record ShipmentScheduled(
     Guid OrderId,
-    DateTime EstimatedDelivery) : IIntegrationEvent;
+    DateTime EstimatedDelivery) : IIntegrationEvent
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+    public int Version { get; } = 1;
+    public string EventType => nameof(ShipmentScheduled);
+    public string? CorrelationId { get; set; }
+    public string? CausationId { get; set; }
+    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
+    public string Source => "shipping-service";
+    public string RoutingKey => "shipment.scheduled";
+    public string? Target { get; set; }
+    public string SchemaVersion => "1.0";
+    public TimeSpan? TimeToLive { get; set; }
+}
 ```
 
 ### 3. Event Metadata
@@ -80,8 +134,23 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Username = "guest";
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
+    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
     
-
+    // Client configuration
+    options.ClientConfiguration.ClientName = "Event-Driven Application";
+    options.ClientConfiguration.EnableAutoRecovery = true;
+    options.ClientConfiguration.EnableHeartbeat = true;
+    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    
+    // Producer settings
+    options.ProducerSettings.EnablePublisherConfirms = true;
+    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
+    options.ProducerSettings.MaxConcurrentPublishes = 100;
+    
+    // Consumer settings
+    options.ConsumerSettings.PrefetchCount = 50;
+    options.ConsumerSettings.AutoAcknowledge = false;
+    options.ConsumerSettings.MaxConcurrentConsumers = 5;
 });
 ```
 
@@ -97,8 +166,10 @@ await _streamFlow.EventBus.Event<OrderCreated>()
         metadata.Source = "order-service";
         metadata.Version = "1.0";
     })
-    .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
-    .WithDeadLetterHandling(enabled: true)
+    .WithAggregateId(orderId.ToString())
+    .WithAggregateType("Order")
+    .WithPriority(1)
+    .WithTtl(TimeSpan.FromMinutes(30))
     .PublishAsync(new OrderCreated(orderId, customerName, amount));
 
 // Publishing integration events with fluent API
@@ -109,22 +180,32 @@ await _streamFlow.EventBus.Event<PaymentProcessed>()
         metadata.CorrelationId = correlationId;
         metadata.CausationId = causationId;
         metadata.Source = "payment-service";
-        metadata.Headers["priority"] = "high";
     })
-    .WithRetryPolicy(RetryPolicyType.Linear)
-    .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
+    .WithProperty("priority", "high")
+    .WithProperty("transaction-type", "credit-card")
     .PublishAsync(new PaymentProcessed(orderId, transactionId, amount));
 
-// Batch event publishing
+// Batch event publishing using individual publish calls
 await _streamFlow.InitializeAsync();
-// NOTE: PublishBatchAsync and IEvent are not part of FS.StreamFlow public API, this is for illustration only.
-var events = new object[]
+var events = new[]
 {
     new OrderCreated(orderId1, customerName1, amount1),
     new OrderCreated(orderId2, customerName2, amount2),
     new OrderCreated(orderId3, customerName3, amount3)
 };
-await _streamFlow.EventBus.PublishBatchAsync(events); // If not available, use a foreach loop and PublishAsync
+
+foreach (var @event in events)
+{
+    await _streamFlow.EventBus.Event<OrderCreated>()
+        .WithMetadata(metadata =>
+        {
+            metadata.CorrelationId = correlationId;
+            metadata.Source = "order-service";
+        })
+        .WithAggregateId(@event.OrderId.ToString())
+        .WithAggregateType("Order")
+        .PublishAsync(@event);
+}
 ```
 
 ### Subscribing to Events with Fluent API
@@ -142,9 +223,10 @@ await _streamFlow.Consumer.Queue<OrderCreated>("order-created-events")
     })
     .WithRetryPolicy(new RetryPolicySettings
     {
-        RetryPolicy = RetryPolicyType.ExponentialBackoff,
         MaxRetryAttempts = 3,
-        RetryDelay = TimeSpan.FromSeconds(1)
+        InitialRetryDelay = TimeSpan.FromSeconds(1),
+        UseExponentialBackoff = true,
+        RetryDelayMultiplier = 2.0
     })
     .WithDeadLetterQueue(new DeadLetterSettings
     {
@@ -199,7 +281,6 @@ public class LegacyEventPublisher
             metadata => {
                 metadata.CorrelationId = correlationId;
                 metadata.Source = "order-service";
-                metadata.Headers["priority"] = "high";
             });
     }
 }
@@ -250,6 +331,8 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
                 metadata.CausationId = context.EventId;
                 metadata.Source = "order-service";
             })
+            .WithAggregateId(@event.OrderId.ToString())
+            .WithAggregateType("Order")
             .PublishAsync(new InventoryReservationRequested(@event.OrderId, @event.Items));
     }
 }
@@ -308,29 +391,33 @@ public class AdvancedEventHandler : IAsyncEventHandler<OrderCreated>
                 .AppendEvent(new OrderProcessingStarted(@event.OrderId, DateTime.UtcNow))
                 .SaveAsync();
             
-            // Publish follow-up events
-            await _streamFlow.EventBus.Event<InventoryReservationRequested>()
-                .WithMetadata(metadata =>
-                {
-                    metadata.CorrelationId = context.CorrelationId;
-                    metadata.CausationId = context.EventId;
-                    metadata.Source = "order-service";
-                })
-                .PublishAsync(new InventoryReservationRequested(@event.OrderId, @event.Items));
+                    // Publish follow-up events
+        await _streamFlow.EventBus.Event<InventoryReservationRequested>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = context.CorrelationId;
+                metadata.CausationId = context.EventId;
+                metadata.Source = "order-service";
+            })
+            .WithAggregateId(@event.OrderId.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new InventoryReservationRequested(@event.OrderId, @event.Items));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing OrderCreated event for order {OrderId}", @event.OrderId);
             
-            // Publish error event
-            await _streamFlow.EventBus.Event<OrderProcessingFailed>()
-                .WithMetadata(metadata =>
-                {
-                    metadata.CorrelationId = context.CorrelationId;
-                    metadata.CausationId = context.EventId;
-                    metadata.Source = "order-service";
-                })
-                .PublishAsync(new OrderProcessingFailed(@event.OrderId, ex.Message));
+                    // Publish error event
+        await _streamFlow.EventBus.Event<OrderProcessingFailed>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = context.CorrelationId;
+                metadata.CausationId = context.EventId;
+                metadata.Source = "order-service";
+            })
+            .WithAggregateId(@event.OrderId.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new OrderProcessingFailed(@event.OrderId, ex.Message));
             
             throw;
         }
@@ -338,15 +425,30 @@ public class AdvancedEventHandler : IAsyncEventHandler<OrderCreated>
 }
 ```
 
+## Required Using Statements
+
+```csharp
+using FS.StreamFlow.Core.Features.Events.Interfaces;
+using FS.StreamFlow.Core.Features.Events.Models;
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+using FS.StreamFlow.Core.Features.Messaging.Models;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+```
+```
+
 ### Registering Event Handlers
 
 ```csharp
 // Register handlers with dependency injection
-builder.Services.AddEventHandler<OrderCreatedHandler, OrderCreated>();
-builder.Services.AddEventHandler<PaymentProcessedHandler, PaymentProcessed>();
+builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
+builder.Services.AddScoped<IAsyncEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
 
-// Or register manually
-await _eventBus.RegisterHandlerAsync<OrderCreatedHandler, OrderCreated>();
+// Or register manually with event bus
+await _streamFlow.EventBus.SubscribeToDomainEventAsync<OrderCreated>(new OrderCreatedHandler(emailService, inventoryService, streamFlow));
+await _streamFlow.EventBus.SubscribeToIntegrationEventAsync<PaymentProcessed>(new PaymentProcessedHandler(paymentService, streamFlow));
 ```
 
 ## Best Practices
@@ -384,58 +486,97 @@ await _eventBus.RegisterHandlerAsync<OrderCreatedHandler, OrderCreated>();
 ```csharp
 public class OrderService
 {
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly IOrderRepository _orderRepository;
+
+    public OrderService(IStreamFlowClient streamFlow, IOrderRepository orderRepository)
+    {
+        _streamFlow = streamFlow;
+        _orderRepository = orderRepository;
+    }
 
     public async Task CreateOrderAsync(CreateOrderRequest request)
     {
+        await _streamFlow.InitializeAsync();
+        
         // Create order
         var order = new Order(request);
         await _orderRepository.SaveAsync(order);
 
-        // Publish domain event
-        await _eventBus.PublishDomainEventAsync(
-            new OrderCreated(
-                order.Id,
-                order.CustomerName,
-                order.Total));
+        // Publish domain event with fluent API
+        await _streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "order-service";
+            })
+            .WithAggregateId(order.Id.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new OrderCreated(order.Id, order.CustomerName, order.Total));
     }
 }
 
-public class OrderCreatedHandler : IEventHandler<OrderCreated>
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
     private readonly IInventoryService _inventoryService;
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
+
+    public OrderCreatedHandler(IInventoryService inventoryService, IStreamFlowClient streamFlow)
+    {
+        _inventoryService = inventoryService;
+        _streamFlow = streamFlow;
+    }
 
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
-        // NOTE: IEventHandler and IAsyncEventHandler are not part of FS.StreamFlow public API, this is for illustration only.
+        await _streamFlow.InitializeAsync();
+        
         // Reserve inventory
         var reserved = await _inventoryService.ReserveItemsAsync(@event.OrderId);
 
-        // Publish integration event
-        await _eventBus.PublishIntegrationEventAsync(
-            new InventoryReserved(@event.OrderId, reserved));
+        // Publish integration event with fluent API
+        await _streamFlow.EventBus.Event<InventoryReserved>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = context.CorrelationId;
+                metadata.CausationId = context.EventId;
+                metadata.Source = "inventory-service";
+            })
+            .WithAggregateId(@event.OrderId.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new InventoryReserved(@event.OrderId, reserved));
     }
 }
 
-public class InventoryReservedHandler : IEventHandler<InventoryReserved>
+public class InventoryReservedHandler : IAsyncEventHandler<InventoryReserved>
 {
     private readonly IPaymentService _paymentService;
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
+
+    public InventoryReservedHandler(IPaymentService paymentService, IStreamFlowClient streamFlow)
+    {
+        _paymentService = paymentService;
+        _streamFlow = streamFlow;
+    }
 
     public async Task HandleAsync(InventoryReserved @event, EventContext context)
     {
-        // NOTE: IEventHandler and IAsyncEventHandler are not part of FS.StreamFlow public API, this is for illustration only.
+        await _streamFlow.InitializeAsync();
+        
         // Process payment
         var payment = await _paymentService.ProcessPaymentAsync(@event.OrderId);
 
-        // Publish integration event
-        await _eventBus.PublishIntegrationEventAsync(
-            new PaymentProcessed(
-                @event.OrderId,
-                payment.TransactionId,
-                payment.Amount));
+        // Publish integration event with fluent API
+        await _streamFlow.EventBus.Event<PaymentProcessed>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = context.CorrelationId;
+                metadata.CausationId = context.EventId;
+                metadata.Source = "payment-service";
+            })
+            .WithAggregateId(@event.OrderId.ToString())
+            .WithAggregateType("Order")
+            .PublishAsync(new PaymentProcessed(@event.OrderId, payment.TransactionId, payment.Amount));
     }
 }
 ```
@@ -443,8 +584,15 @@ public class InventoryReservedHandler : IEventHandler<InventoryReserved>
 ### Error Handling Example
 
 ```csharp
-public class OrderCreatedHandler : IEventHandler<OrderCreated>
+public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
+    private readonly ILogger<OrderCreatedHandler> _logger;
+
+    public OrderCreatedHandler(ILogger<OrderCreatedHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async Task HandleAsync(OrderCreated @event, EventContext context)
     {
         try
@@ -453,7 +601,7 @@ public class OrderCreatedHandler : IEventHandler<OrderCreated>
         }
         catch (Exception ex)
         {
-            // NOTE: RetryableEventException and NonRetryableEventException are not part of FS.StreamFlow public API, this is for illustration only.
+            _logger.LogError(ex, "Error processing OrderCreated event for order {OrderId}", @event.OrderId);
             throw;
         }
     }
@@ -463,11 +611,21 @@ public class OrderCreatedHandler : IEventHandler<OrderCreated>
 ### Monitoring Example
 
 ```csharp
-public class MonitoredEventHandler<T> : IEventHandler<T> where T : IEvent
+public class MonitoredEventHandler<T> : IAsyncEventHandler<T> where T : class, IEvent
 {
-    private readonly IEventHandler<T> _innerHandler;
+    private readonly IAsyncEventHandler<T> _innerHandler;
     private readonly IMetricsCollector _metrics;
     private readonly ILogger<MonitoredEventHandler<T>> _logger;
+
+    public MonitoredEventHandler(
+        IAsyncEventHandler<T> innerHandler,
+        IMetricsCollector metrics,
+        ILogger<MonitoredEventHandler<T>> logger)
+    {
+        _innerHandler = innerHandler;
+        _metrics = metrics;
+        _logger = logger;
+    }
 
     public async Task HandleAsync(T @event, EventContext context)
     {

@@ -62,6 +62,49 @@ public class RabbitMqSampleConsumer(ILogger<RabbitMqSampleConsumer> logger,IHost
                 RoutingKey = "dlq"
             })
             .ConsumeAsync(ProcessRabbitMqMessagesAsync, cancellationToken);
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        await streamFlow.EventBus.Event<OrderCreated>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = correlationId;
+                metadata.Source = "order-service";
+                metadata.Version = "1.0";
+            })
+            .WithRetryPolicy(RetryPolicyType.ExponentialBackoff)
+            .WithDeadLetterHandling(enabled: true)
+            .PublishAsync(new OrderCreated(orderId, customerName, amount));
+        
+        
+        
+        await streamFlow.EventBus.Event<PaymentProcessed>()
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = correlationId;
+                metadata.CausationId = causationId;
+                metadata.Source = "payment-service";
+                metadata.Properties["priority"] = "high";
+            })
+            .WithRetryPolicy(RetryPolicyType.Linear)
+            .WithConfirmation(timeout: TimeSpan.FromSeconds(5))
+            .PublishAsync(new PaymentProcessed(orderId, transactionId, amount));
+        
+        
+        
+        
+        
+        
+        
+        
+        
     }
 
     private Task<bool> ProcessRabbitMqMessagesAsync(WeatherForecast forecast, MessageContext context)
