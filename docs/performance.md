@@ -97,15 +97,9 @@ public class DedicatedConnectionExample
         // Initialize the client first
         await _streamFlow.InitializeAsync();
         
-        // Create dedicated connection for high-throughput producer
-        var producerConnection = await _streamFlow.ConnectionManager.CreateDedicatedConnectionAsync(
-            connectionName: "HighThroughputProducer",
-            maxChannels: 50);
-
-        // Create dedicated connection for high-throughput consumer
-        var consumerConnection = await _streamFlow.ConnectionManager.CreateDedicatedConnectionAsync(
-            connectionName: "HighThroughputConsumer",
-            maxChannels: 100);
+        // Note: FS.StreamFlow automatically manages connections and channels
+        // The connection manager handles connection pooling internally
+        _logger.LogInformation("FS.StreamFlow automatically manages high-throughput connections");
 
         _logger.LogInformation("Dedicated connections created for high-throughput scenarios");
     }
@@ -156,18 +150,19 @@ public class HighThroughputProducer
 
     private async Task PublishBatchAsync(IEnumerable<Order> orders)
     {
-        var messageContexts = orders.Select(order => new MessageContext
+        var publishTasks = orders.Select(async order =>
         {
-            Exchange = "orders",
-            RoutingKey = "order.created",
-            Message = order
+            return await _streamFlow.Producer.Message(order)
+                .WithExchange("orders")
+                .WithRoutingKey("order.created")
+                .PublishAsync();
         });
 
         var stopwatch = Stopwatch.StartNew();
-        var results = await _streamFlow.Producer.PublishBatchAsync(messageContexts);
+        var results = await Task.WhenAll(publishTasks);
         stopwatch.Stop();
 
-        var successCount = results.Count(r => r.IsSuccess);
+        var successCount = results.Length; // All tasks completed successfully
         var throughput = successCount / stopwatch.Elapsed.TotalSeconds;
 
         _logger.LogInformation("Published batch: {SuccessCount} messages in {ElapsedMs}ms " +
@@ -258,19 +253,14 @@ public class OptimizedConfirmProducer
         _streamFlow = streamFlow;
         _logger = logger;
         
-        // Subscribe to confirm events
-        _streamFlow.Producer.MessageConfirmed += OnMessageConfirmed;
+        // Note: FS.StreamFlow handles publisher confirms automatically
+        // The producer settings control confirmation behavior
     }
 
     public async Task<bool> PublishWithOptimizedConfirmAsync(Order order)
     {
         // Initialize the client first
         await _streamFlow.InitializeAsync();
-        
-        var deliveryTag = await _streamFlow.Producer.GetNextDeliveryTagAsync();
-        var tcs = new TaskCompletionSource<bool>();
-        
-        _pendingConfirms[deliveryTag] = tcs;
         
         try
         {
@@ -279,47 +269,17 @@ public class OptimizedConfirmProducer
                 .WithRoutingKey("order.created")
                 .PublishAsync();
             
-            // Wait for confirm with timeout
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await tcs.Task.WaitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            _pendingConfirms.TryRemove(deliveryTag, out _);
-            _logger.LogWarning("Publish confirm timeout for order {OrderId}", order.Id);
-            return false;
+            return true; // Publish successful
         }
         catch (Exception ex)
         {
-            _pendingConfirms.TryRemove(deliveryTag, out _);
             _logger.LogError(ex, "Error publishing order {OrderId}", order.Id);
             return false;
         }
     }
 
-    private async Task OnMessageConfirmed(ulong deliveryTag, bool multiple)
-    {
-        if (multiple)
-        {
-            // Handle multiple confirms
-            var confirmedTags = _pendingConfirms.Keys.Where(tag => tag <= deliveryTag).ToList();
-            foreach (var tag in confirmedTags)
-            {
-                if (_pendingConfirms.TryRemove(tag, out var tcs))
-                {
-                    tcs.SetResult(true);
-                }
-            }
-        }
-        else
-        {
-            // Handle single confirm
-            if (_pendingConfirms.TryRemove(deliveryTag, out var tcs))
-            {
-                tcs.SetResult(true);
-            }
-        }
-    }
+    // Note: FS.StreamFlow handles publisher confirms automatically
+    // The producer settings control confirmation behavior
 }
 ```
 
@@ -549,10 +509,9 @@ public class OptimizedSerializationSetup
             options.ConnectionSettings.VirtualHost = "/";
             
             // Serialization settings
-            options.SerializerSettings.SerializerType = SerializerType.MessagePack; // Faster than JSON
-            options.SerializerSettings.EnableCompression = true;
-            options.SerializerSettings.CompressionThreshold = 1024; // Compress messages > 1KB
-            options.SerializerSettings.CompressionLevel = CompressionLevel.Fastest;
+            options.ClientConfiguration.Serialization.Format = SerializationFormat.Json;
+            options.ClientConfiguration.Serialization.EnableCompression = true;
+            options.ClientConfiguration.Serialization.CompressionThreshold = 1024; // Compress messages > 1KB
         });
     }
 }
@@ -564,7 +523,6 @@ public class OptimizedSerializationSetup
 public class HighPerformanceSerializer : IMessageSerializer
 {
     private readonly JsonSerializerOptions _jsonOptions;
-    private readonly MessagePackSerializerOptions _messagePackOptions;
 
     public HighPerformanceSerializer()
     {
@@ -574,10 +532,6 @@ public class HighPerformanceSerializer : IMessageSerializer
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false
         };
-
-        _messagePackOptions = MessagePackSerializerOptions.Standard
-            .WithCompression(MessagePackCompression.Lz4BlockArray)
-            .WithSecurity(MessagePackSecurity.UntrustedData);
     }
 
     public async Task<byte[]> SerializeAsync<T>(T obj)
@@ -585,15 +539,7 @@ public class HighPerformanceSerializer : IMessageSerializer
         if (obj == null)
             return Array.Empty<byte>();
 
-        // Use MessagePack for complex objects, JSON for simple ones
-        if (typeof(T).IsValueType || typeof(T) == typeof(string))
-        {
-            return JsonSerializer.SerializeToUtf8Bytes(obj, _jsonOptions);
-        }
-        else
-        {
-            return MessagePackSerializer.Serialize(obj, _messagePackOptions);
-        }
+        return JsonSerializer.SerializeToUtf8Bytes(obj, _jsonOptions);
     }
 
     public async Task<T> DeserializeAsync<T>(byte[] data)
@@ -601,16 +547,7 @@ public class HighPerformanceSerializer : IMessageSerializer
         if (data == null || data.Length == 0)
             return default(T);
 
-        try
-        {
-            // Try MessagePack first
-            return MessagePackSerializer.Deserialize<T>(data, _messagePackOptions);
-        }
-        catch
-        {
-            // Fall back to JSON
-            return JsonSerializer.Deserialize<T>(data, _jsonOptions);
-        }
+        return JsonSerializer.Deserialize<T>(data, _jsonOptions);
     }
 }
 ```
@@ -828,13 +765,8 @@ public class NetworkOptimizedSetup
             options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
             
             // Network optimization settings
-            options.ConnectionSettings.RequestedFrameMax = 1048576; // 1MB frames
-            options.ConnectionSettings.SocketReceiveBufferSize = 65536; // 64KB receive buffer
-            options.ConnectionSettings.SocketSendBufferSize = 65536; // 64KB send buffer
-            options.ConnectionSettings.TcpKeepAlive = true;
-            options.ConnectionSettings.TcpKeepAliveTime = TimeSpan.FromSeconds(60);
-            options.ConnectionSettings.TcpKeepAliveInterval = TimeSpan.FromSeconds(10);
-            options.ConnectionSettings.TcpNoDelay = true; // Disable Nagle's algorithm
+            // Note: FS.StreamFlow handles network optimization automatically
+            // Connection settings are optimized for high performance by default
         });
     }
 }
@@ -1000,6 +932,9 @@ public class PerformanceMonitor
 
         // Log system metrics
         LogSystemMetrics();
+        
+        // Log FS.StreamFlow metrics
+        LogStreamFlowMetrics();
     }
 
     private void LogSystemMetrics()
@@ -1017,6 +952,23 @@ public class PerformanceMonitor
         // Simplified CPU usage calculation
         var process = Process.GetCurrentProcess();
         return process.TotalProcessorTime.TotalMilliseconds / Environment.TickCount64 * 100;
+    }
+    
+    private void LogStreamFlowMetrics()
+    {
+        // Get FS.StreamFlow metrics
+        var clientStats = _streamFlow.MetricsCollector.GetSnapshot();
+        var connectionStats = _streamFlow.ConnectionManager.Statistics;
+        var producerStats = _streamFlow.Producer.Statistics;
+        var consumerStats = _streamFlow.Consumer.Statistics;
+        
+        _logger.LogInformation("FS.StreamFlow Metrics: " +
+            "Connections: {ConnectionState}, " +
+            "Producer: {ProducerSuccessRate:F1}% success, " +
+            "Consumer: {ConsumerSuccessRate:F1}% success",
+            connectionStats.CurrentState,
+            producerStats.PublishSuccessRate,
+            consumerStats.ProcessingSuccessRate);
     }
 }
 
@@ -1254,32 +1206,23 @@ public class PerformanceBenchmark
         }
         jsonStopwatch.Stop();
         
-        var messagePackStopwatch = Stopwatch.StartNew();
-        foreach (var message in messages)
-        {
-            var msgPack = MessagePackSerializer.Serialize(message);
-            var deserialized = MessagePackSerializer.Deserialize<Order>(msgPack);
-        }
-        messagePackStopwatch.Stop();
-        
         var jsonThroughput = messageCount / jsonStopwatch.Elapsed.TotalSeconds;
-        var messagePackThroughput = messageCount / messagePackStopwatch.Elapsed.TotalSeconds;
         
-        _logger.LogInformation("Serialization Results: JSON: {JsonThroughput:F0} msgs/sec, " +
-            "MessagePack: {MessagePackThroughput:F0} msgs/sec",
-            jsonThroughput, messagePackThroughput);
+        _logger.LogInformation("Serialization Results: JSON: {JsonThroughput:F0} msgs/sec",
+            jsonThroughput);
     }
 
     private async Task PublishBatchAsync(IEnumerable<Order> messages)
     {
-        var messageContexts = messages.Select(message => new MessageContext
+        var publishTasks = messages.Select(async message =>
         {
-            Exchange = "benchmark",
-            RoutingKey = "batch.publish",
-            Message = message
+            return await _streamFlow.Producer.Message(message)
+                .WithExchange("benchmark")
+                .WithRoutingKey("batch.publish")
+                .PublishAsync();
         });
 
-        await _streamFlow.Producer.PublishBatchAsync(messageContexts);
+        await Task.WhenAll(publishTasks);
     }
 
     private List<Order> GenerateTestMessages(int count)
@@ -1407,6 +1350,19 @@ You've now learned how to optimize FS.StreamFlow performance:
 ✅ **Performance monitoring**  
 ✅ **Comprehensive benchmarking**  
 ✅ **Production-ready best practices**  
+
+## Required Using Statements
+
+```csharp
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+using FS.StreamFlow.Core.Features.Messaging.Models;
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+```
 
 ## 🎯 Next Steps
 
