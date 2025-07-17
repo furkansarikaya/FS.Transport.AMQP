@@ -27,11 +27,8 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ConnectionSettings.Password = "guest";
     options.ConnectionSettings.VirtualHost = "/";
     
-    // Saga settings
-    options.SagaSettings.EnableSagaOrchestration = true;
-    options.SagaSettings.SagaStateExchange = "saga-state";
-    options.SagaSettings.SagaTimeoutExchange = "saga-timeout";
-    options.SagaSettings.SagaTimeout = TimeSpan.FromMinutes(30);
+    // Note: FS.StreamFlow handles saga orchestration automatically
+    // Saga settings are configured through the ISagaOrchestrator interface
 });
 ```
 
