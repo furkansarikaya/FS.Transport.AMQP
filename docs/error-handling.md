@@ -27,21 +27,40 @@ FS.StreamFlow provides multiple layers of error handling to ensure message proce
 ### Error Handling Configuration
 
 ```csharp
-builder.Services.AddRabbitMQ()
-    .WithErrorHandling(config =>
+builder.Services.AddRabbitMQStreamFlow(options =>
+{
+    // Error handling settings
+    options.ConsumerSettings.ErrorHandling = new ErrorHandlingSettings
     {
-        config.EnableDeadLetterQueue = true;
-        config.DeadLetterExchange = "dlx";
-        config.DeadLetterQueue = "dlq";
-        config.RetryPolicy = RetryPolicyType.ExponentialBackoff;
-        config.MaxRetryAttempts = 3;
-        config.RetryDelay = TimeSpan.FromSeconds(1);
-        config.MaxRetryDelay = TimeSpan.FromMinutes(5);
-        config.EnableCircuitBreaker = true;
-        config.CircuitBreakerFailureThreshold = 5;
-        config.CircuitBreakerRecoveryTimeout = TimeSpan.FromMinutes(1);
-    })
-    .Build();
+        Strategy = ErrorHandlingStrategy.Requeue,
+        MaxRetries = 3,
+        RetryDelay = TimeSpan.FromSeconds(1),
+        UseExponentialBackoff = true,
+        LogErrors = true,
+        ContinueOnError = true
+    };
+    
+    // Dead letter queue settings
+    options.ConsumerSettings.DeadLetterSettings = new DeadLetterSettings
+    {
+        ExchangeName = "dlx",
+        RoutingKey = "failed",
+        Enabled = true,
+        MaxRetries = 3,
+        MessageTtl = TimeSpan.FromHours(24)
+    };
+    
+    // Retry policy settings
+    options.ConsumerSettings.RetryPolicy = new RetryPolicySettings
+    {
+        MaxRetryAttempts = 3,
+        InitialRetryDelay = TimeSpan.FromSeconds(1),
+        MaxRetryDelay = TimeSpan.FromMinutes(5),
+        RetryDelayMultiplier = 2.0,
+        UseExponentialBackoff = true,
+        UseJitter = true
+    };
+});
 ```
 
 ## 🔄 Retry Policies
@@ -56,20 +75,22 @@ FS.StreamFlow provides several built-in retry policies:
 public class LinearRetryExample
 {
     private readonly IStreamFlowClient _streamFlow;
+    private readonly IRetryPolicyFactory _retryPolicyFactory;
     private readonly ILogger<LinearRetryExample> _logger;
 
-    public LinearRetryExample(IStreamFlowClient rabbitMQ, ILogger<LinearRetryExample> logger)
+    public LinearRetryExample(IStreamFlowClient streamFlow, IRetryPolicyFactory retryPolicyFactory, ILogger<LinearRetryExample> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
+        _retryPolicyFactory = retryPolicyFactory;
         _logger = logger;
     }
 
     public async Task ProcessWithLinearRetryAsync(Order order)
     {
         await _streamFlow.InitializeAsync();
-        var retryPolicy = new LinearRetryPolicy(
-            maxAttempts: 3,
-            retryDelay: TimeSpan.FromSeconds(2));
+        var retryPolicy = _retryPolicyFactory.CreateLinearPolicy(
+            maxRetryAttempts: 3,
+            delay: TimeSpan.FromSeconds(2));
 
         await retryPolicy.ExecuteAsync(async () =>
         {
@@ -96,22 +117,25 @@ public class LinearRetryExample
 public class ExponentialBackoffRetryExample
 {
     private readonly IStreamFlowClient _streamFlow;
+    private readonly IRetryPolicyFactory _retryPolicyFactory;
     private readonly ILogger<ExponentialBackoffRetryExample> _logger;
 
-    public ExponentialBackoffRetryExample(IStreamFlowClient rabbitMQ, ILogger<ExponentialBackoffRetryExample> logger)
+    public ExponentialBackoffRetryExample(IStreamFlowClient streamFlow, IRetryPolicyFactory retryPolicyFactory, ILogger<ExponentialBackoffRetryExample> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
+        _retryPolicyFactory = retryPolicyFactory;
         _logger = logger;
     }
 
     public async Task ProcessWithExponentialBackoffAsync(Order order)
     {
         await _streamFlow.InitializeAsync();
-        var retryPolicy = new ExponentialBackoffRetryPolicy(
-            maxAttempts: 5,
+        var retryPolicy = _retryPolicyFactory.CreateExponentialBackoffPolicy(
+            maxRetryAttempts: 5,
             initialDelay: TimeSpan.FromSeconds(1),
             maxDelay: TimeSpan.FromMinutes(5),
-            backoffMultiplier: 2.0);
+            multiplier: 2.0,
+            useJitter: true);
 
         await retryPolicy.ExecuteAsync(async () =>
         {
@@ -135,35 +159,24 @@ public class ExponentialBackoffRetryExample
 ### Custom Retry Policy
 
 ```csharp
-public class CustomRetryPolicy : IRetryPolicy
+public class CustomRetryPolicy : RetryPolicyBase
 {
-    private readonly int _maxAttempts;
-    private readonly TimeSpan _initialDelay;
-    private readonly double _backoffMultiplier;
-    private readonly TimeSpan _maxDelay;
-    private readonly ILogger<CustomRetryPolicy> _logger;
+    private readonly Random _random = new();
 
-    public CustomRetryPolicy(
-        int maxAttempts,
-        TimeSpan initialDelay,
-        double backoffMultiplier,
-        TimeSpan maxDelay,
-        ILogger<CustomRetryPolicy> logger)
+    public CustomRetryPolicy(RetryPolicySettings settings, ILogger<CustomRetryPolicy> logger) 
+        : base(settings, logger)
     {
-        _maxAttempts = maxAttempts;
-        _initialDelay = initialDelay;
-        _backoffMultiplier = backoffMultiplier;
-        _maxDelay = maxDelay;
-        _logger = logger;
     }
 
-    public async Task<bool> ShouldRetryAsync(Exception exception, int attemptNumber, TimeSpan elapsed)
+    public override string Name => "Custom";
+
+    public override bool ShouldRetry(Exception exception, int attemptNumber)
     {
         // Don't retry if max attempts reached
-        if (attemptNumber >= _maxAttempts)
+        if (attemptNumber >= MaxRetryAttempts)
         {
             _logger.LogError("Max retry attempts ({MaxAttempts}) reached for exception: {Exception}", 
-                _maxAttempts, exception.Message);
+                MaxRetryAttempts, exception.Message);
             return false;
         }
 
@@ -174,14 +187,19 @@ public class CustomRetryPolicy : IRetryPolicy
             return false;
         }
 
-        // Calculate delay with jitter
-        var delay = CalculateDelay(attemptNumber);
-        
-        _logger.LogWarning("Retrying in {Delay}ms (attempt {Attempt}/{MaxAttempts}): {Exception}", 
-            delay.TotalMilliseconds, attemptNumber + 1, _maxAttempts, exception.Message);
-
-        await Task.Delay(delay);
         return true;
+    }
+
+    public override TimeSpan CalculateDelay(int attemptNumber)
+    {
+        var delay = TimeSpan.FromMilliseconds(Settings.InitialRetryDelay.TotalMilliseconds * Math.Pow(Settings.RetryDelayMultiplier, attemptNumber));
+        
+        // Add jitter to prevent thundering herd
+        var jitter = TimeSpan.FromMilliseconds(_random.Next(0, (int)(delay.TotalMilliseconds * 0.1)));
+        delay = delay.Add(jitter);
+        
+        // Cap at maximum delay
+        return delay > Settings.MaxRetryDelay ? Settings.MaxRetryDelay : delay;
     }
 
     private bool IsPermanentError(Exception exception)
@@ -196,18 +214,6 @@ public class CustomRetryPolicy : IRetryPolicy
             _ => false
         };
     }
-
-    private TimeSpan CalculateDelay(int attemptNumber)
-    {
-        var delay = TimeSpan.FromMilliseconds(_initialDelay.TotalMilliseconds * Math.Pow(_backoffMultiplier, attemptNumber));
-        
-        // Add jitter to prevent thundering herd
-        var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, (int)(delay.TotalMilliseconds * 0.1)));
-        delay = delay.Add(jitter);
-        
-        // Cap at maximum delay
-        return delay > _maxDelay ? _maxDelay : delay;
-    }
 }
 ```
 
@@ -217,43 +223,57 @@ public class CustomRetryPolicy : IRetryPolicy
 public class RetryConsumer
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly IRetryPolicy _retryPolicy;
+    private readonly IRetryPolicyFactory _retryPolicyFactory;
     private readonly ILogger<RetryConsumer> _logger;
 
-    public RetryConsumer(IStreamFlowClient rabbitMQ, IRetryPolicy retryPolicy, ILogger<RetryConsumer> logger)
+    public RetryConsumer(IStreamFlowClient streamFlow, IRetryPolicyFactory retryPolicyFactory, ILogger<RetryConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
-        _retryPolicy = retryPolicy;
+        _streamFlow = streamFlow;
+        _retryPolicyFactory = retryPolicyFactory;
         _logger = logger;
     }
 
     public async Task ConsumeWithRetryAsync(CancellationToken cancellationToken = default)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
+        
+        // Create retry policy
+        var retryPolicy = _retryPolicyFactory.CreateExponentialBackoffPolicy(
+            maxRetryAttempts: 3,
+            initialDelay: TimeSpan.FromSeconds(1),
+            maxDelay: TimeSpan.FromSeconds(30),
+            multiplier: 2.0,
+            useJitter: true);
+
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(3)
+            .WithPrefetchCount(10)
+            .WithErrorHandler(async (exception, context) =>
             {
                 try
                 {
-                    await _retryPolicy.ExecuteAsync(async () =>
+                    await retryPolicy.ExecuteAsync(async () =>
                     {
-                        await ProcessOrderAsync(order);
+                        await ProcessOrderAsync(context.Message as Order);
                     });
                     
                     return true; // Success
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to process order {OrderId} after all retry attempts", order.Id);
+                    _logger.LogError(ex, "Failed to process order after all retry attempts");
                     
                     // Send to dead letter queue
-                    await SendToDeadLetterQueue(order, ex);
+                    await SendToDeadLetterQueue(context.Message as Order, ex);
                     
                     return true; // Acknowledge to prevent infinite retry
                 }
-            },
-            cancellationToken: cancellationToken);
+            })
+            .ConsumeAsync(async (order, context) =>
+            {
+                await ProcessOrderAsync(order);
+                return true; // Acknowledge message
+            }, cancellationToken);
     }
 
     private async Task ProcessOrderAsync(Order order)
@@ -270,16 +290,16 @@ public class RetryConsumer
     private async Task SendToDeadLetterQueue(Order order, Exception exception)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "dlx",
-            routingKey: "order.failed",
-            message: new
-            {
-                OriginalMessage = order,
-                Error = exception.Message,
-                StackTrace = exception.StackTrace,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = order,
+            Error = exception.Message,
+            StackTrace = exception.StackTrace,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("dlx")
+        .WithRoutingKey("order.failed")
+        .PublishAsync();
     }
 }
 ```
@@ -300,42 +320,41 @@ The circuit breaker pattern prevents cascading failures by stopping calls to fai
 public class CircuitBreakerExample
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly ICircuitBreaker _circuitBreaker;
+    private readonly IRetryPolicyFactory _retryPolicyFactory;
     private readonly ILogger<CircuitBreakerExample> _logger;
 
-    public CircuitBreakerExample(IStreamFlowClient rabbitMQ, ILogger<CircuitBreakerExample> logger)
+    public CircuitBreakerExample(IStreamFlowClient streamFlow, IRetryPolicyFactory retryPolicyFactory, ILogger<CircuitBreakerExample> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
+        _retryPolicyFactory = retryPolicyFactory;
         _logger = logger;
-        _circuitBreaker = new CircuitBreaker(
-            failureThreshold: 5,
-            recoveryTimeout: TimeSpan.FromMinutes(1),
-            samplingDuration: TimeSpan.FromSeconds(60));
     }
 
     public async Task ProcessWithCircuitBreakerAsync(Order order)
     {
         await _streamFlow.InitializeAsync();
+        
+        // Create circuit breaker retry policy
+        var circuitBreakerPolicy = _retryPolicyFactory.CreateCircuitBreakerPolicy(
+            maxRetryAttempts: 3,
+            circuitBreakerThreshold: 5,
+            circuitBreakerTimeout: TimeSpan.FromMinutes(1));
+        
         try
         {
-            await _circuitBreaker.ExecuteAsync(async () =>
+            await circuitBreakerPolicy.ExecuteAsync(async () =>
             {
                 await CallExternalServiceAsync(order);
             });
             
             _logger.LogInformation("Order {OrderId} processed successfully", order.Id);
         }
-        catch (CircuitBreakerOpenException)
-        {
-            _logger.LogWarning("Circuit breaker is open, cannot process order {OrderId}", order.Id);
-            
-            // Handle circuit breaker open state
-            await HandleCircuitBreakerOpen(order);
-        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing order {OrderId}", order.Id);
-            throw;
+            
+            // Handle circuit breaker open state
+            await HandleCircuitBreakerOpen(order);
         }
     }
 
@@ -360,10 +379,10 @@ public class CircuitBreakerExample
         
         _logger.LogInformation("Queueing order {OrderId} for later processing", order.Id);
         
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "delayed-processing",
-            routingKey: "order.delayed",
-            message: order);
+        await _streamFlow.Producer.Message(order)
+            .WithExchange("delayed-processing")
+            .WithRoutingKey("order.delayed")
+            .PublishAsync();
     }
 }
 ```
@@ -487,48 +506,40 @@ public class DeadLetterQueueSetup
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DeadLetterQueueSetup> _logger;
 
-    public DeadLetterQueueSetup(IStreamFlowClient rabbitMQ, ILogger<DeadLetterQueueSetup> logger)
+    public DeadLetterQueueSetup(IStreamFlowClient streamFlow, ILogger<DeadLetterQueueSetup> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task SetupDeadLetterInfrastructureAsync()
     {
         await _streamFlow.InitializeAsync();
+        
         // Declare dead letter exchange
-        await _streamFlow.ExchangeManager.DeclareExchangeAsync(
-            exchange: "dlx",
-            type: "topic",
-            durable: true,
-            autoDelete: false);
+        await _streamFlow.ExchangeManager.Exchange("dlx")
+            .AsTopic()
+            .WithDurable(true)
+            .DeclareAsync();
 
         // Declare dead letter queue
-        await _streamFlow.QueueManager.DeclareQueueAsync(
-            queue: "dlq",
-            durable: true,
-            exclusive: false,
-            autoDelete: false);
-
-        // Bind dead letter queue to exchange
-        await _streamFlow.QueueManager.BindQueueAsync(
-            queue: "dlq",
-            exchange: "dlx",
-            routingKey: "#"); // Catch all dead letters
+        await _streamFlow.QueueManager.Queue("dlq")
+            .WithDurable(true)
+            .WithExclusive(false)
+            .WithAutoDelete(false)
+            .BindToExchange("dlx", "#") // Catch all dead letters
+            .DeclareAsync();
 
         // Declare main queue with dead letter configuration
-        await _streamFlow.QueueManager.DeclareQueueAsync(
-            queue: "order-processing",
-            durable: true,
-            exclusive: false,
-            autoDelete: false,
-            arguments: new Dictionary<string, object>
-            {
-                ["x-dead-letter-exchange"] = "dlx",
-                ["x-dead-letter-routing-key"] = "order.failed",
-                ["x-message-ttl"] = 300000, // 5 minutes TTL
-                ["x-max-retries"] = 3
-            });
+        await _streamFlow.QueueManager.Queue("order-processing")
+            .WithDurable(true)
+            .WithExclusive(false)
+            .WithAutoDelete(false)
+            .WithDeadLetterExchange("dlx")
+            .WithDeadLetterRoutingKey("order.failed")
+            .WithMessageTtl(TimeSpan.FromMinutes(5))
+            .WithArgument("x-max-retries", 3)
+            .DeclareAsync();
 
         _logger.LogInformation("Dead letter infrastructure setup completed");
     }
@@ -543,18 +554,20 @@ public class DeadLetterQueueConsumer
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<DeadLetterQueueConsumer> _logger;
 
-    public DeadLetterQueueConsumer(IStreamFlowClient rabbitMQ, ILogger<DeadLetterQueueConsumer> logger)
+    public DeadLetterQueueConsumer(IStreamFlowClient streamFlow, ILogger<DeadLetterQueueConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task ProcessDeadLetterMessagesAsync(CancellationToken cancellationToken = default)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Consumer.ConsumeAsync<DeadLetterMessage>(
-            queueName: "dlq",
-            messageHandler: async (deadLetterMessage, context) =>
+        
+        await _streamFlow.Consumer.Queue<DeadLetterMessage>("dlq")
+            .WithConcurrency(2)
+            .WithPrefetchCount(10)
+            .ConsumeAsync(async (deadLetterMessage, context) =>
             {
                 _logger.LogError("Processing dead letter message: {MessageId}", context.MessageId);
                 
@@ -574,9 +587,9 @@ public class DeadLetterQueueConsumer
                 }
                 
                 return handled;
-            },
-            cancellationToken: cancellationToken);
+            }, cancellationToken);
     }
+```
 
     private DeathInformation ExtractDeathInformation(MessageContext context)
     {
@@ -644,10 +657,10 @@ public class DeadLetterQueueConsumer
             // Attempt to reprocess after delay
             await Task.Delay(TimeSpan.FromMinutes(5));
             
-            await _streamFlow.Producer.PublishAsync(
-                exchange: deathInfo.OriginalExchange,
-                routingKey: deathInfo.OriginalRoutingKey,
-                message: deadLetterMessage.OriginalMessage);
+            await _streamFlow.Producer.Message(deadLetterMessage.OriginalMessage)
+                .WithExchange(deathInfo.OriginalExchange)
+                .WithRoutingKey(deathInfo.OriginalRoutingKey)
+                .PublishAsync();
             
             return true;
         }
@@ -673,10 +686,10 @@ public class DeadLetterQueueConsumer
         _logger.LogInformation("Handling max length exceeded message: {MessageId}", deathInfo.MessageId);
         
         // Send to alternative queue with higher capacity
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "high-capacity",
-            routingKey: deathInfo.OriginalRoutingKey,
-            message: deadLetterMessage.OriginalMessage);
+        await _streamFlow.Producer.Message(deadLetterMessage.OriginalMessage)
+            .WithExchange("high-capacity")
+            .WithRoutingKey(deathInfo.OriginalRoutingKey)
+            .PublishAsync();
         
         return true;
     }
@@ -700,12 +713,13 @@ public class DeadLetterQueueConsumer
             ArchivedAt = DateTimeOffset.UtcNow
         };
 
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "archive",
-            routingKey: "dead-letter.archived",
-            message: archiveData);
+        await _streamFlow.Producer.Message(archiveData)
+            .WithExchange("archive")
+            .WithRoutingKey("dead-letter.archived")
+            .PublishAsync();
     }
 }
+```
 ```
 
 ## 🏷️ Error Classification
@@ -814,9 +828,9 @@ public class ClassifyingErrorConsumer
     private readonly ErrorClassifier _errorClassifier;
     private readonly ILogger<ClassifyingErrorConsumer> _logger;
 
-    public ClassifyingErrorConsumer(IStreamFlowClient rabbitMQ, ErrorClassifier errorClassifier, ILogger<ClassifyingErrorConsumer> logger)
+    public ClassifyingErrorConsumer(IStreamFlowClient streamFlow, ErrorClassifier errorClassifier, ILogger<ClassifyingErrorConsumer> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _errorClassifier = errorClassifier;
         _logger = logger;
     }
@@ -824,9 +838,11 @@ public class ClassifyingErrorConsumer
     public async Task ConsumeWithErrorClassificationAsync(CancellationToken cancellationToken = default)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Consumer.ConsumeAsync<Order>(
-            queueName: "order-processing",
-            messageHandler: async (order, context) =>
+        
+        await _streamFlow.Consumer.Queue<Order>("order-processing")
+            .WithConcurrency(3)
+            .WithPrefetchCount(10)
+            .ConsumeAsync(async (order, context) =>
             {
                 var attemptNumber = GetAttemptNumber(context);
                 const int maxAttempts = 3;
@@ -864,9 +880,9 @@ public class ClassifyingErrorConsumer
                         return true; // Acknowledge to prevent infinite loop
                     }
                 }
-            },
-            cancellationToken: cancellationToken);
+            }, cancellationToken);
     }
+```
 
     private async Task ProcessOrderAsync(Order order)
     {
@@ -904,22 +920,14 @@ public class ClassifyingErrorConsumer
     private async Task PublishForRetry(Order order, MessageContext context, int attemptNumber, TimeSpan delay)
     {
         await _streamFlow.InitializeAsync();
-        // Publish to retry queue with delay
-        var retryProperties = new BasicProperties
-        {
-            Headers = new Dictionary<string, object>(context.Headers)
-            {
-                ["x-retry-count"] = attemptNumber,
-                ["x-retry-timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            },
-            Expiration = delay.TotalMilliseconds.ToString()
-        };
-
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "retry-exchange",
-            routingKey: context.RoutingKey,
-            message: order,
-            properties: retryProperties);
+        
+        await _streamFlow.Producer.Message(order)
+            .WithExchange("retry-exchange")
+            .WithRoutingKey(context.RoutingKey)
+            .WithExpiration(delay)
+            .WithHeader("x-retry-count", attemptNumber)
+            .WithHeader("x-retry-timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            .PublishAsync();
     }
 
     private async Task SendToDeadLetterQueue(Order order, Exception exception, ErrorType errorType)
@@ -935,17 +943,17 @@ public class ClassifyingErrorConsumer
             _ => "unknown.error"
         };
 
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "dlx",
-            routingKey: deadLetterRoutingKey,
-            message: new
-            {
-                OriginalMessage = order,
-                ErrorType = errorType.ToString(),
-                ErrorMessage = exception.Message,
-                StackTrace = exception.StackTrace,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = order,
+            ErrorType = errorType.ToString(),
+            ErrorMessage = exception.Message,
+            StackTrace = exception.StackTrace,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("dlx")
+        .WithRoutingKey(deadLetterRoutingKey)
+        .PublishAsync();
     }
 }
 
@@ -970,30 +978,37 @@ Create custom error handlers for specific scenarios.
 ### Custom Error Handler Implementation
 
 ```csharp
-public interface ICustomErrorHandler
-{
-    Task<ErrorHandlingResult> HandleErrorAsync(ErrorContext context, CancellationToken cancellationToken = default);
-}
-
-public class CustomErrorHandler : ICustomErrorHandler
+public class CustomErrorHandler : IErrorHandler
 {
     private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CustomErrorHandler> _logger;
     private readonly ErrorClassifier _errorClassifier;
 
-    public CustomErrorHandler(IStreamFlowClient rabbitMQ, ILogger<CustomErrorHandler> logger, ErrorClassifier errorClassifier)
+    public CustomErrorHandler(IStreamFlowClient streamFlow, ILogger<CustomErrorHandler> logger, ErrorClassifier errorClassifier)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         _errorClassifier = errorClassifier;
     }
 
-    public async Task<ErrorHandlingResult> HandleErrorAsync(ErrorContext context, CancellationToken cancellationToken = default)
+    public string Name => "Custom Error Handler";
+
+    public ErrorHandlingSettings Settings { get; } = new();
+
+    public event EventHandler<ErrorHandledEventArgs>? ErrorHandled;
+    public event EventHandler<DeadLetterEventArgs>? MessageSentToDeadLetterQueue;
+
+    public async Task<ErrorHandlingResult> HandleErrorAsync(Exception exception, MessageContext context, CancellationToken cancellationToken = default)
+    {
+        return await HandleErrorAsync(exception, context, 1, cancellationToken);
+    }
+
+    public async Task<ErrorHandlingResult> HandleErrorAsync(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken = default)
     {
         await _streamFlow.InitializeAsync();
-        var errorType = _errorClassifier.ClassifyError(context.Exception);
+        var errorType = _errorClassifier.ClassifyError(exception);
         
-        _logger.LogError(context.Exception, "Handling error for message {MessageId}. Error type: {ErrorType}", 
+        _logger.LogError(exception, "Handling error for message {MessageId}. Error type: {ErrorType}", 
             context.MessageId, errorType);
 
         try
@@ -1002,173 +1017,174 @@ public class CustomErrorHandler : ICustomErrorHandler
             switch (errorType)
             {
                 case ErrorType.Transient:
-                    return await HandleTransientError(context, cancellationToken);
+                    return await HandleTransientError(exception, context, attemptNumber, cancellationToken);
                 
                 case ErrorType.Permanent:
-                    return await HandlePermanentError(context, cancellationToken);
+                    return await HandlePermanentError(exception, context, attemptNumber, cancellationToken);
                 
                 case ErrorType.Validation:
-                    return await HandleValidationError(context, cancellationToken);
+                    return await HandleValidationError(exception, context, attemptNumber, cancellationToken);
                 
                 case ErrorType.Authentication:
-                    return await HandleAuthenticationError(context, cancellationToken);
+                    return await HandleAuthenticationError(exception, context, attemptNumber, cancellationToken);
                 
                 case ErrorType.Business:
-                    return await HandleBusinessError(context, cancellationToken);
+                    return await HandleBusinessError(exception, context, attemptNumber, cancellationToken);
                 
                 case ErrorType.System:
-                    return await HandleSystemError(context, cancellationToken);
+                    return await HandleSystemError(exception, context, attemptNumber, cancellationToken);
                 
                 default:
-                    return await HandleUnknownError(context, cancellationToken);
+                    return await HandleUnknownError(exception, context, attemptNumber, cancellationToken);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in custom error handler");
-            return ErrorHandlingResult.Reject;
+            return ErrorHandlingResult.Failed("Error in custom error handler");
         }
     }
+```
 
-    private async Task<ErrorHandlingResult> HandleTransientError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandleTransientError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
-        if (context.AttemptNumber < 3)
+        if (attemptNumber < 3)
         {
-            var delay = TimeSpan.FromSeconds(Math.Pow(2, context.AttemptNumber));
+            var delay = TimeSpan.FromSeconds(Math.Pow(2, attemptNumber));
             
             _logger.LogWarning("Transient error on attempt {Attempt}. Retrying in {Delay}s", 
-                context.AttemptNumber, delay.TotalSeconds);
+                attemptNumber, delay.TotalSeconds);
             
             await Task.Delay(delay, cancellationToken);
-            return ErrorHandlingResult.Retry;
+            return ErrorHandlingResult.Retry(delay);
         }
         
         _logger.LogError("Transient error exceeded retry limit");
-        await SendToDeadLetterQueue(context, "transient.max-retries");
-        return ErrorHandlingResult.Acknowledge;
+        await SendToDeadLetterQueue(context, exception, "transient.max-retries");
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task<ErrorHandlingResult> HandlePermanentError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandlePermanentError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
         _logger.LogError("Permanent error detected. Sending to dead letter queue");
-        await SendToDeadLetterQueue(context, "permanent.error");
-        return ErrorHandlingResult.Acknowledge;
+        await SendToDeadLetterQueue(context, exception, "permanent.error");
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task<ErrorHandlingResult> HandleValidationError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandleValidationError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
         _logger.LogError("Validation error detected. Sending to validation error queue");
-        await SendToValidationErrorQueue(context);
-        return ErrorHandlingResult.Acknowledge;
+        await SendToValidationErrorQueue(context, exception);
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task<ErrorHandlingResult> HandleAuthenticationError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandleAuthenticationError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
         _logger.LogError("Authentication error detected. Sending to auth error queue");
-        await SendToAuthErrorQueue(context);
-        return ErrorHandlingResult.Acknowledge;
+        await SendToAuthErrorQueue(context, exception);
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task<ErrorHandlingResult> HandleBusinessError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandleBusinessError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
         _logger.LogError("Business error detected. Sending to business error queue");
-        await SendToBusinessErrorQueue(context);
-        return ErrorHandlingResult.Acknowledge;
+        await SendToBusinessErrorQueue(context, exception);
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task<ErrorHandlingResult> HandleSystemError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandleSystemError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
         _logger.LogError("System error detected. Sending to system error queue");
-        await SendToSystemErrorQueue(context);
-        return ErrorHandlingResult.Acknowledge;
+        await SendToSystemErrorQueue(context, exception);
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task<ErrorHandlingResult> HandleUnknownError(ErrorContext context, CancellationToken cancellationToken)
+    private async Task<ErrorHandlingResult> HandleUnknownError(Exception exception, MessageContext context, int attemptNumber, CancellationToken cancellationToken)
     {
-        if (context.AttemptNumber < 1) // Only retry once for unknown errors
+        if (attemptNumber < 1) // Only retry once for unknown errors
         {
-            _logger.LogWarning("Unknown error on attempt {Attempt}. Retrying once", context.AttemptNumber);
+            _logger.LogWarning("Unknown error on attempt {Attempt}. Retrying once", attemptNumber);
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-            return ErrorHandlingResult.Retry;
+            return ErrorHandlingResult.Retry(TimeSpan.FromSeconds(5));
         }
         
         _logger.LogError("Unknown error exceeded retry limit");
-        await SendToDeadLetterQueue(context, "unknown.error");
-        return ErrorHandlingResult.Acknowledge;
+        await SendToDeadLetterQueue(context, exception, "unknown.error");
+        return ErrorHandlingResult.Success(ErrorHandlingAction.Acknowledge);
     }
 
-    private async Task SendToDeadLetterQueue(ErrorContext context, string errorType)
+    private async Task SendToDeadLetterQueue(MessageContext context, Exception exception, string errorType)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "dlx",
-            routingKey: errorType,
-            message: new
-            {
-                OriginalMessage = context.Message,
-                ErrorType = errorType,
-                ErrorMessage = context.Exception.Message,
-                StackTrace = context.Exception.StackTrace,
-                AttemptNumber = context.AttemptNumber,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = context.Message,
+            ErrorType = errorType,
+            ErrorMessage = exception.Message,
+            StackTrace = exception.StackTrace,
+            AttemptNumber = context.AttemptCount,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("dlx")
+        .WithRoutingKey(errorType)
+        .PublishAsync();
     }
 
-    private async Task SendToValidationErrorQueue(ErrorContext context)
+    private async Task SendToValidationErrorQueue(MessageContext context, Exception exception)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "validation-errors",
-            routingKey: "validation.failed",
-            message: new
-            {
-                OriginalMessage = context.Message,
-                ValidationErrors = ExtractValidationErrors(context.Exception),
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = context.Message,
+            ValidationErrors = ExtractValidationErrors(exception),
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("validation-errors")
+        .WithRoutingKey("validation.failed")
+        .PublishAsync();
     }
 
-    private async Task SendToAuthErrorQueue(ErrorContext context)
+    private async Task SendToAuthErrorQueue(MessageContext context, Exception exception)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "auth-errors",
-            routingKey: "auth.failed",
-            message: new
-            {
-                OriginalMessage = context.Message,
-                AuthError = context.Exception.Message,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = context.Message,
+            AuthError = exception.Message,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("auth-errors")
+        .WithRoutingKey("auth.failed")
+        .PublishAsync();
     }
 
-    private async Task SendToBusinessErrorQueue(ErrorContext context)
+    private async Task SendToBusinessErrorQueue(MessageContext context, Exception exception)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "business-errors",
-            routingKey: "business.rule.violated",
-            message: new
-            {
-                OriginalMessage = context.Message,
-                BusinessRule = context.Exception.Message,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = context.Message,
+            BusinessRule = exception.Message,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("business-errors")
+        .WithRoutingKey("business.rule.violated")
+        .PublishAsync();
     }
 
-    private async Task SendToSystemErrorQueue(ErrorContext context)
+    private async Task SendToSystemErrorQueue(MessageContext context, Exception exception)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "system-errors",
-            routingKey: "system.error",
-            message: new
-            {
-                OriginalMessage = context.Message,
-                SystemError = context.Exception.Message,
-                StackTrace = context.Exception.StackTrace,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            OriginalMessage = context.Message,
+            SystemError = exception.Message,
+            StackTrace = exception.StackTrace,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("system-errors")
+        .WithRoutingKey("system.error")
+        .PublishAsync();
     }
 
     private List<string> ExtractValidationErrors(Exception exception)
@@ -1191,14 +1207,25 @@ public class CustomErrorHandler : ICustomErrorHandler
         
         return errors;
     }
-}
 
-public enum ErrorHandlingResult
-{
-    Acknowledge,
-    Retry,
-    Reject
+    public bool CanHandle(Exception exception)
+    {
+        return true; // Handle all exceptions
+    }
+
+    public IRetryPolicy? GetRetryPolicy(Exception exception)
+    {
+        return null; // Use default retry policy
+    }
+
+    public bool ShouldSendToDeadLetterQueue(Exception exception, MessageContext context, int attemptNumber)
+    {
+        return attemptNumber >= Settings.MaxRetries;
+    }
 }
+```
+
+
 ```
 
 ## 📊 Monitoring and Alerting
@@ -1215,14 +1242,15 @@ public class ErrorMonitoringService
     private readonly Dictionary<string, ErrorMetrics> _errorMetrics = new();
     private readonly Timer _monitoringTimer;
 
-    public ErrorMonitoringService(IStreamFlowClient rabbitMQ, ILogger<ErrorMonitoringService> logger)
+    public ErrorMonitoringService(IStreamFlowClient streamFlow, ILogger<ErrorMonitoringService> logger)
     {
-        _streamFlow = rabbitMQ;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Monitor every minute
         _monitoringTimer = new Timer(MonitorErrors, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
     }
+```
 
     public void RecordError(string errorType, string serviceName, Exception exception)
     {
@@ -1299,55 +1327,55 @@ public class ErrorMonitoringService
     private async Task SendHighErrorRateAlert(ErrorMetrics metrics)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "alerts",
-            routingKey: "error.high-rate",
-            message: new
-            {
-                AlertType = "HighErrorRate",
-                ServiceName = metrics.ServiceName,
-                ErrorType = metrics.ErrorType,
-                ErrorCount = metrics.ErrorCount,
-                LastError = metrics.LastError,
-                LastErrorTime = metrics.LastErrorTime,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            AlertType = "HighErrorRate",
+            ServiceName = metrics.ServiceName,
+            ErrorType = metrics.ErrorType,
+            ErrorCount = metrics.ErrorCount,
+            LastError = metrics.LastError,
+            LastErrorTime = metrics.LastErrorTime,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("alerts")
+        .WithRoutingKey("error.high-rate")
+        .PublishAsync();
     }
 
     private async Task SendNewErrorTypeAlert(ErrorMetrics metrics)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "alerts",
-            routingKey: "error.new-type",
-            message: new
-            {
-                AlertType = "NewErrorType",
-                ServiceName = metrics.ServiceName,
-                ErrorType = metrics.ErrorType,
-                ErrorCount = metrics.ErrorCount,
-                LastError = metrics.LastError,
-                LastErrorTime = metrics.LastErrorTime,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            AlertType = "NewErrorType",
+            ServiceName = metrics.ServiceName,
+            ErrorType = metrics.ErrorType,
+            ErrorCount = metrics.ErrorCount,
+            LastError = metrics.LastError,
+            LastErrorTime = metrics.LastErrorTime,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("alerts")
+        .WithRoutingKey("error.new-type")
+        .PublishAsync();
     }
 
     private async Task SendSystemErrorAlert(ErrorMetrics metrics)
     {
         await _streamFlow.InitializeAsync();
-        await _streamFlow.Producer.PublishAsync(
-            exchange: "alerts",
-            routingKey: "error.system",
-            message: new
-            {
-                AlertType = "SystemError",
-                ServiceName = metrics.ServiceName,
-                ErrorType = metrics.ErrorType,
-                ErrorCount = metrics.ErrorCount,
-                LastError = metrics.LastError,
-                LastErrorTime = metrics.LastErrorTime,
-                Timestamp = DateTimeOffset.UtcNow
-            });
+        await _streamFlow.Producer.Message(new
+        {
+            AlertType = "SystemError",
+            ServiceName = metrics.ServiceName,
+            ErrorType = metrics.ErrorType,
+            ErrorCount = metrics.ErrorCount,
+            LastError = metrics.LastError,
+            LastErrorTime = metrics.LastErrorTime,
+            Timestamp = DateTimeOffset.UtcNow
+        })
+        .WithExchange("alerts")
+        .WithRoutingKey("error.system")
+        .PublishAsync();
     }
 }
 
@@ -1444,7 +1472,12 @@ public void RecordError(Exception exception, string context)
 
 ```csharp
 // DO: Use circuit breakers for external service calls
-await _circuitBreaker.ExecuteAsync(async () =>
+var circuitBreakerPolicy = _retryPolicyFactory.CreateCircuitBreakerPolicy(
+    maxRetryAttempts: 3,
+    circuitBreakerThreshold: 5,
+    circuitBreakerTimeout: TimeSpan.FromMinutes(1));
+
+await circuitBreakerPolicy.ExecuteAsync(async () =>
 {
     await _externalService.ProcessOrderAsync(order);
 });
@@ -1465,22 +1498,28 @@ _logger.LogError(ex, "Failed to process order {OrderId} for customer {CustomerId
 // DO: Implement health checks for error handling components
 public class ErrorHandlingHealthCheck : IHealthCheck
 {
-    private readonly ICircuitBreaker _circuitBreaker;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly IErrorHandler _errorHandler;
+
+    public ErrorHandlingHealthCheck(IStreamFlowClient streamFlow, IErrorHandler errorHandler)
+    {
+        _streamFlow = streamFlow;
+        _errorHandler = errorHandler;
+    }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         var data = new Dictionary<string, object>
         {
-            ["circuit_breaker_state"] = _circuitBreaker.State.ToString(),
-            ["error_handler_status"] = _errorHandler.Status.ToString()
+            ["error_handler_name"] = _errorHandler.Name,
+            ["client_status"] = _streamFlow.Status.ToString()
         };
 
-        var isHealthy = _circuitBreaker.State != CircuitBreakerState.Open;
+        var isHealthy = _streamFlow.Status == ClientStatus.Connected;
         
         return isHealthy 
             ? HealthCheckResult.Healthy("Error handling is healthy", data)
-            : HealthCheckResult.Unhealthy("Circuit breaker is open", data: data);
+            : HealthCheckResult.Unhealthy("StreamFlow client is not connected", data: data);
     }
 }
 ```
@@ -1504,4 +1543,15 @@ Continue your FS.StreamFlow journey:
 - [Performance Tuning](performance.md) - Optimize for high throughput
 - [Monitoring](monitoring.md) - Monitor your messaging system
 - [Examples](examples/) - See real-world examples
-- [Configuration](configuration.md) - Advanced configuration options 
+- [Configuration](configuration.md) - Advanced configuration options
+
+## 📚 Required Using Statements
+
+```csharp
+using FS.StreamFlow.Core.Features.Messaging.Interfaces;
+using FS.StreamFlow.Core.Features.Messaging.Models;
+using FS.StreamFlow.RabbitMQ.Features.RetryPolicies;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Collections.Concurrent;
+``` 
