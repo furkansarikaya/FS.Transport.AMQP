@@ -153,6 +153,26 @@ await streamFlow.InitializeAsync();
 // Start the event bus
 var eventBus = app.Services.GetRequiredService<IEventBus>();
 await eventBus.StartAsync();
+
+// Register application shutdown handlers
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(async () =>
+{
+    try
+    {
+        // Stop event bus gracefully
+        await eventBus.StopAsync();
+        
+        // Shutdown StreamFlow client
+        await streamFlow.ShutdownAsync();
+        
+        Console.WriteLine("Event bus and StreamFlow client stopped gracefully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error during shutdown: {ex.Message}");
+    }
+});
 ```
 
 ### 2. Required Using Statements
@@ -429,7 +449,61 @@ await eventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
 await eventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
 ```
 
-### 3. Custom Event Handler with Function
+### 3. Event Monitoring and Observability
+
+```csharp
+public class EventMonitoringService
+{
+    private readonly IEventBus _eventBus;
+    private readonly ILogger<EventMonitoringService> _logger;
+
+    public EventMonitoringService(IEventBus eventBus, ILogger<EventMonitoringService> logger)
+    {
+        _eventBus = eventBus;
+        _logger = logger;
+        
+        // Subscribe to event bus events for monitoring
+        _eventBus.EventPublished += OnEventPublished;
+        _eventBus.EventReceived += OnEventReceived;
+        _eventBus.EventProcessingFailed += OnEventProcessingFailed;
+    }
+
+    private void OnEventPublished(object? sender, EventPublishedEventArgs e)
+    {
+        if (e.Success)
+        {
+            _logger.LogInformation("Event {EventType} published successfully to {Exchange} with routing key {RoutingKey}", 
+                e.Event.EventType, e.ExchangeName, e.RoutingKey);
+        }
+        else
+        {
+            _logger.LogError("Failed to publish event {EventType} to {Exchange}: {ErrorMessage}", 
+                e.Event.EventType, e.ExchangeName, e.ErrorMessage);
+        }
+    }
+
+    private void OnEventReceived(object? sender, EventReceivedEventArgs e)
+    {
+        _logger.LogInformation("Event {EventType} received from {Exchange} with routing key {RoutingKey}", 
+            e.Event.EventType, e.ExchangeName, e.RoutingKey);
+    }
+
+    private void OnEventProcessingFailed(object? sender, EventProcessingFailedEventArgs e)
+    {
+        _logger.LogError(e.Exception, "Event {EventType} processing failed. Attempt: {AttemptCount}, WillRetry: {WillRetry}", 
+            e.Event.EventType, e.AttemptCount, e.WillRetry);
+    }
+
+    public void Dispose()
+    {
+        _eventBus.EventPublished -= OnEventPublished;
+        _eventBus.EventReceived -= OnEventReceived;
+        _eventBus.EventProcessingFailed -= OnEventProcessingFailed;
+    }
+}
+```
+
+### 4. Custom Event Handler with Function
 
 ```csharp
 public class CustomEventHandler
@@ -475,7 +549,17 @@ public class CustomEventHandler
 
 ## Event Store
 
-### 1. Event Store Usage
+### 1. Event Store Initialization
+
+The event store needs to be initialized before use:
+
+```csharp
+// Program.cs
+var eventStore = app.Services.GetRequiredService<IEventStore>();
+await eventStore.InitializeAsync();
+```
+
+### 2. Event Store Usage
 
 ```csharp
 public class OrderEventStore
@@ -493,20 +577,19 @@ public class OrderEventStore
     {
         var streamName = $"order-{orderId}";
         
-        await _eventStore.Stream(streamName)
-            .AppendEvent(@event)
-            .SaveAsync();
+        // Get current version for optimistic concurrency
+        var currentVersion = await _eventStore.GetStreamVersionAsync(streamName);
+        
+        await _eventStore.SaveEventsAsync(streamName, new[] { @event }, currentVersion);
             
         _logger.LogInformation("Event {EventType} stored in stream {StreamName}", @event.EventType, streamName);
     }
 
-    public async Task<IEnumerable<IEvent>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
+    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
     {
         var streamName = $"order-{orderId}";
         
-        var events = await _eventStore.Stream(streamName)
-            .FromVersion(fromVersion)
-            .ReadAsync();
+        var events = await _eventStore.GetEventsAsync(streamName, fromVersion);
             
         return events;
     }
@@ -515,8 +598,7 @@ public class OrderEventStore
     {
         var streamName = $"order-{orderId}";
         
-        var version = await _eventStore.Stream(streamName)
-            .GetVersionAsync();
+        var version = await _eventStore.GetStreamVersionAsync(streamName);
             
         return version;
     }
@@ -620,22 +702,28 @@ public enum OrderStatus
 - **Use dependency injection**: Inject required services
 - **Log important operations**: Include correlation IDs
 - **Avoid long-running operations**: Use async/await properly
+- **Return boolean for success/failure**: Return `true` for success, `false` for retry
+- **Use cancellation tokens**: Support graceful cancellation
 
 ### 3. Event Bus Configuration
 
 - **Start event bus early**: Initialize in application startup
+- **Stop event bus gracefully**: Call `StopAsync()` during shutdown
 - **Handle connection failures**: Implement retry policies
-- **Monitor event processing**: Use built-in metrics
+- **Monitor event processing**: Use built-in metrics and events
 - **Configure appropriate timeouts**: Set reasonable values
 - **Use persistent delivery**: For critical events
+- **Subscribe to events**: Use `EventPublished`, `EventReceived`, `EventProcessingFailed` events for monitoring
 
 ### 4. Event Store Usage
 
+- **Initialize event store**: Call `InitializeAsync()` before use
 - **Use meaningful stream names**: Include aggregate ID
 - **Store events atomically**: Use transactions when possible
-- **Handle concurrency**: Implement optimistic concurrency control
+- **Handle concurrency**: Implement optimistic concurrency control with expected version
 - **Backup event streams**: Regular backups for disaster recovery
 - **Monitor storage usage**: Track event store growth
+- **Use proper shutdown**: Call `Dispose()` when done
 
 ## Complete Examples
 
@@ -690,6 +778,26 @@ await eventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
 await eventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
 await eventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
 await eventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
+
+// Register application shutdown handlers
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(async () =>
+{
+    try
+    {
+        // Stop event bus gracefully
+        await eventBus.StopAsync();
+        
+        // Shutdown StreamFlow client
+        await streamFlow.ShutdownAsync();
+        
+        Console.WriteLine("Event bus and StreamFlow client stopped gracefully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error during shutdown: {ex.Message}");
+    }
+});
 
 await app.RunAsync();
 ```
