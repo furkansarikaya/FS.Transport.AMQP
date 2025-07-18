@@ -432,7 +432,7 @@ public record OrderCreated(Guid OrderId, decimal Amount, List<string> Items) : I
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "order-service";
-    public string RoutingKey => "order.created";
+    public string ExchangeName => "order.created";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -448,7 +448,7 @@ public record InventoryReserved(Guid OrderId) : IIntegrationEvent
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "inventory-service";
-    public string RoutingKey => "inventory.reserved";
+    public string ExchangeName => "inventory.reserved";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -464,7 +464,7 @@ public record PaymentProcessed(Guid OrderId) : IIntegrationEvent
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "payment-service";
-    public string RoutingKey => "payment.processed";
+    public string ExchangeName => "payment.processed";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -480,7 +480,7 @@ public record OrderShipped(Guid OrderId, string TrackingNumber) : IIntegrationEv
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "shipping-service";
-    public string RoutingKey => "order.shipped";
+    public string ExchangeName => "order.shipped";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -496,7 +496,7 @@ public record InventoryReservationFailed(Guid OrderId) : IIntegrationEvent
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "inventory-service";
-    public string RoutingKey => "inventory.reservation.failed";
+    public string ExchangeName => "inventory.reservation.failed";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -512,7 +512,7 @@ public record PaymentFailed(Guid OrderId) : IIntegrationEvent
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "payment-service";
-    public string RoutingKey => "payment.failed";
+    public string ExchangeName => "payment.failed";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }

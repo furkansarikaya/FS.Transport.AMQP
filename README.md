@@ -284,7 +284,7 @@ public record OrderShipped(Guid OrderId, string TrackingNumber) : IIntegrationEv
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "order-service";
-    public string RoutingKey => "order.shipped";
+    public string ExchangeName => "order.shipped";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -300,25 +300,55 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
     }
 }
 
-// Publishing events with fluent API
+// Option 1: Direct API (Recommended for production)
+// Publishing Domain Events (uses separate exchanges per aggregate)
+var orderCreated = new OrderCreated(orderId, customerName, amount)
+{
+    AggregateType = "Order",
+    AggregateId = orderId.ToString(),
+    CorrelationId = correlationId,
+    Version = "1.0"
+};
+await _streamFlow.EventBus.PublishDomainEventAsync(orderCreated);
+
+// Publishing Integration Events (uses ExchangeName as exchange name)
+var orderShipped = new OrderShipped(orderId, trackingNumber)
+{
+    ExchangeName = "order-service", // This becomes the exchange name
+    CorrelationId = correlationId,
+    CausationId = causationId,
+    TimeToLive = TimeSpan.FromMinutes(30)
+};
+await _streamFlow.EventBus.PublishIntegrationEventAsync(orderShipped);
+
+// Option 2: Fluent API (Great for complex configurations)
+// Publishing Domain Events with fluent API
 await _streamFlow.EventBus.Event<OrderCreated>()
-    .WithMetadata(metadata =>
-    {
-        metadata.CorrelationId = correlationId;
-        metadata.Source = "order-service";
-        metadata.Version = "1.0";
-    })
-    .WithPriority(1)
-    .WithTtl(TimeSpan.FromMinutes(30))
+    .WithCorrelationId(correlationId)
+    .WithSource("order-service")
+    .WithVersion("1.0")
+    .WithAggregateId(orderId.ToString())
+    .WithAggregateType("Order")
     .PublishAsync(new OrderCreated(orderId, customerName, amount));
 
+// Publishing Integration Events with fluent API
 await _streamFlow.EventBus.Event<OrderShipped>()
     .WithCorrelationId(correlationId)
     .WithCausationId(causationId)
-    .WithAggregateId(orderId.ToString())
-    .WithAggregateType("Order")
+    .WithSource("order-service")
+    .WithTtl(TimeSpan.FromMinutes(30))
     .WithProperty("priority", "high")
-    .PublishAsync(new OrderShipped(orderId, trackingNumber));
+    .PublishAsync(new OrderShipped(orderId, trackingNumber) { ExchangeName = "order-service" });
+
+// Subscribing to Domain Events
+await _streamFlow.EventBus.SubscribeToDomainEventAsync<OrderCreated>(
+    "Order", // Aggregate type
+    new OrderCreatedHandler());
+
+// Subscribing to Integration Events
+await _streamFlow.EventBus.SubscribeToIntegrationEventAsync<OrderShipped>(
+    "order-service", // Exchange name (matches RoutingKey)
+    new OrderShippedHandler());
 ```
 
 ### 3. Event Sourcing Support
@@ -600,19 +630,16 @@ public class OrderProcessingService
             .BindToExchange("orders", "order.*")
             .DeclareAsync();
         
-        // 2. Publish domain event with fluent API
-        await _streamFlow.EventBus.Event<OrderCreated>()
-            .WithMetadata(metadata =>
-            {
-                metadata.CorrelationId = Guid.NewGuid().ToString();
-                metadata.Source = "order-service";
-                metadata.Version = "1.0";
-            })
-            .WithAggregateId(order.Id.ToString())
-            .WithAggregateType("Order")
-            .WithPriority(1)
-            .WithTtl(TimeSpan.FromMinutes(30))
-            .PublishAsync(new OrderCreated(order.Id, order.CustomerName, order.Total));
+        // 2. Publish domain event with new API
+        var orderCreated = new OrderCreated(order.Id, order.CustomerName, order.Total)
+        {
+            AggregateType = "Order",
+            AggregateId = order.Id.ToString(),
+            CorrelationId = Guid.NewGuid().ToString(),
+            Version = "1.0",
+            Source = "order-service"
+        };
+        await _streamFlow.EventBus.PublishDomainEventAsync(orderCreated);
         
         // 3. Store event in event store with fluent API
         await _streamFlow.EventStore.Stream($"order-{order.Id}")
@@ -640,16 +667,15 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
             await _inventoryService.ReserveItemsAsync(@event.OrderId);
             
             // Publish follow-up events
-            await _streamFlow.EventBus.Event<InventoryRequested>()
-                .WithMetadata(metadata =>
-                {
-                    metadata.CorrelationId = context.CorrelationId;
-                    metadata.CausationId = context.EventId;
-                    metadata.Source = "inventory-service";
-                })
-                .WithAggregateId(@event.OrderId.ToString())
-                .WithAggregateType("Order")
-                .PublishAsync(new InventoryRequested(@event.OrderId, @event.Items));
+            // Publish integration event to inventory service
+            var inventoryRequested = new InventoryRequested(@event.OrderId, @event.Items)
+            {
+                RoutingKey = "inventory-service", // Exchange name
+                CorrelationId = context.CorrelationId,
+                CausationId = context.EventId,
+                Source = "order-service"
+            };
+            await _streamFlow.EventBus.PublishIntegrationEventAsync(inventoryRequested);
         }
         catch (Exception ex)
         {
@@ -676,13 +702,14 @@ public class OrderService
         await _orderRepository.SaveAsync(order);
         
         // Publish integration event for other services
-        await _streamFlow.EventBus.Event<OrderCreated>()
-            .WithCorrelationId(Guid.NewGuid().ToString())
-            .WithSource("order-service")
-            .WithVersion("1.0")
-            .WithAggregateId(order.Id.ToString())
-            .WithAggregateType("Order")
-            .PublishAsync(new OrderCreated(order.Id, order.CustomerId, order.Items));
+        var orderCreated = new OrderCreated(order.Id, order.CustomerId, order.Items)
+        {
+            ExchangeName = "order-service", // Exchange name
+            CorrelationId = Guid.NewGuid().ToString(),
+            Source = "order-service",
+            Version = "1.0"
+        };
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(orderCreated);
     }
 }
 
@@ -708,13 +735,14 @@ public class InventoryService
                 var reserved = await ReserveInventoryAsync(orderCreated.Items);
                 
                 // Publish inventory reserved event
-                await _streamFlow.EventBus.Event<InventoryReserved>()
-                    .WithCorrelationId(context.CorrelationId)
-                    .WithCausationId(context.MessageId)
-                    .WithSource("inventory-service")
-                    .WithAggregateId(orderCreated.OrderId.ToString())
-                    .WithAggregateType("Order")
-                    .PublishAsync(new InventoryReserved(orderCreated.OrderId, reserved));
+                var inventoryReserved = new InventoryReserved(orderCreated.OrderId, reserved)
+                {
+                    RoutingKey = "inventory-service", // Exchange name
+                    CorrelationId = context.CorrelationId,
+                    CausationId = context.MessageId,
+                    Source = "inventory-service"
+                };
+                await _streamFlow.EventBus.PublishIntegrationEventAsync(inventoryReserved);
                 
                 return true; // Acknowledge message
             });
@@ -743,14 +771,14 @@ public class PaymentService
                 var payment = await ProcessPaymentAsync(inventoryReserved.OrderId);
                 
                 // Publish payment processed event
-                await _streamFlow.EventBus.Event<PaymentProcessed>()
-                    .WithCorrelationId(context.CorrelationId)
-                    .WithCausationId(context.MessageId)
-                    .WithSource("payment-service")
-                    .WithAggregateId(inventoryReserved.OrderId.ToString())
-                    .WithAggregateType("Order")
-                    .WithProperty("transaction-id", payment.TransactionId)
-                    .PublishAsync(new PaymentProcessed(inventoryReserved.OrderId, payment.TransactionId));
+                var paymentProcessed = new PaymentProcessed(inventoryReserved.OrderId, payment.TransactionId)
+                {
+                    RoutingKey = "payment-service", // Exchange name
+                    CorrelationId = context.CorrelationId,
+                    CausationId = context.MessageId,
+                    Source = "payment-service"
+                };
+                await _streamFlow.EventBus.PublishIntegrationEventAsync(paymentProcessed);
                 
                 return true;
             });
@@ -1034,34 +1062,65 @@ await _streamFlow.Consumer.Queue<Order>("order-processing")
 
 ### Fluent Event Bus API
 
+FS.StreamFlow provides both **Direct API** and **Fluent API** approaches for event publishing:
+
+- **Direct API**: Recommended for production use. More explicit, better performance, easier to debug.
+- **Fluent API**: Great for complex configurations, prototyping, and when you need chainable operations.
+
 Manage events with comprehensive fluent operations:
 
 ```csharp
-// Advanced event publishing with fluent API
+// Fluent API for Domain Events
+await _streamFlow.EventBus.Event<OrderCreated>()
+    .WithCorrelationId(correlationId)
+    .WithCausationId(causationId)
+    .WithSource("order-service")
+    .WithVersion("1.0")
+    .WithAggregateId(orderId.ToString())
+    .WithAggregateType("Order")
+    .WithProperty("priority", "high")
+    .PublishAsync(new OrderCreated(orderId, customerName, amount));
+
+// Fluent API for Integration Events
+await _streamFlow.EventBus.Event<OrderShipped>()
+    .WithCorrelationId(correlationId)
+    .WithCausationId(causationId)
+    .WithSource("order-service")
+    .WithVersion("1.0")
+    .WithTtl(TimeSpan.FromMinutes(30))
+    .WithProperty("tracking-number", trackingNumber)
+    .WithProperty("priority", "urgent")
+    .PublishAsync(new OrderShipped(orderId, trackingNumber) { ExchangeName = "order-service" });
+
+// Advanced fluent configuration
 await _streamFlow.EventBus.Event<OrderCreated>()
     .WithMetadata(metadata =>
     {
         metadata.CorrelationId = correlationId;
         metadata.Source = "order-service";
-        metadata.Version = "1.0";
+        metadata.Version = 1;
+        metadata.Aggregate = new AggregateMetadata
+        {
+            Id = orderId.ToString(),
+            Type = "Order"
+        };
     })
-    .WithCorrelationId(correlationId)
-    .WithCausationId(causationId)
-    .WithAggregateId(orderId.ToString())
-    .WithAggregateType("Order")
-    .WithPriority(1)
-    .WithTtl(TimeSpan.FromMinutes(30))
-    .WithProperty("priority", "high")
+    .WithProperties(new Dictionary<string, object>
+    {
+        ["priority"] = "high",
+        ["region"] = "us-east-1",
+        ["customer-tier"] = "premium"
+    })
     .PublishAsync(new OrderCreated(orderId, customerName, amount));
 
-// Integration event publishing
-await _streamFlow.EventBus.Event<OrderShipped>()
-    .WithSource("order-service")
-    .WithVersion("1.0")
-    .WithCorrelationId(correlationId)
-    .WithCausationId(causationId)
-    .WithProperty("tracking-number", trackingNumber)
-    .PublishAsync(new OrderShipped(orderId, trackingNumber));
+// Subscribe to events (same as direct API)
+await _streamFlow.EventBus.SubscribeToDomainEventAsync<OrderCreated>(
+    "Order", // Aggregate type
+    new OrderCreatedHandler());
+
+await _streamFlow.EventBus.SubscribeToIntegrationEventAsync<OrderShipped>(
+    "order-service", // Exchange name
+    new OrderShippedHandler());
 ```
 
 ### Fluent Event Store API
@@ -1600,11 +1659,14 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
         await SendOrderConfirmationAsync(@event);
         
         // Publish integration event
-        await _streamFlow.EventBus.Event<OrderConfirmed>()
-            .WithCorrelationId(context.CorrelationId)
-            .WithCausationId(context.EventId)
-            .WithSource("order-service")
-            .PublishAsync(new OrderConfirmed(@event.OrderId, @event.CustomerName));
+        var orderConfirmed = new OrderConfirmed(@event.OrderId, @event.CustomerName)
+        {
+            ExchangeName = "order-service", // Exchange name
+            CorrelationId = context.CorrelationId,
+            CausationId = context.EventId,
+            Source = "order-service"
+        };
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(orderConfirmed);
     }
     
     private async Task SendOrderConfirmationAsync(OrderCreated @event)

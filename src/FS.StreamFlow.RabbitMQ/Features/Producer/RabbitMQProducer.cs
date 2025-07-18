@@ -570,6 +570,14 @@ public class RabbitMQProducer : IProducer
             var channel = await _connectionManager.GetChannelAsync(cancellationToken);
             var rabbitChannel = ((RabbitMQChannel)channel).GetNativeChannel();
 
+            // Auto-declare exchange if it doesn't exist (fanout type for events)
+            await rabbitChannel.ExchangeDeclareAsync(
+                exchange: exchange,
+                type: "fanout", // Use fanout exchange for events - no routing key needed
+                durable: true,
+                autoDelete: false,
+                arguments: null);
+
             // Convert Core properties to RabbitMQ properties
             var properties = rabbitChannel.CreateBasicProperties();
             properties.MessageId = basicProperties.MessageId;

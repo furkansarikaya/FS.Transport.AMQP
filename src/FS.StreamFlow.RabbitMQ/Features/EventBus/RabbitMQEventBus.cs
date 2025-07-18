@@ -188,8 +188,8 @@ public class RabbitMQEventBus : IEventBus
             Subject = domainEvent.AggregateId,
             Options = new PublishOptions
             {
-                Exchange = "domain-events",
-                RoutingKey = $"domain.{domainEvent.AggregateType.ToLowerInvariant()}.{domainEvent.EventType.ToLowerInvariant()}",
+                Exchange = $"domain.{domainEvent.AggregateType.ToLowerInvariant()}", // Separate exchange per aggregate
+                RoutingKey = string.Empty, // No routing key needed for fanout exchange
                 Mandatory = true,
                 Properties = new MessageProperties
                 {
@@ -230,8 +230,8 @@ public class RabbitMQEventBus : IEventBus
             Subject = integrationEvent.Target,
             Options = new PublishOptions
             {
-                Exchange = "integration-events",
-                RoutingKey = integrationEvent.RoutingKey,
+                Exchange = integrationEvent.ExchangeName,
+                RoutingKey = string.Empty, // Fanout exchanges don't use routing keys
                 Mandatory = true,
                 Properties = new MessageProperties
                 {
@@ -298,13 +298,16 @@ public class RabbitMQEventBus : IEventBus
     /// Subscribes to domain events of a specific type
     /// </summary>
     /// <typeparam name="T">Domain event type</typeparam>
+    /// <param name="aggregateType">Aggregate type name (e.g., "Order", "Customer")</param>
     /// <param name="handler">Event handler</param>
     /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
     /// <returns>Task representing the subscription operation</returns>
     /// <exception cref="ArgumentNullException">Thrown when handler is null</exception>
     /// <exception cref="ObjectDisposedException">Thrown when the event bus has been disposed</exception>
-    public async Task SubscribeToDomainEventAsync<T>(IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IDomainEvent
+    public async Task SubscribeToDomainEventAsync<T>(string aggregateType, IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IDomainEvent
     {
+        if (string.IsNullOrWhiteSpace(aggregateType))
+            throw new ArgumentException("Aggregate type cannot be null or empty", nameof(aggregateType));
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
@@ -312,27 +315,22 @@ public class RabbitMQEventBus : IEventBus
         EnsureRunning();
 
         var eventType = typeof(T);
+        var exchangeName = $"domain.{aggregateType.ToLowerInvariant()}";
+        var queueName = $"{exchangeName}.{eventType.Name}";
         
         _eventHandlers.AddOrUpdate(eventType, 
             new List<IAsyncEventHandler<IEvent>> { handler as IAsyncEventHandler<IEvent> }, 
             (key, existing) => { existing.Add(handler as IAsyncEventHandler<IEvent>); return existing; });
 
         _statistics.ActiveSubscriptions++;
-        _logger.LogInformation("Subscribed to domain event: {EventType}", eventType.Name);
+        _logger.LogInformation("Subscribed to domain event: {EventType} for aggregate: {AggregateType}", eventType.Name, aggregateType);
         
-        // Start consuming from the domain event queue
-        var queueName = $"domain-events-{eventType.Name}";
-        await _consumer.ConsumeAsync<T>(queueName, async (evt, context) =>
+        // Start consuming from the domain event queue using ConsumeEventAsync (no routing key needed for fanout)
+        await _consumer.ConsumeEventAsync<T>(exchangeName, eventType.Name, async (evt, eventContext) =>
         {
             try
             {
-                await handler.HandleAsync(evt, new EventContext
-                {
-                    EventType = eventType.Name,
-                    EventId = Guid.CreateVersion7().ToString(),
-                    Timestamp = DateTimeOffset.UtcNow,
-                    Source = "EventBus"
-                }, CancellationToken.None);
+                await handler.HandleAsync(evt, eventContext, cancellationToken);
                 return true;
             }
             catch (Exception ex)
@@ -340,24 +338,23 @@ public class RabbitMQEventBus : IEventBus
                 _logger.LogError(ex, "Error handling domain event {EventType}", eventType.Name);
                 return false;
             }
-        }, new ConsumerContext
-        {
-            ConsumerTag = queueName,
-            Settings = new ConsumerSettings { AutoAcknowledge = false }
-        }, CancellationToken.None);
+        }, cancellationToken);
     }
 
     /// <summary>
     /// Subscribes to integration events of a specific type
     /// </summary>
     /// <typeparam name="T">Integration event type</typeparam>
+    /// <param name="exchangeName">Exchange name to subscribe to (should match the ExchangeName used when publishing)</param>
     /// <param name="handler">Event handler</param>
     /// <param name="cancellationToken">Cancellation token for operation cancellation</param>
     /// <returns>Task representing the subscription operation</returns>
     /// <exception cref="ArgumentNullException">Thrown when handler is null</exception>
     /// <exception cref="ObjectDisposedException">Thrown when the event bus has been disposed</exception>
-    public async Task SubscribeToIntegrationEventAsync<T>(IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
+    public async Task SubscribeToIntegrationEventAsync<T>(string exchangeName, IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
     {
+        if (string.IsNullOrWhiteSpace(exchangeName))
+            throw new ArgumentException("Exchange name cannot be null or empty", nameof(exchangeName));
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
@@ -365,14 +362,16 @@ public class RabbitMQEventBus : IEventBus
         EnsureRunning();
 
         var eventType = typeof(T);
-        var routingKey = "integration.*";
+        var queueName = $"{exchangeName}.{eventType.Name}"; // Create unique queue name
         
         _eventHandlers.AddOrUpdate(eventType, 
             new List<IAsyncEventHandler<IEvent>> { handler as IAsyncEventHandler<IEvent> }, 
             (key, existing) => { existing.Add(handler as IAsyncEventHandler<IEvent>); return existing; });
 
-        await _consumer.ConsumeIntegrationEventAsync<T>(
-            "integration-service",
+        // Auto-create exchange and queue, then consume (no routing key needed for fanout)
+        await _consumer.ConsumeEventAsync<T>(
+            exchangeName,
+            eventType.Name,
             async (evt, eventContext) =>
             {
                 await handler.HandleAsync(evt, eventContext, cancellationToken);
@@ -381,7 +380,8 @@ public class RabbitMQEventBus : IEventBus
             cancellationToken);
 
         _statistics.ActiveSubscriptions++;
-        _logger.LogInformation("Subscribed to integration event: {EventType} with routing key: {RoutingKey}", eventType.Name, routingKey);
+        _logger.LogInformation("Subscribed to integration event: {EventType} from exchange: {ExchangeName} with queue: {QueueName}", 
+            eventType.Name, exchangeName, queueName);
     }
 
     /// <summary>

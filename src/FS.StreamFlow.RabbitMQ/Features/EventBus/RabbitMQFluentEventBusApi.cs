@@ -4,9 +4,11 @@ using FS.StreamFlow.Core.Features.Events.Models;
 namespace FS.StreamFlow.RabbitMQ.Features.EventBus;
 
 /// <summary>
-/// RabbitMQ implementation of fluent event bus API for chainable event publishing configuration
+/// RabbitMQ implementation of fluent event bus API for chainable event publishing configuration.
+/// Provides a fluent interface for configuring event metadata, properties, and publishing options.
+/// Uses fanout exchanges for event distribution without routing keys.
 /// </summary>
-/// <typeparam name="T">Event type</typeparam>
+/// <typeparam name="T">Event type that implements IEvent</typeparam>
 public class RabbitMQFluentEventBusApi<T> : IFluentEventBusApi<T> where T : class, IEvent
 {
     private readonly IEventBus _eventBus;
@@ -95,9 +97,10 @@ public class RabbitMQFluentEventBusApi<T> : IFluentEventBusApi<T> where T : clas
     }
 
     /// <summary>
-    /// Configures aggregate type (for domain events)
+    /// Configures aggregate type (for domain events).
+    /// This will be used to create the exchange name as "domain.{aggregateType}" for fanout exchanges.
     /// </summary>
-    /// <param name="aggregateType">Aggregate type</param>
+    /// <param name="aggregateType">Aggregate type (e.g., "Order", "Customer")</param>
     /// <returns>Fluent event bus API for method chaining</returns>
     public IFluentEventBusApi<T> WithAggregateType(string aggregateType)
     {
@@ -161,32 +164,23 @@ public class RabbitMQFluentEventBusApi<T> : IFluentEventBusApi<T> where T : clas
     }
 
     /// <summary>
-    /// Publishes the event with the configured settings
+    /// Publishes the event with the configured settings.
+    /// Applies all fluent API metadata to the event before publishing.
+    /// Uses fanout exchanges: domain events go to "domain.{aggregateType}" exchanges,
+    /// integration events go to exchanges named after their ExchangeName property.
     /// </summary>
     /// <param name="eventData">Event data to publish</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the publish operation</returns>
+    /// <exception cref="ArgumentNullException">Thrown when eventData is null</exception>
+    /// <exception cref="InvalidOperationException">Thrown when event doesn't implement IDomainEvent or IIntegrationEvent</exception>
     public async Task PublishAsync(T eventData, CancellationToken cancellationToken = default)
     {
         if (eventData == null)
             throw new ArgumentNullException(nameof(eventData));
 
-        // Set metadata properties
-        if (_properties.Count > 0)
-        {
-            _metadata.Properties ??= new Dictionary<string, object>();
-            foreach (var kvp in _properties)
-            {
-                _metadata.Properties[kvp.Key] = kvp.Value;
-            }
-        }
-
-        // Set event metadata
-        if (eventData is IEvent eventWithMetadata)
-        {
-            // Use reflection or interface to set metadata if supported
-            // For now, we'll use the standard publish methods
-        }
+        // Apply fluent API metadata to the event
+        ApplyMetadataToEvent(eventData);
 
         // Publish based on event type
         if (eventData is IDomainEvent domainEvent)
@@ -199,8 +193,59 @@ public class RabbitMQFluentEventBusApi<T> : IFluentEventBusApi<T> where T : clas
         }
         else
         {
-            // Generic event publishing - for now use domain event publishing
-            await _eventBus.PublishDomainEventAsync(eventData as IDomainEvent ?? throw new InvalidOperationException("Event must be a domain or integration event"), cancellationToken);
+            throw new InvalidOperationException("Event must implement IDomainEvent or IIntegrationEvent");
+        }
+    }
+
+    /// <summary>
+    /// Applies the configured metadata to the event
+    /// </summary>
+    /// <param name="eventData">Event to apply metadata to</param>
+    private void ApplyMetadataToEvent(T eventData)
+    {
+        // Apply common metadata
+        if (!string.IsNullOrEmpty(_metadata.CorrelationId))
+            eventData.CorrelationId = _metadata.CorrelationId;
+        
+        if (!string.IsNullOrEmpty(_metadata.CausationId))
+            eventData.CausationId = _metadata.CausationId;
+        
+        if (!string.IsNullOrEmpty(_metadata.Source))
+            eventData.Source = _metadata.Source;
+        
+        if (_metadata.Version.HasValue)
+            eventData.Version = _metadata.Version.Value.ToString();
+
+        // Apply domain event specific metadata
+        if (eventData is IDomainEvent domainEvent)
+        {
+            if (_metadata.Aggregate != null)
+            {
+                if (!string.IsNullOrEmpty(_metadata.Aggregate.Id))
+                    domainEvent.AggregateId = _metadata.Aggregate.Id;
+                
+                if (!string.IsNullOrEmpty(_metadata.Aggregate.Type))
+                    domainEvent.AggregateType = _metadata.Aggregate.Type;
+            }
+        }
+
+        // Apply integration event specific metadata
+        if (eventData is IIntegrationEvent integrationEvent)
+        {
+            // Apply TTL if specified
+            if (_properties.TryGetValue("ttl", out var ttlValue) && ttlValue is TimeSpan ttl)
+                integrationEvent.TimeToLive = ttl;
+        }
+
+        // Apply custom properties if the event supports them
+        if (_properties.Count > 0 && eventData is IEvent eventWithProperties)
+        {
+            eventWithProperties.Properties ??= new Dictionary<string, object>();
+            foreach (var kvp in _properties)
+            {
+                if (kvp.Key != "ttl") // TTL is handled separately
+                    eventWithProperties.Properties[kvp.Key] = kvp.Value;
+            }
         }
     }
 

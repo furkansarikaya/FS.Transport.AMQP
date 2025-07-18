@@ -61,19 +61,21 @@ public interface IEventBus : IDisposable
     /// Subscribes to domain events of a specific type
     /// </summary>
     /// <typeparam name="T">Domain event type</typeparam>
+    /// <param name="aggregateType">Aggregate type name (e.g., "Order", "Customer")</param>
     /// <param name="handler">Event handler</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the subscription operation</returns>
-    Task SubscribeToDomainEventAsync<T>(IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IDomainEvent;
+    Task SubscribeToDomainEventAsync<T>(string aggregateType, IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IDomainEvent;
     
     /// <summary>
     /// Subscribes to integration events of a specific type
     /// </summary>
     /// <typeparam name="T">Integration event type</typeparam>
+    /// <param name="exchangeName">Exchange name to subscribe to (should match the ExchangeName used when publishing)</param>
     /// <param name="handler">Event handler</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the subscription operation</returns>
-    Task SubscribeToIntegrationEventAsync<T>(IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent;
+    Task SubscribeToIntegrationEventAsync<T>(string exchangeName, IAsyncEventHandler<T> handler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent;
     
     /// <summary>
     /// Subscribes to events with a custom handler function

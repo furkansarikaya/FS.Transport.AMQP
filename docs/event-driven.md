@@ -79,7 +79,7 @@ public record PaymentProcessed(
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "payment-service";
-    public string RoutingKey => "payment.processed";
+    public string ExchangeName => "payment.processed";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -97,7 +97,7 @@ public record ShipmentScheduled(
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "shipping-service";
-    public string RoutingKey => "shipment.scheduled";
+    public string ExchangeName => "shipment.scheduled";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }

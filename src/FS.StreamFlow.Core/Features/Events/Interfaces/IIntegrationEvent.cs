@@ -12,9 +12,10 @@ public interface IIntegrationEvent : IEvent
     string Source { get; }
     
     /// <summary>
-    /// Routing key pattern for message distribution
+    /// Exchange name for fanout message distribution.
+    /// This determines which exchange the integration event will be published to.
     /// </summary>
-    string RoutingKey { get; }
+    string ExchangeName { get; }
     
     /// <summary>
     /// Target audience for this integration event (optional)

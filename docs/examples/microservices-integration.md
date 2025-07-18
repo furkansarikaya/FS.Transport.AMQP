@@ -52,7 +52,7 @@ public record OrderCreated(Guid OrderId, string CustomerId, List<string> Items) 
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "order-service";
-    public string RoutingKey => "order.created";
+    public string ExchangeName => "order.created";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -71,7 +71,7 @@ public record InventoryReserved(Guid OrderId, List<string> Items) : IIntegration
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "inventory-service";
-    public string RoutingKey => "inventory.reserved";
+    public string ExchangeName => "inventory.reserved";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -90,7 +90,7 @@ public record PaymentProcessed(Guid OrderId, string TransactionId) : IIntegratio
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "payment-service";
-    public string RoutingKey => "payment.processed";
+    public string ExchangeName => "payment.processed";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }

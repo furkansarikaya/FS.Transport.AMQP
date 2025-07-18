@@ -69,7 +69,7 @@ public record EmailSent(Guid UserId, string Email, DateTime SentAt) : IIntegrati
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "email-service";
-    public string RoutingKey => "email.sent";
+    public string ExchangeName => "email.sent";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }

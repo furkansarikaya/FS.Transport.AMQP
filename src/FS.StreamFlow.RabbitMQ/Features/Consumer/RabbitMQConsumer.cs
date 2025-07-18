@@ -294,17 +294,20 @@ public class RabbitMQConsumer : IConsumer
     }
 
     /// <summary>
-    /// Consumes events from an exchange with automatic event handler resolution
+    /// Consumes events from a fanout exchange with automatic queue creation and event handler resolution.
+    /// Creates a durable queue and binds it to the specified exchange for reliable event processing.
     /// </summary>
-    /// <typeparam name="T">Event type</typeparam>
-    /// <param name="exchangeName">Exchange name to consume from</param>
-    /// <param name="routingKey">Routing key pattern</param>
-    /// <param name="eventHandler">Event handler for processing events</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the consumption operation</returns>
-    public async Task ConsumeEventAsync<T>(string exchangeName, string routingKey, IAsyncEventHandler<T> eventHandler, CancellationToken cancellationToken = default) where T : class, IEvent
+    /// <typeparam name="T">The type of event to consume, must implement IEvent</typeparam>
+    /// <param name="exchangeName">The name of the RabbitMQ fanout exchange to consume events from</param>
+    /// <param name="queueName">The name of the queue to create and bind to the exchange</param>
+    /// <param name="eventHandler">The event handler instance to process received events</param>
+    /// <param name="cancellationToken">Token to cancel the consumption operation</param>
+    /// <returns>A task representing the asynchronous consumption operation</returns>
+    /// <exception cref="ArgumentNullException">Thrown when any parameter is null</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the consumer is not properly initialized</exception>
+    public async Task ConsumeEventAsync<T>(string exchangeName, string queueName, IAsyncEventHandler<T> eventHandler, CancellationToken cancellationToken = default) where T : class, IEvent
     {
-        await ConsumeEventAsync<T>(exchangeName, routingKey, async (evt, ctx) =>
+        await ConsumeEventAsync<T>(exchangeName, queueName, async (evt, ctx) =>
         {
             await eventHandler.HandleAsync(evt, ctx, cancellationToken);
             return true;
@@ -312,15 +315,18 @@ public class RabbitMQConsumer : IConsumer
     }
 
     /// <summary>
-    /// Consumes events from an exchange with inline event handler
+    /// Consumes events from a fanout exchange with automatic queue creation and inline event handler processing.
+    /// This method automatically declares the exchange as fanout type, creates a durable queue, and binds them together.
     /// </summary>
-    /// <typeparam name="T">Event type</typeparam>
-    /// <param name="exchangeName">Exchange name to consume from</param>
-    /// <param name="routingKey">Routing key pattern</param>
-    /// <param name="eventHandler">Inline event handler function</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the consumption operation</returns>
-    public async Task ConsumeEventAsync<T>(string exchangeName, string routingKey, Func<T, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IEvent
+    /// <typeparam name="T">The type of event to consume, must implement IEvent</typeparam>
+    /// <param name="exchangeName">The name of the RabbitMQ fanout exchange to consume events from</param>
+    /// <param name="queueName">The name of the queue to create and bind to the exchange</param>
+    /// <param name="eventHandler">The inline handler function to process received events, returns true if processing succeeded</param>
+    /// <param name="cancellationToken">Token to cancel the consumption operation</param>
+    /// <returns>A task representing the asynchronous consumption operation</returns>
+    /// <exception cref="ArgumentNullException">Thrown when any parameter is null</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the consumer is not running or channel is unavailable</exception>
+    public async Task ConsumeEventAsync<T>(string exchangeName, string queueName, Func<T, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IEvent
     {
         if (_status != ConsumerStatus.Running)
         {
@@ -332,22 +338,30 @@ public class RabbitMQConsumer : IConsumer
             throw new InvalidOperationException("Channel is not available");
         }
 
-        // Declare a temporary queue for event consumption
-        var queueResult = await _channel.QueueDeclareAsync(
-            queue: string.Empty,
-            durable: false,
-            exclusive: true,
-            autoDelete: true,
+        // Auto-declare exchange if it doesn't exist (fanout type for events)
+        await _channel.ExchangeDeclareAsync(
+            exchange: exchangeName,
+            type: "fanout", // Use fanout exchange for events - no routing key needed
+            durable: true,
+            autoDelete: false,
             arguments: null,
             cancellationToken: cancellationToken);
 
-        var queueName = queueResult.QueueName;
+        // Create a durable queue with proper naming
+        var queueName = $"{exchangeName}.{routingKey}";
+        await _channel.QueueDeclareAsync(
+            queue: queueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: null,
+            cancellationToken: cancellationToken);
 
-        // Bind queue to exchange
+        // Bind queue to exchange (no routing key needed for fanout)
         await _channel.QueueBindAsync(
             queue: queueName,
             exchange: exchangeName,
-            routingKey: routingKey,
+            routingKey: string.Empty, // Empty routing key for fanout exchange
             arguments: null,
             cancellationToken: cancellationToken);
 
@@ -386,19 +400,20 @@ public class RabbitMQConsumer : IConsumer
     }
 
     /// <summary>
-    /// Consumes integration events with service-to-service communication
+    /// Consumes integration events from a specified exchange with automatic queue management and fanout distribution.
+    /// This method provides backward compatibility but is deprecated in favor of the more flexible ConsumeEventAsync method.
     /// </summary>
-    /// <typeparam name="T">Integration event type</typeparam>
-    /// <param name="serviceName">Service name to consume events from</param>
-    /// <param name="eventHandler">Integration event handler</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the consumption operation</returns>
-    public async Task ConsumeIntegrationEventAsync<T>(string serviceName, Func<T, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
+    /// <typeparam name="T">The type of integration event to consume, must implement IIntegrationEvent</typeparam>
+    /// <param name="exchangeName">The name of the RabbitMQ exchange to consume events from</param>
+    /// <param name="eventHandler">The handler function to process received integration events</param>
+    /// <param name="cancellationToken">Token to cancel the consumption operation</param>
+    /// <returns>A task representing the asynchronous consumption operation</returns>
+    /// <exception cref="ArgumentNullException">Thrown when exchangeName or eventHandler is null</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the consumer is not properly initialized</exception>
+    [Obsolete("This method is deprecated. Use ConsumeEventAsync<T>(string exchangeName, string queueName, Func<T, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken) instead for better control over queue naming and configuration.", false)]
+    public async Task ConsumeIntegrationEventAsync<T>(string exchangeName, Func<T, EventContext, Task<bool>> eventHandler, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
     {
-        var exchangeName = $"integration.{serviceName}";
-        var routingKey = typeof(T).Name;
-
-        await ConsumeEventAsync<T>(exchangeName, routingKey, eventHandler, cancellationToken);
+        await ConsumeEventAsync<T>(exchangeName, typeof(T).Name, eventHandler, cancellationToken);
     }
 
     /// <summary>

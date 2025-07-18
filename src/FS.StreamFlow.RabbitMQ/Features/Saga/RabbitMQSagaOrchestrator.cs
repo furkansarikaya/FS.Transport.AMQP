@@ -642,11 +642,11 @@ public class RabbitMQSagaOrchestrator : ISagaOrchestrator
         var channel = await _connectionManager.GetChannelAsync(cancellationToken);
         var rabbitChannel = ((RabbitMQChannel)channel).GetNativeChannel();
 
-        // Declare saga state exchange
-        rabbitChannel.ExchangeDeclare("saga-state-exchange", "topic", durable: true);
+        // Declare saga state exchange (fanout for state distribution)
+        rabbitChannel.ExchangeDeclare("saga-state-exchange", "fanout", durable: true);
 
-        // Declare saga event exchange
-        rabbitChannel.ExchangeDeclare("saga-event-exchange", "topic", durable: true);
+        // Declare saga event exchange (fanout for event distribution)
+        rabbitChannel.ExchangeDeclare("saga-event-exchange", "fanout", durable: true);
 
         _logger.LogInformation("Initialized saga infrastructure");
     }
