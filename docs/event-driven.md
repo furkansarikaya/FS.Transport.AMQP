@@ -150,6 +150,9 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
+// Create required exchanges for event bus
+await CreateEventBusExchangesAsync(streamFlow);
+
 // Start the event bus (CRITICAL: Event bus must be started explicitly)
 await streamFlow.EventBus.StartAsync();
 
@@ -172,6 +175,50 @@ lifetime.ApplicationStopping.Register(async () =>
         Console.WriteLine($"Error during shutdown: {ex.Message}");
     }
 });
+
+// Helper method to create required exchanges and queues using fluent API
+static async Task CreateEventBusExchangesAsync(IStreamFlowClient streamFlow)
+{
+    try
+    {
+        // Create domain events exchange using fluent API
+        await streamFlow.ExchangeManager.Exchange("domain-events")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .DeclareAsync();
+
+        // Create integration events exchange using fluent API
+        await streamFlow.ExchangeManager.Exchange("integration-events")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .DeclareAsync();
+
+        // Example: Create a queue for domain events and bind to exchange
+        await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .BindToExchange("domain-events", "domain.order.ordercreated")
+            .DeclareAsync();
+
+        // Example: Create a queue for integration events and bind to exchange
+        await streamFlow.QueueManager.Queue("integration-events-PaymentProcessed")
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .BindToExchange("integration-events", "payment.processed")
+            .DeclareAsync();
+
+        Console.WriteLine("Event bus exchanges and queues created successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Warning: Could not create exchanges or queues: {ex.Message}");
+        // Exchanges or queues might already exist, which is fine
+    }
+}
+
+// Note: You should create a queue and bind it to the exchange for each event type you want to consume. The queue name and routing key should match your event and consumer needs.
 ```
 
 ### 2. Required Using Statements
@@ -380,13 +427,13 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
         {
             _logger.LogInformation("Processing OrderCreated event for order {OrderId}", @event.OrderId);
 
-            // Send confirmation email
-            await _emailService.SendOrderConfirmationAsync(
-                @event.OrderId,
+        // Send confirmation email
+        await _emailService.SendOrderConfirmationAsync(
+            @event.OrderId,
                 @event.CustomerName,
                 cancellationToken);
 
-            // Reserve inventory
+        // Reserve inventory
             var reserved = await _inventoryService.ReserveInventoryAsync(@event.OrderId, cancellationToken);
 
             if (reserved)
@@ -516,35 +563,7 @@ public class PaymentProcessedHandler : IHybridEventHandler<PaymentProcessed>
 }
 ```
 
-### 3. Event Handler Factory and Registry
-
-#### IEventHandlerFactory
-```csharp
-public interface IEventHandlerFactory
-{
-    Task<IEnumerable<EventHandlingResult>> ExecuteHandlersAsync(IEvent @event, EventContext context, CancellationToken cancellationToken = default);
-    Task<EventHandlingResult> ExecuteHandlerAsync(IEventHandler handler, IEvent @event, EventContext context, CancellationToken cancellationToken = default);
-    EventHandlerExecutionStatistics GetStatistics();
-}
-```
-
-#### IEventHandlerRegistry
-```csharp
-public interface IEventHandlerRegistry
-{
-    void RegisterHandler(IEventHandler handler);
-    void RegisterHandler<THandler>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped) where THandler : class, IEventHandler;
-    bool UnregisterHandler(string handlerName);
-    IEnumerable<IEventHandler> GetHandlersForEvent(Type eventType);
-    IEnumerable<IEventHandler> GetHandlersForEvent<T>() where T : class, IEvent;
-    IEventHandler? GetHandler(string handlerName);
-    IEnumerable<IEventHandler> GetAllHandlers();
-    EventHandlerRegistryStatistics GetStatistics();
-    int DiscoverAndRegisterHandlers(params System.Reflection.Assembly[] assemblies);
-}
-```
-
-### 4. Event Handler Registration and Discovery
+### 3. Event Handler Registration and Discovery
 
 ```csharp
 // Program.cs
@@ -555,57 +574,90 @@ builder.Services.AddScoped<IHybridEventHandler<PaymentProcessed>, PaymentProcess
 builder.Services.AddScoped<IAsyncEventHandler<InventoryReserved>, InventoryReservedHandler>();
 builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentScheduledHandler>();
 
-// Register event handler factory and registry
-builder.Services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
-builder.Services.AddSingleton<IEventHandlerRegistry, EventHandlerRegistry>();
-
 var app = builder.Build();
 
-// Get services
+// Initialize the StreamFlow client
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
-var eventHandlerRegistry = app.Services.GetRequiredService<IEventHandlerRegistry>();
-var eventHandlerFactory = app.Services.GetRequiredService<IEventHandlerFactory>();
+await streamFlow.InitializeAsync();
 
-// Discover and register handlers from assemblies
-var discoveredCount = eventHandlerRegistry.DiscoverAndRegisterHandlers(
-    typeof(OrderCreatedHandler).Assembly);
+// Create required exchanges for event bus
+await CreateEventBusExchangesAsync(streamFlow);
 
-Console.WriteLine($"Discovered and registered {discoveredCount} event handlers");
+// Start the event bus (CRITICAL: Event bus must be started explicitly)
+await streamFlow.EventBus.StartAsync();
+
+// Get event handlers from dependency injection
+var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
+var orderCancelledHandler = app.Services.GetRequiredService<IEventHandler<OrderCancelled>>();
+var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
+var inventoryReservedHandler = app.Services.GetRequiredService<IAsyncEventHandler<InventoryReserved>>();
+var shipmentScheduledHandler = app.Services.GetRequiredService<IAsyncEventHandler<ShipmentScheduled>>();
 
 // Subscribe to events
-var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
-var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
-
 await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
+await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCancelledHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
 
-// Get handler statistics
-var registryStats = eventHandlerRegistry.GetStatistics();
-var executionStats = eventHandlerFactory.GetStatistics();
+Console.WriteLine("Event handlers registered and subscribed successfully");
 
-Console.WriteLine($"Registry: {registryStats.TotalHandlers} handlers, {registryStats.EventTypes} event types");
-Console.WriteLine($"Execution: {executionStats.TotalEvents} events processed, {executionStats.EventSuccessRate:F2}% success rate");
+// Helper method to create required exchanges and queues using fluent API
+static async Task CreateEventBusExchangesAsync(IStreamFlowClient streamFlow)
+{
+    try
+    {
+        // Create domain events exchange using fluent API
+        await streamFlow.ExchangeManager.Exchange("domain-events")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .DeclareAsync();
+
+        // Create integration events exchange using fluent API
+        await streamFlow.ExchangeManager.Exchange("integration-events")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .DeclareAsync();
+
+        // Example: Create a queue for domain events and bind to exchange
+        await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .BindToExchange("domain-events", "domain.order.ordercreated")
+            .DeclareAsync();
+
+        // Example: Create a queue for integration events and bind to exchange
+        await streamFlow.QueueManager.Queue("integration-events-PaymentProcessed")
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .BindToExchange("integration-events", "payment.processed")
+            .DeclareAsync();
+
+        Console.WriteLine("Event bus exchanges and queues created successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Warning: Could not create exchanges or queues: {ex.Message}");
+        // Exchanges or queues might already exist, which is fine
+    }
+}
+
+// Note: You should create a queue and bind it to the exchange for each event type you want to consume. The queue name and routing key should match your event and consumer needs.
 ```
 
-### 5. Event Monitoring and Observability
+### 4. Event Monitoring and Observability
 
 ```csharp
 public class EventMonitoringService
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly IEventHandlerFactory _eventHandlerFactory;
-    private readonly IEventHandlerRegistry _eventHandlerRegistry;
     private readonly ILogger<EventMonitoringService> _logger;
 
-    public EventMonitoringService(
-        IStreamFlowClient streamFlow,
-        IEventHandlerFactory eventHandlerFactory,
-        IEventHandlerRegistry eventHandlerRegistry,
-        ILogger<EventMonitoringService> logger)
+    public EventMonitoringService(IStreamFlowClient streamFlow, ILogger<EventMonitoringService> logger)
     {
         _streamFlow = streamFlow;
-        _eventHandlerFactory = eventHandlerFactory;
-        _eventHandlerRegistry = eventHandlerRegistry;
         _logger = logger;
         
         // Subscribe to event bus events for monitoring
@@ -640,24 +692,22 @@ public class EventMonitoringService
             e.Event.EventType, e.AttemptCount, e.WillRetry);
     }
 
-    public void LogHandlerStatistics()
+    public void LogEventBusStatistics()
     {
-        var registryStats = _eventHandlerRegistry.GetStatistics();
-        var executionStats = _eventHandlerFactory.GetStatistics();
-
-        _logger.LogInformation("Event Handler Statistics:");
-        _logger.LogInformation("  Registry: {TotalHandlers} handlers, {EventTypes} event types", 
-            registryStats.TotalHandlers, registryStats.EventTypes);
-        _logger.LogInformation("  Execution: {TotalEvents} events, {SuccessRate:F2}% success rate", 
-            executionStats.TotalEvents, executionStats.EventSuccessRate);
-        _logger.LogInformation("  Average execution time: {AvgTime:F2}ms", 
-            executionStats.AverageExecutionTime.TotalMilliseconds);
-
-        foreach (var handlerDetail in registryStats.HandlerDetails)
-        {
-            _logger.LogInformation("  Handler: {Name} (Priority: {Priority}, Concurrent: {Concurrent})", 
-                handlerDetail.Name, handlerDetail.Priority, handlerDetail.AllowConcurrentExecution);
-        }
+        var stats = _streamFlow.EventBus.Statistics;
+        
+        _logger.LogInformation("Event Bus Statistics:");
+        _logger.LogInformation("  Status: {Status}", stats.Status);
+        _logger.LogInformation("  Uptime: {Uptime}", stats.Uptime);
+        _logger.LogInformation("  Events Published: {Published}", stats.TotalEventsPublished);
+        _logger.LogInformation("  Events Received: {Received}", stats.TotalEventsReceived);
+        _logger.LogInformation("  Events Processed: {Processed}", stats.TotalEventsProcessedSuccessfully);
+        _logger.LogInformation("  Events Failed: {Failed}", stats.TotalEventsFailedProcessing);
+        _logger.LogInformation("  Success Rate: {SuccessRate:F2}%", stats.SuccessRate);
+        _logger.LogInformation("  Active Subscriptions: {Subscriptions}", stats.ActiveSubscriptions);
+        _logger.LogInformation("  Currently Processing: {Processing}", stats.CurrentlyProcessingEvents);
+        _logger.LogInformation("  Average Processing Time: {AvgTime:F2}ms", stats.AverageProcessingTimeMs);
+        _logger.LogInformation("  Events Per Second: {EventsPerSec:F2}", stats.EventsPerSecond);
     }
 
     public void Dispose()
@@ -669,7 +719,7 @@ public class EventMonitoringService
 }
 ```
 
-### 6. Custom Event Handler with Function
+### 5. Custom Event Handler with Function
 
 ```csharp
 public class CustomEventHandler
@@ -869,6 +919,7 @@ public enum OrderStatus
 
 - **Use StreamFlow client**: Access event bus through `IStreamFlowClient.EventBus`
 - **Initialize StreamFlow client**: Call `streamFlow.InitializeAsync()` first
+- **Create exchanges**: Ensure required exchanges exist before starting event bus
 - **Start event bus explicitly**: Call `streamFlow.EventBus.StartAsync()` after initialization
 - **Stop event bus gracefully**: Call `streamFlow.EventBus.StopAsync()` before shutdown
 - **Handle connection failures**: Implement retry policies
@@ -887,14 +938,13 @@ public enum OrderStatus
 - **Monitor storage usage**: Track event store growth
 - **Automatic lifecycle**: Event store is managed by StreamFlow client
 
-### 5. Event Handler Registry and Factory
+### 5. Exchange Management
 
-- **Register handlers properly**: Use dependency injection and registry
-- **Discover handlers automatically**: Use assembly scanning for handler discovery
-- **Monitor handler statistics**: Track execution metrics and success rates
-- **Handle handler priorities**: Higher priority handlers execute first
-- **Manage concurrent execution**: Configure `AllowConcurrentExecution` appropriately
-- **Use hybrid handlers**: Implement both sync and async when needed
+- **Create exchanges before starting**: Ensure exchanges exist before event bus starts
+- **Use durable exchanges**: For production environments
+- **Set appropriate exchange types**: Topic for event routing, Direct for simple routing
+- **Handle exchange creation errors**: Exchanges might already exist
+- **Monitor exchange health**: Check exchange status and performance
 
 ## Complete Examples
 
@@ -930,9 +980,7 @@ builder.Services.AddScoped<IHybridEventHandler<PaymentProcessed>, PaymentProcess
 builder.Services.AddScoped<IAsyncEventHandler<InventoryReserved>, InventoryReservedHandler>();
 builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentScheduledHandler>();
 
-// Register event handling infrastructure
-builder.Services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
-builder.Services.AddSingleton<IEventHandlerRegistry, EventHandlerRegistry>();
+// Register monitoring service
 builder.Services.AddSingleton<EventMonitoringService>();
 
 var app = builder.Build();
@@ -941,35 +989,31 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
+// Create required exchanges for event bus
+await CreateEventBusExchangesAsync(streamFlow);
+
 // Start the event bus (CRITICAL: Event bus must be started explicitly)
 await streamFlow.EventBus.StartAsync();
 
-// Get event handling services
-var eventHandlerRegistry = app.Services.GetRequiredService<IEventHandlerRegistry>();
-var eventHandlerFactory = app.Services.GetRequiredService<IEventHandlerFactory>();
-var eventMonitoringService = app.Services.GetRequiredService<EventMonitoringService>();
-
-// Discover and register handlers from assemblies
-var discoveredCount = eventHandlerRegistry.DiscoverAndRegisterHandlers(
-    typeof(OrderCreatedHandler).Assembly);
-
-Console.WriteLine($"Discovered and registered {discoveredCount} event handlers");
-
-// Subscribe to events
+// Get event handlers from dependency injection
 var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
 var orderCancelledHandler = app.Services.GetRequiredService<IEventHandler<OrderCancelled>>();
 var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
 var inventoryReservedHandler = app.Services.GetRequiredService<IAsyncEventHandler<InventoryReserved>>();
 var shipmentScheduledHandler = app.Services.GetRequiredService<IAsyncEventHandler<ShipmentScheduled>>();
 
+// Subscribe to events
 await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
 await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCancelledHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
 
-// Log initial statistics
-eventMonitoringService.LogHandlerStatistics();
+// Initialize monitoring
+var eventMonitoringService = app.Services.GetRequiredService<EventMonitoringService>();
+eventMonitoringService.LogEventBusStatistics();
+
+Console.WriteLine("Event handlers registered and subscribed successfully");
 
 // Register application shutdown handlers
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -978,7 +1022,7 @@ lifetime.ApplicationStopping.Register(async () =>
     try
     {
         // Log final statistics
-        eventMonitoringService.LogHandlerStatistics();
+        eventMonitoringService.LogEventBusStatistics();
         
         // Stop event bus gracefully
         await streamFlow.EventBus.StopAsync();
@@ -993,6 +1037,50 @@ lifetime.ApplicationStopping.Register(async () =>
         Console.WriteLine($"Error during shutdown: {ex.Message}");
     }
 });
+
+// Helper method to create required exchanges and queues using fluent API
+static async Task CreateEventBusExchangesAsync(IStreamFlowClient streamFlow)
+{
+    try
+    {
+        // Create domain events exchange using fluent API
+        await streamFlow.ExchangeManager.Exchange("domain-events")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .DeclareAsync();
+
+        // Create integration events exchange using fluent API
+        await streamFlow.ExchangeManager.Exchange("integration-events")
+            .AsTopic()
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .DeclareAsync();
+
+        // Example: Create a queue for domain events and bind to exchange
+        await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .BindToExchange("domain-events", "domain.order.ordercreated")
+            .DeclareAsync();
+
+        // Example: Create a queue for integration events and bind to exchange
+        await streamFlow.QueueManager.Queue("integration-events-PaymentProcessed")
+            .WithDurable(true)
+            .WithAutoDelete(false)
+            .BindToExchange("integration-events", "payment.processed")
+            .DeclareAsync();
+
+        Console.WriteLine("Event bus exchanges and queues created successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Warning: Could not create exchanges or queues: {ex.Message}");
+        // Exchanges or queues might already exist, which is fine
+    }
+}
+
+// Note: You should create a queue and bind it to the exchange for each event type you want to consume. The queue name and routing key should match your event and consumer needs.
 
 await app.RunAsync();
 ```
@@ -1097,23 +1185,23 @@ public class ResilientEventHandler<T> : IAsyncEventHandler<T> where T : class, I
                 
                 _logger.LogInformation("Successfully processed event {EventType}", typeof(T).Name);
                 return;
-            }
-            catch (Exception ex)
-            {
+        }
+        catch (Exception ex)
+        {
                 _logger.LogError(ex, "Error processing event {EventType} attempt {Attempt}", typeof(T).Name, attempt);
 
                 if (attempt >= maxAttempts)
                 {
                     _logger.LogError("Max retry attempts reached for event {EventType}", typeof(T).Name);
-                    throw;
-                }
+            throw;
+        }
 
                 var delay = _retryPolicy.GetDelay(attempt);
                 await Task.Delay(delay, cancellationToken);
-            }
-        }
+    }
+} 
     }
 }
 ```
 
-This comprehensive guide covers all aspects of implementing event-driven architecture with FS.StreamFlow, from basic setup to advanced patterns and best practices, including the complete event handling system with multiple interfaces, factories, registries, and monitoring capabilities. 
+This comprehensive guide covers all aspects of implementing event-driven architecture with FS.StreamFlow, from basic setup to advanced patterns and best practices, including the complete event handling system with multiple interfaces and monitoring capabilities. 
