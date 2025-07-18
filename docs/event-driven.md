@@ -150,9 +150,8 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Start the event bus
-var eventBus = app.Services.GetRequiredService<IEventBus>();
-await eventBus.StartAsync();
+// Start the event bus (required for event publishing and subscription)
+await streamFlow.EventBus.StartAsync();
 
 // Register application shutdown handlers
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -161,9 +160,9 @@ lifetime.ApplicationStopping.Register(async () =>
     try
     {
         // Stop event bus gracefully
-        await eventBus.StopAsync();
+        await streamFlow.EventBus.StopAsync();
         
-        // Shutdown StreamFlow client
+        // Shutdown StreamFlow client gracefully
         await streamFlow.ShutdownAsync();
         
         Console.WriteLine("Event bus and StreamFlow client stopped gracefully");
@@ -195,12 +194,12 @@ using System.Diagnostics;
 ```csharp
 public class OrderService
 {
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderService> _logger;
 
-    public OrderService(IEventBus eventBus, ILogger<OrderService> logger)
+    public OrderService(IStreamFlowClient streamFlow, ILogger<OrderService> logger)
     {
-        _eventBus = eventBus;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -217,7 +216,7 @@ public class OrderService
         };
 
         // Publish the domain event
-        await _eventBus.PublishDomainEventAsync(orderCreatedEvent);
+        await _streamFlow.EventBus.PublishDomainEventAsync(orderCreatedEvent);
         
         _logger.LogInformation("Order created event published: {OrderId}", orderId);
     }
@@ -234,7 +233,7 @@ public class OrderService
         };
 
         // Publish the integration event
-        await _eventBus.PublishIntegrationEventAsync(paymentProcessedEvent);
+        await _streamFlow.EventBus.PublishIntegrationEventAsync(paymentProcessedEvent);
         
         _logger.LogInformation("Payment processed event published: {OrderId}", orderId);
     }
@@ -246,12 +245,12 @@ public class OrderService
 ```csharp
 public class AdvancedOrderService
 {
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<AdvancedOrderService> _logger;
 
-    public AdvancedOrderService(IEventBus eventBus, ILogger<AdvancedOrderService> logger)
+    public AdvancedOrderService(IStreamFlowClient streamFlow, ILogger<AdvancedOrderService> logger)
     {
-        _eventBus = eventBus;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -263,7 +262,7 @@ public class AdvancedOrderService
         var orderCreatedEvent = new OrderCreated(orderId, request.CustomerName, request.Amount);
 
         // Use fluent API for advanced configuration
-        await _eventBus.Event<OrderCreated>()
+        await _streamFlow.EventBus.Event<OrderCreated>()
             .WithCorrelationId(correlationId)
             .WithSource("order-service")
             .WithVersion("1.0")
@@ -295,7 +294,7 @@ public class AdvancedOrderService
         }
 
         // Publish multiple events in a batch
-        await _eventBus.PublishBatchAsync(events);
+        await _streamFlow.EventBus.PublishBatchAsync(events);
         
         _logger.LogInformation("Published batch of {Count} events", events.Count);
     }
@@ -311,18 +310,18 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
     private readonly IEmailService _emailService;
     private readonly IInventoryService _inventoryService;
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderCreatedHandler> _logger;
 
     public OrderCreatedHandler(
         IEmailService emailService,
         IInventoryService inventoryService,
-        IEventBus eventBus,
+        IStreamFlowClient streamFlow,
         ILogger<OrderCreatedHandler> logger)
     {
         _emailService = emailService;
         _inventoryService = inventoryService;
-        _eventBus = eventBus;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -350,7 +349,7 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
                     CausationId = context.EventId
                 };
 
-                await _eventBus.PublishIntegrationEventAsync(inventoryReservedEvent, cancellationToken);
+                await _streamFlow.EventBus.PublishIntegrationEventAsync(inventoryReservedEvent, cancellationToken);
                 
                 _logger.LogInformation("Inventory reserved for order {OrderId}", @event.OrderId);
             }
@@ -363,7 +362,7 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
                     CausationId = context.EventId
                 };
 
-                await _eventBus.PublishIntegrationEventAsync(inventoryReservationFailedEvent, cancellationToken);
+                await _streamFlow.EventBus.PublishIntegrationEventAsync(inventoryReservationFailedEvent, cancellationToken);
                 
                 _logger.LogWarning("Inventory reservation failed for order {OrderId}", @event.OrderId);
             }
@@ -379,16 +378,16 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 public class PaymentProcessedHandler : IAsyncEventHandler<PaymentProcessed>
 {
     private readonly IOrderService _orderService;
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<PaymentProcessedHandler> _logger;
 
     public PaymentProcessedHandler(
         IOrderService orderService,
-        IEventBus eventBus,
+        IStreamFlowClient streamFlow,
         ILogger<PaymentProcessedHandler> logger)
     {
         _orderService = orderService;
-        _eventBus = eventBus;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -408,7 +407,7 @@ public class PaymentProcessedHandler : IAsyncEventHandler<PaymentProcessed>
                 CausationId = context.EventId
             };
 
-            await _eventBus.PublishIntegrationEventAsync(shipmentScheduledEvent, cancellationToken);
+            await _streamFlow.EventBus.PublishIntegrationEventAsync(shipmentScheduledEvent, cancellationToken);
             
             _logger.LogInformation("Payment processed successfully for order {OrderId}", @event.OrderId);
         }
@@ -435,18 +434,15 @@ builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentSchedu
 var app = builder.Build();
 
 // Get services
-var eventBus = app.Services.GetRequiredService<IEventBus>();
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
 var paymentProcessedHandler = app.Services.GetRequiredService<IAsyncEventHandler<PaymentProcessed>>();
 
-// Start event bus
-await eventBus.StartAsync();
-
 // Subscribe to domain events
-await eventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
+await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
 
 // Subscribe to integration events
-await eventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
 ```
 
 ### 3. Event Monitoring and Observability
@@ -454,18 +450,18 @@ await eventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
 ```csharp
 public class EventMonitoringService
 {
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<EventMonitoringService> _logger;
 
-    public EventMonitoringService(IEventBus eventBus, ILogger<EventMonitoringService> logger)
+    public EventMonitoringService(IStreamFlowClient streamFlow, ILogger<EventMonitoringService> logger)
     {
-        _eventBus = eventBus;
+        _streamFlow = streamFlow;
         _logger = logger;
         
         // Subscribe to event bus events for monitoring
-        _eventBus.EventPublished += OnEventPublished;
-        _eventBus.EventReceived += OnEventReceived;
-        _eventBus.EventProcessingFailed += OnEventProcessingFailed;
+        _streamFlow.EventBus.EventPublished += OnEventPublished;
+        _streamFlow.EventBus.EventReceived += OnEventReceived;
+        _streamFlow.EventBus.EventProcessingFailed += OnEventProcessingFailed;
     }
 
     private void OnEventPublished(object? sender, EventPublishedEventArgs e)
@@ -496,9 +492,9 @@ public class EventMonitoringService
 
     public void Dispose()
     {
-        _eventBus.EventPublished -= OnEventPublished;
-        _eventBus.EventReceived -= OnEventReceived;
-        _eventBus.EventProcessingFailed -= OnEventProcessingFailed;
+        _streamFlow.EventBus.EventPublished -= OnEventPublished;
+        _streamFlow.EventBus.EventReceived -= OnEventReceived;
+        _streamFlow.EventBus.EventProcessingFailed -= OnEventProcessingFailed;
     }
 }
 ```
@@ -508,19 +504,19 @@ public class EventMonitoringService
 ```csharp
 public class CustomEventHandler
 {
-    private readonly IEventBus _eventBus;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<CustomEventHandler> _logger;
 
-    public CustomEventHandler(IEventBus eventBus, ILogger<CustomEventHandler> logger)
+    public CustomEventHandler(IStreamFlowClient streamFlow, ILogger<CustomEventHandler> logger)
     {
-        _eventBus = eventBus;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
     public async Task SubscribeToCustomEventsAsync()
     {
         // Subscribe with custom handler function
-        await _eventBus.SubscribeAsync<OrderCreated>(async (orderCreated, context) =>
+        await _streamFlow.EventBus.SubscribeAsync<OrderCreated>(async (orderCreated, context) =>
         {
             try
             {
@@ -549,27 +545,21 @@ public class CustomEventHandler
 
 ## Event Store
 
-### 1. Event Store Initialization
+### 1. Event Store Usage
 
-The event store needs to be initialized before use:
-
-```csharp
-// Program.cs
-var eventStore = app.Services.GetRequiredService<IEventStore>();
-await eventStore.InitializeAsync();
-```
+The event store is automatically initialized with the StreamFlow client and accessed through it:
 
 ### 2. Event Store Usage
 
 ```csharp
 public class OrderEventStore
 {
-    private readonly IEventStore _eventStore;
+    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderEventStore> _logger;
 
-    public OrderEventStore(IEventStore eventStore, ILogger<OrderEventStore> logger)
+    public OrderEventStore(IStreamFlowClient streamFlow, ILogger<OrderEventStore> logger)
     {
-        _eventStore = eventStore;
+        _streamFlow = streamFlow;
         _logger = logger;
     }
 
@@ -578,9 +568,9 @@ public class OrderEventStore
         var streamName = $"order-{orderId}";
         
         // Get current version for optimistic concurrency
-        var currentVersion = await _eventStore.GetStreamVersionAsync(streamName);
+        var currentVersion = await _streamFlow.EventStore.GetStreamVersionAsync(streamName);
         
-        await _eventStore.SaveEventsAsync(streamName, new[] { @event }, currentVersion);
+        await _streamFlow.EventStore.SaveEventsAsync(streamName, new[] { @event }, currentVersion);
             
         _logger.LogInformation("Event {EventType} stored in stream {StreamName}", @event.EventType, streamName);
     }
@@ -589,7 +579,7 @@ public class OrderEventStore
     {
         var streamName = $"order-{orderId}";
         
-        var events = await _eventStore.GetEventsAsync(streamName, fromVersion);
+        var events = await _streamFlow.EventStore.GetEventsAsync(streamName, fromVersion);
             
         return events;
     }
@@ -598,7 +588,7 @@ public class OrderEventStore
     {
         var streamName = $"order-{orderId}";
         
-        var version = await _eventStore.GetStreamVersionAsync(streamName);
+        var version = await _streamFlow.EventStore.GetStreamVersionAsync(streamName);
             
         return version;
     }
@@ -707,8 +697,10 @@ public enum OrderStatus
 
 ### 3. Event Bus Configuration
 
-- **Start event bus early**: Initialize in application startup
-- **Stop event bus gracefully**: Call `StopAsync()` during shutdown
+- **Use StreamFlow client**: Access event bus through `IStreamFlowClient.EventBus`
+- **Initialize StreamFlow client**: Call `streamFlow.InitializeAsync()` first
+- **Start event bus explicitly**: Call `streamFlow.EventBus.StartAsync()` after initialization
+- **Stop event bus gracefully**: Call `streamFlow.EventBus.StopAsync()` before shutdown
 - **Handle connection failures**: Implement retry policies
 - **Monitor event processing**: Use built-in metrics and events
 - **Configure appropriate timeouts**: Set reasonable values
@@ -717,13 +709,13 @@ public enum OrderStatus
 
 ### 4. Event Store Usage
 
-- **Initialize event store**: Call `InitializeAsync()` before use
+- **Access through StreamFlow client**: Use `streamFlow.EventStore` for all operations
 - **Use meaningful stream names**: Include aggregate ID
 - **Store events atomically**: Use transactions when possible
 - **Handle concurrency**: Implement optimistic concurrency control with expected version
 - **Backup event streams**: Regular backups for disaster recovery
 - **Monitor storage usage**: Track event store growth
-- **Use proper shutdown**: Call `Dispose()` when done
+- **Automatic lifecycle**: Event store is managed by StreamFlow client
 
 ## Complete Examples
 
@@ -764,9 +756,8 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Start event bus
-var eventBus = app.Services.GetRequiredService<IEventBus>();
-await eventBus.StartAsync();
+// Start the event bus (required for event publishing and subscription)
+await streamFlow.EventBus.StartAsync();
 
 // Subscribe to events
 var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
@@ -774,10 +765,10 @@ var paymentProcessedHandler = app.Services.GetRequiredService<IAsyncEventHandler
 var inventoryReservedHandler = app.Services.GetRequiredService<IAsyncEventHandler<InventoryReserved>>();
 var shipmentScheduledHandler = app.Services.GetRequiredService<IAsyncEventHandler<ShipmentScheduled>>();
 
-await eventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
-await eventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
-await eventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
-await eventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
+await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
 
 // Register application shutdown handlers
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
