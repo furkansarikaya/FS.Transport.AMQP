@@ -150,7 +150,7 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Start the event bus (required for event publishing and subscription)
+// Start the event bus (CRITICAL: Event bus must be started explicitly)
 await streamFlow.EventBus.StartAsync();
 
 // Register application shutdown handlers
@@ -265,7 +265,7 @@ public class AdvancedOrderService
         await _streamFlow.EventBus.Event<OrderCreated>()
             .WithCorrelationId(correlationId)
             .WithSource("order-service")
-            .WithVersion("1.0")
+            .WithVersion("1")
             .WithAggregateId(orderId.ToString())
             .WithAggregateType("Order")
             .WithPriority(1)
@@ -303,8 +303,49 @@ public class AdvancedOrderService
 
 ## Event Handling
 
-### 1. Event Handler Implementation
+FS.StreamFlow provides a comprehensive event handling system with multiple interfaces and capabilities:
 
+### 1. Event Handler Interfaces
+
+#### IEventHandler (Base Interface)
+```csharp
+public interface IEventHandler
+{
+    Type[] EventTypes { get; }
+    string HandlerName { get; }
+    int Priority { get; }
+    bool CanHandle(Type eventType);
+    bool AllowConcurrentExecution { get; }
+}
+```
+
+#### IAsyncEventHandler<T> (Async Handler)
+```csharp
+public interface IAsyncEventHandler<in T> : IEventHandler where T : class, IEvent
+{
+    Task HandleAsync(T @event, EventContext context, CancellationToken cancellationToken = default);
+}
+```
+
+#### IEventHandler<T> (Sync Handler)
+```csharp
+public interface IEventHandler<in T> : IEventHandler where T : class, IEvent
+{
+    void Handle(T @event, EventContext context);
+}
+```
+
+#### IHybridEventHandler<T> (Both Sync and Async)
+```csharp
+public interface IHybridEventHandler<in T> : IEventHandler<T>, IAsyncEventHandler<T> where T : class, IEvent
+{
+    ExecutionMode PreferredExecutionMode { get; }
+}
+```
+
+### 2. Event Handler Implementation Examples
+
+#### Async Event Handler
 ```csharp
 public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
@@ -324,6 +365,14 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
         _streamFlow = streamFlow;
         _logger = logger;
     }
+
+    // IEventHandler implementation
+    public Type[] EventTypes => new[] { typeof(OrderCreated) };
+    public string HandlerName => "OrderCreatedHandler";
+    public int Priority => 1;
+    public bool AllowConcurrentExecution => true;
+
+    public bool CanHandle(Type eventType) => eventType == typeof(OrderCreated);
 
     public async Task HandleAsync(OrderCreated @event, EventContext context, CancellationToken cancellationToken = default)
     {
@@ -374,8 +423,40 @@ public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
         }
     }
 }
+```
 
-public class PaymentProcessedHandler : IAsyncEventHandler<PaymentProcessed>
+#### Synchronous Event Handler
+```csharp
+public class OrderCancelledHandler : IEventHandler<OrderCancelled>
+{
+    private readonly ILogger<OrderCancelledHandler> _logger;
+
+    public OrderCancelledHandler(ILogger<OrderCancelledHandler> logger)
+    {
+        _logger = logger;
+    }
+
+    // IEventHandler implementation
+    public Type[] EventTypes => new[] { typeof(OrderCancelled) };
+    public string HandlerName => "OrderCancelledHandler";
+    public int Priority => 2;
+    public bool AllowConcurrentExecution => false;
+
+    public bool CanHandle(Type eventType) => eventType == typeof(OrderCancelled);
+
+    public void Handle(OrderCancelled @event, EventContext context)
+    {
+        _logger.LogInformation("Order {OrderId} cancelled: {Reason}", @event.OrderId, @event.Reason);
+        
+        // Synchronous processing logic
+        // Note: Avoid long-running operations in sync handlers
+    }
+}
+```
+
+#### Hybrid Event Handler
+```csharp
+public class PaymentProcessedHandler : IHybridEventHandler<PaymentProcessed>
 {
     private readonly IOrderService _orderService;
     private readonly IStreamFlowClient _streamFlow;
@@ -389,6 +470,21 @@ public class PaymentProcessedHandler : IAsyncEventHandler<PaymentProcessed>
         _orderService = orderService;
         _streamFlow = streamFlow;
         _logger = logger;
+    }
+
+    // IEventHandler implementation
+    public Type[] EventTypes => new[] { typeof(PaymentProcessed) };
+    public string HandlerName => "PaymentProcessedHandler";
+    public int Priority => 1;
+    public bool AllowConcurrentExecution => true;
+    public ExecutionMode PreferredExecutionMode => ExecutionMode.Asynchronous;
+
+    public bool CanHandle(Type eventType) => eventType == typeof(PaymentProcessed);
+
+    public void Handle(PaymentProcessed @event, EventContext context)
+    {
+        // Synchronous implementation (not recommended for this handler)
+        _logger.LogInformation("Payment processed for order {OrderId}", @event.OrderId);
     }
 
     public async Task HandleAsync(PaymentProcessed @event, EventContext context, CancellationToken cancellationToken = default)
@@ -420,42 +516,96 @@ public class PaymentProcessedHandler : IAsyncEventHandler<PaymentProcessed>
 }
 ```
 
-### 2. Event Handler Registration
+### 3. Event Handler Factory and Registry
+
+#### IEventHandlerFactory
+```csharp
+public interface IEventHandlerFactory
+{
+    Task<IEnumerable<EventHandlingResult>> ExecuteHandlersAsync(IEvent @event, EventContext context, CancellationToken cancellationToken = default);
+    Task<EventHandlingResult> ExecuteHandlerAsync(IEventHandler handler, IEvent @event, EventContext context, CancellationToken cancellationToken = default);
+    EventHandlerExecutionStatistics GetStatistics();
+}
+```
+
+#### IEventHandlerRegistry
+```csharp
+public interface IEventHandlerRegistry
+{
+    void RegisterHandler(IEventHandler handler);
+    void RegisterHandler<THandler>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped) where THandler : class, IEventHandler;
+    bool UnregisterHandler(string handlerName);
+    IEnumerable<IEventHandler> GetHandlersForEvent(Type eventType);
+    IEnumerable<IEventHandler> GetHandlersForEvent<T>() where T : class, IEvent;
+    IEventHandler? GetHandler(string handlerName);
+    IEnumerable<IEventHandler> GetAllHandlers();
+    EventHandlerRegistryStatistics GetStatistics();
+    int DiscoverAndRegisterHandlers(params System.Reflection.Assembly[] assemblies);
+}
+```
+
+### 4. Event Handler Registration and Discovery
 
 ```csharp
 // Program.cs
 // Register event handlers with dependency injection
 builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
-builder.Services.AddScoped<IAsyncEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
+builder.Services.AddScoped<IEventHandler<OrderCancelled>, OrderCancelledHandler>();
+builder.Services.AddScoped<IHybridEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
 builder.Services.AddScoped<IAsyncEventHandler<InventoryReserved>, InventoryReservedHandler>();
 builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentScheduledHandler>();
 
-// Subscribe to events after application startup
+// Register event handler factory and registry
+builder.Services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
+builder.Services.AddSingleton<IEventHandlerRegistry, EventHandlerRegistry>();
+
 var app = builder.Build();
 
 // Get services
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+var eventHandlerRegistry = app.Services.GetRequiredService<IEventHandlerRegistry>();
+var eventHandlerFactory = app.Services.GetRequiredService<IEventHandlerFactory>();
+
+// Discover and register handlers from assemblies
+var discoveredCount = eventHandlerRegistry.DiscoverAndRegisterHandlers(
+    typeof(OrderCreatedHandler).Assembly);
+
+Console.WriteLine($"Discovered and registered {discoveredCount} event handlers");
+
+// Subscribe to events
 var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
-var paymentProcessedHandler = app.Services.GetRequiredService<IAsyncEventHandler<PaymentProcessed>>();
+var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
 
-// Subscribe to domain events
 await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
-
-// Subscribe to integration events
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
+
+// Get handler statistics
+var registryStats = eventHandlerRegistry.GetStatistics();
+var executionStats = eventHandlerFactory.GetStatistics();
+
+Console.WriteLine($"Registry: {registryStats.TotalHandlers} handlers, {registryStats.EventTypes} event types");
+Console.WriteLine($"Execution: {executionStats.TotalEvents} events processed, {executionStats.EventSuccessRate:F2}% success rate");
 ```
 
-### 3. Event Monitoring and Observability
+### 5. Event Monitoring and Observability
 
 ```csharp
 public class EventMonitoringService
 {
     private readonly IStreamFlowClient _streamFlow;
+    private readonly IEventHandlerFactory _eventHandlerFactory;
+    private readonly IEventHandlerRegistry _eventHandlerRegistry;
     private readonly ILogger<EventMonitoringService> _logger;
 
-    public EventMonitoringService(IStreamFlowClient streamFlow, ILogger<EventMonitoringService> logger)
+    public EventMonitoringService(
+        IStreamFlowClient streamFlow,
+        IEventHandlerFactory eventHandlerFactory,
+        IEventHandlerRegistry eventHandlerRegistry,
+        ILogger<EventMonitoringService> logger)
     {
         _streamFlow = streamFlow;
+        _eventHandlerFactory = eventHandlerFactory;
+        _eventHandlerRegistry = eventHandlerRegistry;
         _logger = logger;
         
         // Subscribe to event bus events for monitoring
@@ -490,6 +640,26 @@ public class EventMonitoringService
             e.Event.EventType, e.AttemptCount, e.WillRetry);
     }
 
+    public void LogHandlerStatistics()
+    {
+        var registryStats = _eventHandlerRegistry.GetStatistics();
+        var executionStats = _eventHandlerFactory.GetStatistics();
+
+        _logger.LogInformation("Event Handler Statistics:");
+        _logger.LogInformation("  Registry: {TotalHandlers} handlers, {EventTypes} event types", 
+            registryStats.TotalHandlers, registryStats.EventTypes);
+        _logger.LogInformation("  Execution: {TotalEvents} events, {SuccessRate:F2}% success rate", 
+            executionStats.TotalEvents, executionStats.EventSuccessRate);
+        _logger.LogInformation("  Average execution time: {AvgTime:F2}ms", 
+            executionStats.AverageExecutionTime.TotalMilliseconds);
+
+        foreach (var handlerDetail in registryStats.HandlerDetails)
+        {
+            _logger.LogInformation("  Handler: {Name} (Priority: {Priority}, Concurrent: {Concurrent})", 
+                handlerDetail.Name, handlerDetail.Priority, handlerDetail.AllowConcurrentExecution);
+        }
+    }
+
     public void Dispose()
     {
         _streamFlow.EventBus.EventPublished -= OnEventPublished;
@@ -499,7 +669,7 @@ public class EventMonitoringService
 }
 ```
 
-### 4. Custom Event Handler with Function
+### 6. Custom Event Handler with Function
 
 ```csharp
 public class CustomEventHandler
@@ -548,8 +718,6 @@ public class CustomEventHandler
 ### 1. Event Store Usage
 
 The event store is automatically initialized with the StreamFlow client and accessed through it:
-
-### 2. Event Store Usage
 
 ```csharp
 public class OrderEventStore
@@ -694,6 +862,8 @@ public enum OrderStatus
 - **Avoid long-running operations**: Use async/await properly
 - **Return boolean for success/failure**: Return `true` for success, `false` for retry
 - **Use cancellation tokens**: Support graceful cancellation
+- **Implement handler properties**: Set `EventTypes`, `HandlerName`, `Priority`, `AllowConcurrentExecution`
+- **Choose appropriate execution mode**: Use async handlers for I/O operations, sync for simple logic
 
 ### 3. Event Bus Configuration
 
@@ -716,6 +886,15 @@ public enum OrderStatus
 - **Backup event streams**: Regular backups for disaster recovery
 - **Monitor storage usage**: Track event store growth
 - **Automatic lifecycle**: Event store is managed by StreamFlow client
+
+### 5. Event Handler Registry and Factory
+
+- **Register handlers properly**: Use dependency injection and registry
+- **Discover handlers automatically**: Use assembly scanning for handler discovery
+- **Monitor handler statistics**: Track execution metrics and success rates
+- **Handle handler priorities**: Higher priority handlers execute first
+- **Manage concurrent execution**: Configure `AllowConcurrentExecution` appropriately
+- **Use hybrid handlers**: Implement both sync and async when needed
 
 ## Complete Examples
 
@@ -746,9 +925,15 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 // Register event handlers
 builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
-builder.Services.AddScoped<IAsyncEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
+builder.Services.AddScoped<IEventHandler<OrderCancelled>, OrderCancelledHandler>();
+builder.Services.AddScoped<IHybridEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
 builder.Services.AddScoped<IAsyncEventHandler<InventoryReserved>, InventoryReservedHandler>();
 builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentScheduledHandler>();
+
+// Register event handling infrastructure
+builder.Services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
+builder.Services.AddSingleton<IEventHandlerRegistry, EventHandlerRegistry>();
+builder.Services.AddSingleton<EventMonitoringService>();
 
 var app = builder.Build();
 
@@ -756,19 +941,35 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Start the event bus (required for event publishing and subscription)
+// Start the event bus (CRITICAL: Event bus must be started explicitly)
 await streamFlow.EventBus.StartAsync();
+
+// Get event handling services
+var eventHandlerRegistry = app.Services.GetRequiredService<IEventHandlerRegistry>();
+var eventHandlerFactory = app.Services.GetRequiredService<IEventHandlerFactory>();
+var eventMonitoringService = app.Services.GetRequiredService<EventMonitoringService>();
+
+// Discover and register handlers from assemblies
+var discoveredCount = eventHandlerRegistry.DiscoverAndRegisterHandlers(
+    typeof(OrderCreatedHandler).Assembly);
+
+Console.WriteLine($"Discovered and registered {discoveredCount} event handlers");
 
 // Subscribe to events
 var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
-var paymentProcessedHandler = app.Services.GetRequiredService<IAsyncEventHandler<PaymentProcessed>>();
+var orderCancelledHandler = app.Services.GetRequiredService<IEventHandler<OrderCancelled>>();
+var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
 var inventoryReservedHandler = app.Services.GetRequiredService<IAsyncEventHandler<InventoryReserved>>();
 var shipmentScheduledHandler = app.Services.GetRequiredService<IAsyncEventHandler<ShipmentScheduled>>();
 
 await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
+await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCancelledHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
 await streamFlow.EventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
+
+// Log initial statistics
+eventMonitoringService.LogHandlerStatistics();
 
 // Register application shutdown handlers
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -776,8 +977,11 @@ lifetime.ApplicationStopping.Register(async () =>
 {
     try
     {
+        // Log final statistics
+        eventMonitoringService.LogHandlerStatistics();
+        
         // Stop event bus gracefully
-        await eventBus.StopAsync();
+        await streamFlow.EventBus.StopAsync();
         
         // Shutdown StreamFlow client
         await streamFlow.ShutdownAsync();
@@ -869,6 +1073,14 @@ public class ResilientEventHandler<T> : IAsyncEventHandler<T> where T : class, I
         _retryPolicy = retryPolicy;
     }
 
+    // IEventHandler implementation
+    public Type[] EventTypes => _innerHandler.EventTypes;
+    public string HandlerName => $"Resilient_{_innerHandler.HandlerName}";
+    public int Priority => _innerHandler.Priority;
+    public bool AllowConcurrentExecution => _innerHandler.AllowConcurrentExecution;
+
+    public bool CanHandle(Type eventType) => _innerHandler.CanHandle(eventType);
+
     public async Task HandleAsync(T @event, EventContext context, CancellationToken cancellationToken = default)
     {
         var attempt = 0;
@@ -904,4 +1116,4 @@ public class ResilientEventHandler<T> : IAsyncEventHandler<T> where T : class, I
 }
 ```
 
-This comprehensive guide covers all aspects of implementing event-driven architecture with FS.StreamFlow, from basic setup to advanced patterns and best practices. 
+This comprehensive guide covers all aspects of implementing event-driven architecture with FS.StreamFlow, from basic setup to advanced patterns and best practices, including the complete event handling system with multiple interfaces, factories, registries, and monitoring capabilities. 
