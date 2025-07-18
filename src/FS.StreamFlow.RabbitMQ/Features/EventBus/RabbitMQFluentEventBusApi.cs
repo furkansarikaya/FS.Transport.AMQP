@@ -203,48 +203,46 @@ public class RabbitMQFluentEventBusApi<T> : IFluentEventBusApi<T> where T : clas
     /// <param name="eventData">Event to apply metadata to</param>
     private void ApplyMetadataToEvent(T eventData)
     {
-        // Apply common metadata
+        // Apply common metadata to the Metadata dictionary
         if (!string.IsNullOrEmpty(_metadata.CorrelationId))
-            eventData.CorrelationId = _metadata.CorrelationId;
+            eventData.Metadata["CorrelationId"] = _metadata.CorrelationId;
         
         if (!string.IsNullOrEmpty(_metadata.CausationId))
-            eventData.CausationId = _metadata.CausationId;
+            eventData.Metadata["CausationId"] = _metadata.CausationId;
         
         if (!string.IsNullOrEmpty(_metadata.Source))
-            eventData.Source = _metadata.Source;
+            eventData.Metadata["Source"] = _metadata.Source;
         
-        if (_metadata.Version.HasValue)
-            eventData.Version = _metadata.Version.Value.ToString();
+        if (_metadata.Version > 0)
+            eventData.Metadata["Version"] = _metadata.Version;
 
         // Apply domain event specific metadata
-        if (eventData is IDomainEvent domainEvent)
+        if (eventData is IDomainEvent)
         {
             if (_metadata.Aggregate != null)
             {
                 if (!string.IsNullOrEmpty(_metadata.Aggregate.Id))
-                    domainEvent.AggregateId = _metadata.Aggregate.Id;
+                    eventData.Metadata["AggregateId"] = _metadata.Aggregate.Id;
                 
                 if (!string.IsNullOrEmpty(_metadata.Aggregate.Type))
-                    domainEvent.AggregateType = _metadata.Aggregate.Type;
+                    eventData.Metadata["AggregateType"] = _metadata.Aggregate.Type;
             }
         }
 
         // Apply integration event specific metadata
-        if (eventData is IIntegrationEvent integrationEvent)
+        if (eventData is IIntegrationEvent)
         {
             // Apply TTL if specified
             if (_properties.TryGetValue("ttl", out var ttlValue) && ttlValue is TimeSpan ttl)
-                integrationEvent.TimeToLive = ttl;
+                eventData.Metadata["TimeToLive"] = ttl;
         }
 
-        // Apply custom properties if the event supports them
-        if (_properties.Count > 0 && eventData is IEvent eventWithProperties)
+        // Apply custom properties to metadata
+        if (_properties.Count > 0)
         {
-            eventWithProperties.Properties ??= new Dictionary<string, object>();
             foreach (var kvp in _properties)
             {
-                if (kvp.Key != "ttl") // TTL is handled separately
-                    eventWithProperties.Properties[kvp.Key] = kvp.Value;
+                eventData.Metadata[kvp.Key] = kvp.Value;
             }
         }
     }

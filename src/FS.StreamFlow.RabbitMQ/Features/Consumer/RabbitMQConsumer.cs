@@ -347,8 +347,7 @@ public class RabbitMQConsumer : IConsumer
             arguments: null,
             cancellationToken: cancellationToken);
 
-        // Create a durable queue with proper naming
-        var queueName = $"{exchangeName}.{routingKey}";
+        // Create a durable queue (use the provided queueName)
         await _channel.QueueDeclareAsync(
             queue: queueName,
             durable: true,
@@ -365,7 +364,7 @@ public class RabbitMQConsumer : IConsumer
             arguments: null,
             cancellationToken: cancellationToken);
 
-        _logger.LogInformation("Consuming events from exchange {ExchangeName} with routing key {RoutingKey}", exchangeName, routingKey);
+        _logger.LogInformation("Consuming events from exchange {ExchangeName} with queue {QueueName}", exchangeName, queueName);
 
         // Start consuming
         await ConsumeAsync<T>(queueName, async (evt, msgCtx) =>
