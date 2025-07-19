@@ -3,6 +3,7 @@ using FS.StreamFlow.Core.Features.Events.Models;
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
 using Microsoft.Extensions.Logging;
+using RabbitMQ.Client;
 using System.Collections.Concurrent;
 
 namespace FS.StreamFlow.RabbitMQ.Features.EventStore;
@@ -325,11 +326,61 @@ public class RabbitMQEventStore : IEventStore
                 version,
                 snapshot.GetType().Name);
 
-            _snapshots.AddOrUpdate(streamId, eventSnapshot, (key, existing) => eventSnapshot);
-            _statistics.TotalSnapshots++;
+                // Get RabbitMQ channel for snapshot persistence
+                var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+                var rabbitChannel = ((RabbitMQChannel)channel).GetNativeChannel();
 
-            _logger.LogInformation("Saved snapshot for stream {StreamId} at version {Version}", streamId, version);
-            await Task.CompletedTask;
+                try
+                {
+                    // Create stream-specific snapshot queue
+                    var queueName = $"snapshots.stream.{streamId}";
+                    await rabbitChannel.QueueDeclareAsync(
+                        queue: queueName,
+                        durable: true,
+                        exclusive: false,
+                        autoDelete: false,
+                        arguments: null,
+                        cancellationToken: cancellationToken);
+
+                    // Bind queue to snapshots exchange with stream-specific routing key
+                    await rabbitChannel.QueueBindAsync(
+                        queue: queueName,
+                        exchange: "snapshots",
+                        routingKey: streamId,
+                        arguments: null,
+                        cancellationToken: cancellationToken);
+
+                    // Store in memory for fast access
+                    _snapshots.AddOrUpdate(streamId, eventSnapshot, (key, existing) => eventSnapshot);
+
+                    // Persist snapshot to RabbitMQ for durability
+                    var snapshotMessage = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        StreamId = streamId,
+                        SnapshotType = snapshot.GetType().Name,
+                        SnapshotData = snapshot,
+                        Version = version,
+                        Timestamp = DateTimeOffset.UtcNow
+                    });
+
+                    var bodyBytes = System.Text.Encoding.UTF8.GetBytes(snapshotMessage);
+                    
+                    await rabbitChannel.BasicPublishAsync(
+                        exchange: "snapshots",
+                        routingKey: streamId,
+                        mandatory: false,
+                        body: bodyBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    
+                    _logger.LogDebug("Snapshot persisted to RabbitMQ: snapshots.stream.{StreamId}, Version: {Version}", streamId, version);
+
+                    _statistics.TotalSnapshots++;
+
+                    _logger.LogInformation("Saved snapshot for stream {StreamId} at version {Version}", streamId, version);
+                }
+                finally
+                {
+                    await _connectionManager.ReturnChannelAsync(channel, cancellationToken);
+                }
         }
         catch (Exception ex)
         {
@@ -647,25 +698,74 @@ public class RabbitMQEventStream : IEventStream
                 throw new InvalidOperationException($"Version mismatch. Expected: {expectedVersion}, Actual: {currentVersion}");
             }
 
-            // Append events
-            foreach (var eventData in eventList)
+            // Get RabbitMQ channel for persistence
+            var channel = await _connectionManager.GetChannelAsync(cancellationToken);
+            var rabbitChannel = ((RabbitMQChannel)channel).GetNativeChannel();
+
+            try
             {
-                var storedEvent = new StoredEvent(
-                    _streamId,
-                    eventData.GetType().Name,
-                    eventData,
-                    ++currentVersion);
+                // Create stream-specific queue for this stream
+                var queueName = $"eventstore.stream.{_streamId}";
+                await rabbitChannel.QueueDeclareAsync(
+                    queue: queueName,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    arguments: null,
+                    cancellationToken: cancellationToken);
 
-                _events.Enqueue(storedEvent);
+                // Bind queue to eventstore exchange with stream-specific routing key
+                await rabbitChannel.QueueBindAsync(
+                    queue: queueName,
+                    exchange: "eventstore",
+                    routingKey: $"stream.{_streamId}",
+                    arguments: null,
+                    cancellationToken: cancellationToken);
+
+                // Append events both to memory and RabbitMQ
+                foreach (var eventData in eventList)
+                {
+                    var storedEvent = new StoredEvent(
+                        _streamId,
+                        eventData.GetType().Name,
+                        eventData,
+                        ++currentVersion);
+
+                    // Store in memory for fast access
+                    _events.Enqueue(storedEvent);
+
+                    // Persist to RabbitMQ for durability
+                    var eventMessage = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        StreamId = _streamId,
+                        EventType = eventData.GetType().Name,
+                        EventData = eventData,
+                        Version = currentVersion,
+                        Timestamp = DateTimeOffset.UtcNow
+                    });
+
+                    var bodyBytes = System.Text.Encoding.UTF8.GetBytes(eventMessage);
+                    
+                    await rabbitChannel.BasicPublishAsync(
+                        exchange: "eventstore",
+                        routingKey: $"stream.{_streamId}",
+                        mandatory: false,
+                        body: bodyBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    
+                    _logger.LogDebug("Event persisted to RabbitMQ: eventstore.stream.{StreamId}, Version: {Version}", _streamId, currentVersion);
+                }
+
+                _version = currentVersion;
+                
+                _logger.LogDebug("Appended {EventCount} events to stream {StreamId}. New version: {Version}", 
+                    eventList.Count, _streamId, _version);
+
+                return _version;
             }
-
-            _version = currentVersion;
-            
-            _logger.LogDebug("Appended {EventCount} events to stream {StreamId}. New version: {Version}", 
-                eventList.Count, _streamId, _version);
-
-            await Task.CompletedTask;
-            return _version;
+            finally
+            {
+                await _connectionManager.ReturnChannelAsync(channel, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
