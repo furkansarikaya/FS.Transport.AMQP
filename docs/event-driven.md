@@ -8,17 +8,19 @@ This guide explains how to implement event-driven architecture using FS.StreamFl
 - [Event Bus Setup](#event-bus-setup)
 - [Event Publishing](#event-publishing)
 - [Event Handling](#event-handling)
-- [Event Store](#event-store)
 - [Best Practices](#best-practices)
-- [Complete Examples](#complete-examples)
 
 ## Overview
 
 Event-driven architecture (EDA) is a software design pattern where components communicate through events. FS.StreamFlow provides comprehensive support for implementing EDA through its event bus, event handlers, and event store features.
 
-## Event Types
+**🚀 Key Features:**
+- **Automatic Infrastructure**: No manual exchange/queue creation needed
+- **Fanout Exchanges**: Simplified event distribution without routing keys
+- **Type-Safe Events**: Strongly typed event models with interfaces
+- **Fluent API**: Chainable configuration and publishing
 
-FS.StreamFlow supports three main types of events:
+## Event Types
 
 ### 1. Domain Events
 
@@ -28,36 +30,22 @@ Domain events represent something significant that happened within your domain:
 public record OrderCreated(
     Guid OrderId,
     string CustomerName,
-    decimal Amount) : IDomainEvent
+    decimal Amount
+) : IDomainEvent
 {
-    public Guid Id { get; } = Guid.NewGuid();
-    public DateTime OccurredOn { get; } = DateTime.UtcNow;
-    public int Version { get; } = 1;
-    public string EventType => nameof(OrderCreated);
-    public string? CorrelationId { get; set; }
-    public string? CausationId { get; set; }
-    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
-    public string AggregateId => OrderId.ToString();
-    public string AggregateType => "Order";
-    public long AggregateVersion { get; set; }
-    public string? InitiatedBy { get; set; }
-}
-
-public record OrderCancelled(
-    Guid OrderId,
-    string Reason) : IDomainEvent
-{
-    public Guid Id { get; } = Guid.NewGuid();
-    public DateTime OccurredOn { get; } = DateTime.UtcNow;
-    public int Version { get; } = 1;
-    public string EventType => nameof(OrderCancelled);
-    public string? CorrelationId { get; set; }
-    public string? CausationId { get; set; }
-    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
-    public string AggregateId => OrderId.ToString();
-    public string AggregateType => "Order";
-    public long AggregateVersion { get; set; }
-    public string? InitiatedBy { get; set; }
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; init; } = DateTime.UtcNow;
+    public int Version { get; init; } = 1;
+    public string EventType { get; init; } = nameof(OrderCreated);
+    public string? CorrelationId { get; init; }
+    public string? CausationId { get; init; }
+    public IDictionary<string, object> Metadata { get; init; } = new Dictionary<string, object>();
+    
+    // Domain event specific properties
+    public string AggregateId { get; init; } = OrderId.ToString();
+    public string AggregateType { get; init; } = "Order";
+    public long AggregateVersion { get; init; } = 1;
+    public string? InitiatedBy { get; init; }
 }
 ```
 
@@ -69,38 +57,43 @@ Integration events are used for communication between different services:
 public record PaymentProcessed(
     Guid OrderId,
     string TransactionId,
-    decimal Amount) : IIntegrationEvent
+    decimal Amount
+) : IIntegrationEvent
 {
-    public Guid Id { get; } = Guid.NewGuid();
-    public DateTime OccurredOn { get; } = DateTime.UtcNow;
-    public int Version { get; } = 1;
-    public string EventType => nameof(PaymentProcessed);
-    public string? CorrelationId { get; set; }
-    public string? CausationId { get; set; }
-    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
-    public string Source => "payment-service";
-    public string ExchangeName => "payment.processed";
-    public string? Target { get; set; }
-    public string SchemaVersion => "1.0";
-    public TimeSpan? TimeToLive { get; set; }
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; init; } = DateTime.UtcNow;
+    public int Version { get; init; } = 1;
+    public string EventType { get; init; } = nameof(PaymentProcessed);
+    public string? CorrelationId { get; init; }
+    public string? CausationId { get; init; }
+    public IDictionary<string, object> Metadata { get; init; } = new Dictionary<string, object>();
+    
+    // Integration event specific properties
+    public string Source { get; init; } = "payment-service";
+    public string ExchangeName { get; init; } = "payment-events"; // 🔥 Used for exchange naming
+    public string? Target { get; init; }
+    public string SchemaVersion { get; init; } = "1.0";
+    public TimeSpan? TimeToLive { get; init; }
 }
 
 public record ShipmentScheduled(
     Guid OrderId,
-    DateTime EstimatedDelivery) : IIntegrationEvent
+    DateTime EstimatedDelivery
+) : IIntegrationEvent
 {
-    public Guid Id { get; } = Guid.NewGuid();
-    public DateTime OccurredOn { get; } = DateTime.UtcNow;
-    public int Version { get; } = 1;
-    public string EventType => nameof(ShipmentScheduled);
-    public string? CorrelationId { get; set; }
-    public string? CausationId { get; set; }
-    public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
-    public string Source => "shipping-service";
-    public string ExchangeName => "shipment.scheduled";
-    public string? Target { get; set; }
-    public string SchemaVersion => "1.0";
-    public TimeSpan? TimeToLive { get; set; }
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; init; } = DateTime.UtcNow;
+    public int Version { get; init; } = 1;
+    public string EventType { get; init; } = nameof(ShipmentScheduled);
+    public string? CorrelationId { get; init; }
+    public string? CausationId { get; init; }
+    public IDictionary<string, object> Metadata { get; init; } = new Dictionary<string, object>();
+    
+    public string Source { get; init; } = "shipping-service";
+    public string ExchangeName { get; init; } = "shipping-events"; // 🔥 Service-based exchange naming
+    public string? Target { get; init; }
+    public string SchemaVersion { get; init; } = "1.0";
+    public TimeSpan? TimeToLive { get; init; }
 }
 ```
 
@@ -108,41 +101,44 @@ public record ShipmentScheduled(
 
 ### 1. Service Registration
 
-First, register the event bus services in your application:
-
 ```csharp
-// Program.cs
-using FS.StreamFlow.RabbitMQ.DependencyInjection;
-
 var builder = WebApplication.CreateBuilder(args);
 
-// Add RabbitMQ StreamFlow with event bus support
-builder.Services.AddRabbitMQStreamFlow(options =>
+// Add FS.StreamFlow services with RabbitMQ
+builder.Services.AddStreamFlow(options =>
 {
-    // Client configuration
-    options.ClientConfiguration.ClientName = "Event-Driven Application";
-    options.ClientConfiguration.EnableAutoRecovery = true;
-    options.ClientConfiguration.EnableHeartbeat = true;
-    options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
-    
-    // Connection settings
-    options.ConnectionSettings.Host = "localhost";
-    options.ConnectionSettings.Port = 5672;
-    options.ConnectionSettings.Username = "guest";
-    options.ConnectionSettings.Password = "guest";
-    options.ConnectionSettings.VirtualHost = "/";
-    options.ConnectionSettings.ConnectionTimeout = TimeSpan.FromSeconds(30);
-    
-    // Producer settings
-    options.ProducerSettings.EnablePublisherConfirms = true;
-    options.ProducerSettings.ConfirmationTimeout = TimeSpan.FromSeconds(5);
-    options.ProducerSettings.MaxConcurrentPublishes = 100;
-    
-    // Consumer settings
-    options.ConsumerSettings.PrefetchCount = 50;
-    options.ConsumerSettings.AutoAcknowledge = false;
-    options.ConsumerSettings.MaxConcurrentConsumers = 5;
+    options.UseRabbitMQ(rabbitMqOptions =>
+    {
+        // Connection settings
+        rabbitMqOptions.ConnectionString = "amqp://localhost:5672";
+        rabbitMqOptions.VirtualHost = "/";
+        rabbitMqOptions.Username = "guest";
+        rabbitMqOptions.Password = "guest";
+        
+        // Client configuration
+        rabbitMqOptions.ClientConfiguration.ClientName = "Event-Driven Application";
+        rabbitMqOptions.ClientConfiguration.EnableAutoRecovery = true;
+        rabbitMqOptions.ClientConfiguration.EnableHeartbeat = true;
+        
+        // Producer settings
+        rabbitMqOptions.ProducerSettings.EnableConfirmation = true;
+        rabbitMqOptions.ProducerSettings.EnablePersistence = true;
+        
+        // Consumer settings
+        rabbitMqOptions.ConsumerSettings.AutoAcknowledge = false;
+        rabbitMqOptions.ConsumerSettings.MaxConcurrentConsumers = 5;
+        
+        // Error handling settings
+        rabbitMqOptions.ErrorHandlingSettings.MaxRetries = 3;
+        rabbitMqOptions.ErrorHandlingSettings.RetryDelay = TimeSpan.FromSeconds(2);
+        rabbitMqOptions.ErrorHandlingSettings.UseExponentialBackoff = true;
+        rabbitMqOptions.ErrorHandlingSettings.EnableDeadLetterQueue = true;
+    });
 });
+
+// Register event handlers
+builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
+builder.Services.AddScoped<IAsyncEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
 
 var app = builder.Build();
 
@@ -150,89 +146,33 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Create required exchanges for event bus
-await CreateEventBusExchangesAsync(streamFlow);
+// ✅ No manual exchange creation needed!
+// EventBus automatically creates exchanges and queues when publishing/subscribing
 
 // Start the event bus (CRITICAL: Event bus must be started explicitly)
 await streamFlow.EventBus.StartAsync();
 
-// Register application shutdown handlers
-var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-lifetime.ApplicationStopping.Register(async () =>
-{
-    try
-    {
-        // Stop event bus gracefully
-        await streamFlow.EventBus.StopAsync();
-        
-        // Shutdown StreamFlow client gracefully
-        await streamFlow.ShutdownAsync();
-        
-        Console.WriteLine("Event bus and StreamFlow client stopped gracefully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error during shutdown: {ex.Message}");
-    }
-});
-
-// Helper method to create required exchanges and queues using fluent API
-static async Task CreateEventBusExchangesAsync(IStreamFlowClient streamFlow)
-{
-    try
-    {
-        // Create domain events exchange using fluent API
-        await streamFlow.ExchangeManager.Exchange("domain-events")
-            .AsTopic()
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .DeclareAsync();
-
-        // Create integration events exchange using fluent API
-        await streamFlow.ExchangeManager.Exchange("integration-events")
-            .AsTopic()
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .DeclareAsync();
-
-        // Example: Create a queue for domain events and bind to exchange
-        await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .BindToExchange("domain-events", "domain.order.ordercreated")
-            .DeclareAsync();
-
-        // Example: Create a queue for integration events and bind to exchange
-        await streamFlow.QueueManager.Queue("integration-events-PaymentProcessed")
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .BindToExchange("integration-events", "payment.processed")
-            .DeclareAsync();
-
-        Console.WriteLine("Event bus exchanges and queues created successfully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Warning: Could not create exchanges or queues: {ex.Message}");
-        // Exchanges or queues might already exist, which is fine
-    }
-}
-
-// Note: You should create a queue and bind it to the exchange for each event type you want to consume. The queue name and routing key should match your event and consumer needs.
+app.Run();
 ```
 
-### 2. Required Using Statements
+### 2. Automatic Infrastructure Management
 
-```csharp
-using FS.StreamFlow.Core.Features.Events.Interfaces;
-using FS.StreamFlow.Core.Features.Events.Models;
-using FS.StreamFlow.Core.Features.Messaging.Interfaces;
-using FS.StreamFlow.Core.Features.Messaging.Models;
-using FS.StreamFlow.RabbitMQ.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System.Diagnostics;
-```
+🚀 **EventBus automatically handles all RabbitMQ infrastructure creation:**
+
+#### Domain Events:
+- **Exchange**: Automatically created as `"domain.{aggregateType}"` (e.g., `"domain.order"`)
+- **Type**: Fanout exchange (no routing keys needed)
+- **Queue**: Auto-created with pattern `"{exchangeName}.{eventType}"`
+
+#### Integration Events:
+- **Exchange**: Uses the `ExchangeName` property from your event
+- **Type**: Fanout exchange (simplified event distribution)
+- **Queue**: Auto-created with pattern `"{exchangeName}.{eventType}"`
+
+#### Infrastructure Properties:
+- All exchanges and queues are **durable** by default
+- **Production-ready** configuration out of the box
+- **No manual setup** required - just publish and subscribe!
 
 ## Event Publishing
 
@@ -262,7 +202,7 @@ public class OrderService
             InitiatedBy = "order-service"
         };
 
-        // Publish the domain event
+        // Publish the domain event - automatically creates "domain.order" exchange
         await _streamFlow.EventBus.PublishDomainEventAsync(orderCreatedEvent);
         
         _logger.LogInformation("Order created event published: {OrderId}", orderId);
@@ -279,7 +219,7 @@ public class OrderService
             CausationId = orderId.ToString()
         };
 
-        // Publish the integration event
+        // Publish the integration event - uses ExchangeName property for exchange
         await _streamFlow.EventBus.PublishIntegrationEventAsync(paymentProcessedEvent);
         
         _logger.LogInformation("Payment processed event published: {OrderId}", orderId);
@@ -293,695 +233,95 @@ public class OrderService
 public class AdvancedOrderService
 {
     private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<AdvancedOrderService> _logger;
 
-    public AdvancedOrderService(IStreamFlowClient streamFlow, ILogger<AdvancedOrderService> logger)
+    public AdvancedOrderService(IStreamFlowClient streamFlow)
     {
         _streamFlow = streamFlow;
-        _logger = logger;
     }
 
-    public async Task CreateOrderWithFluentApiAsync(CreateOrderRequest request)
+    public async Task CreateOrderWithAdvancedPublishingAsync(CreateOrderRequest request)
     {
         var orderId = Guid.NewGuid();
-        var correlationId = Guid.NewGuid().ToString();
 
-        var orderCreatedEvent = new OrderCreated(orderId, request.CustomerName, request.Amount);
-
-        // Use fluent API for advanced configuration
+        // Advanced domain event publishing with fluent API
         await _streamFlow.EventBus.Event<OrderCreated>()
-            .WithCorrelationId(correlationId)
-            .WithSource("order-service")
-            .WithVersion("1")
+            .WithMetadata(metadata =>
+            {
+                metadata.CorrelationId = Guid.NewGuid().ToString();
+                metadata.Source = "order-service";
+                metadata.Version = 2;
+            })
             .WithAggregateId(orderId.ToString())
             .WithAggregateType("Order")
             .WithPriority(1)
             .WithTtl(TimeSpan.FromMinutes(30))
-            .WithProperty("customer-tier", "premium")
-            .WithProperty("order-type", "online")
-            .PublishAsync(orderCreatedEvent);
+            .WithProperty("order-type", "premium")
+            .PublishAsync(new OrderCreated(orderId, request.CustomerName, request.Amount));
 
-        _logger.LogInformation("Order created with fluent API: {OrderId}", orderId);
-    }
-
-    public async Task PublishBatchEventsAsync(List<CreateOrderRequest> requests)
-    {
-        var events = new List<IEvent>();
-        var correlationId = Guid.NewGuid().ToString();
-
-        foreach (var request in requests)
-        {
-            var orderId = Guid.NewGuid();
-            var orderCreatedEvent = new OrderCreated(orderId, request.CustomerName, request.Amount)
-            {
-                CorrelationId = correlationId,
-                InitiatedBy = "order-service"
-            };
-            events.Add(orderCreatedEvent);
-        }
-
-        // Publish multiple events in a batch
-        await _streamFlow.EventBus.PublishBatchAsync(events);
-        
-        _logger.LogInformation("Published batch of {Count} events", events.Count);
+        // Advanced integration event publishing
+        await _streamFlow.EventBus.Event<PaymentProcessed>()
+            .WithCorrelationId(Guid.NewGuid().ToString())
+            .WithCausationId(orderId.ToString())
+            .WithSource("payment-service")
+            .WithVersion(1)
+            .WithTtl(TimeSpan.FromHours(1))
+            .WithProperty("payment-method", "credit-card")
+            .PublishAsync(new PaymentProcessed(orderId, "txn-123", request.Amount));
     }
 }
 ```
 
 ## Event Handling
 
-FS.StreamFlow provides a comprehensive event handling system with multiple interfaces and capabilities:
+### 1. Event Handler Implementation
 
-### 1. Event Handler Interfaces
-
-#### IEventHandler (Base Interface)
-```csharp
-public interface IEventHandler
-{
-    Type[] EventTypes { get; }
-    string HandlerName { get; }
-    int Priority { get; }
-    bool CanHandle(Type eventType);
-    bool AllowConcurrentExecution { get; }
-}
-```
-
-#### IAsyncEventHandler<T> (Async Handler)
-```csharp
-public interface IAsyncEventHandler<in T> : IEventHandler where T : class, IEvent
-{
-    Task HandleAsync(T @event, EventContext context, CancellationToken cancellationToken = default);
-}
-```
-
-#### IEventHandler<T> (Sync Handler)
-```csharp
-public interface IEventHandler<in T> : IEventHandler where T : class, IEvent
-{
-    void Handle(T @event, EventContext context);
-}
-```
-
-#### IHybridEventHandler<T> (Both Sync and Async)
-```csharp
-public interface IHybridEventHandler<in T> : IEventHandler<T>, IAsyncEventHandler<T> where T : class, IEvent
-{
-    ExecutionMode PreferredExecutionMode { get; }
-}
-```
-
-### 2. Event Handler Implementation Examples
-
-#### Async Event Handler
 ```csharp
 public class OrderCreatedHandler : IAsyncEventHandler<OrderCreated>
 {
-    private readonly IEmailService _emailService;
-    private readonly IInventoryService _inventoryService;
-    private readonly IStreamFlowClient _streamFlow;
     private readonly ILogger<OrderCreatedHandler> _logger;
+    private readonly IInventoryService _inventoryService;
 
-    public OrderCreatedHandler(
-        IEmailService emailService,
-        IInventoryService inventoryService,
-        IStreamFlowClient streamFlow,
-        ILogger<OrderCreatedHandler> logger)
+    public OrderCreatedHandler(ILogger<OrderCreatedHandler> logger, IInventoryService inventoryService)
     {
-        _emailService = emailService;
+        _logger = logger;
         _inventoryService = inventoryService;
-        _streamFlow = streamFlow;
-        _logger = logger;
     }
 
-    // IEventHandler implementation
-    public Type[] EventTypes => new[] { typeof(OrderCreated) };
-    public string HandlerName => "OrderCreatedHandler";
     public int Priority => 1;
-    public bool AllowConcurrentExecution => true;
+    public string HandlerName => nameof(OrderCreatedHandler);
 
-    public bool CanHandle(Type eventType) => eventType == typeof(OrderCreated);
-
-    public async Task HandleAsync(OrderCreated @event, EventContext context, CancellationToken cancellationToken = default)
+    public async Task<bool> CanHandleAsync(IEvent @event)
     {
+        return @event is OrderCreated;
+    }
+
+    public async Task HandleAsync(OrderCreated @event, EventContext context)
+    {
+        _logger.LogInformation("Processing OrderCreated event for order {OrderId}", @event.OrderId);
+
         try
         {
-            _logger.LogInformation("Processing OrderCreated event for order {OrderId}", @event.OrderId);
-
-        // Send confirmation email
-        await _emailService.SendOrderConfirmationAsync(
-            @event.OrderId,
-                @event.CustomerName,
-                cancellationToken);
-
-        // Reserve inventory
-            var reserved = await _inventoryService.ReserveInventoryAsync(@event.OrderId, cancellationToken);
-
-            if (reserved)
-            {
-                // Publish follow-up integration event
-                var inventoryReservedEvent = new InventoryReserved(@event.OrderId, DateTime.UtcNow)
-                {
-                    CorrelationId = context.CorrelationId,
-                    CausationId = context.EventId
-                };
-
-                await _streamFlow.EventBus.PublishIntegrationEventAsync(inventoryReservedEvent, cancellationToken);
-                
-                _logger.LogInformation("Inventory reserved for order {OrderId}", @event.OrderId);
-            }
-            else
-            {
-                // Publish failure event
-                var inventoryReservationFailedEvent = new InventoryReservationFailed(@event.OrderId, "Insufficient stock")
-                {
-                    CorrelationId = context.CorrelationId,
-                    CausationId = context.EventId
-                };
-
-                await _streamFlow.EventBus.PublishIntegrationEventAsync(inventoryReservationFailedEvent, cancellationToken);
-                
-                _logger.LogWarning("Inventory reservation failed for order {OrderId}", @event.OrderId);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing OrderCreated event for order {OrderId}", @event.OrderId);
-            throw;
-        }
-    }
-}
-```
-
-#### Synchronous Event Handler
-```csharp
-public class OrderCancelledHandler : IEventHandler<OrderCancelled>
-{
-    private readonly ILogger<OrderCancelledHandler> _logger;
-
-    public OrderCancelledHandler(ILogger<OrderCancelledHandler> logger)
-    {
-        _logger = logger;
-    }
-
-    // IEventHandler implementation
-    public Type[] EventTypes => new[] { typeof(OrderCancelled) };
-    public string HandlerName => "OrderCancelledHandler";
-    public int Priority => 2;
-    public bool AllowConcurrentExecution => false;
-
-    public bool CanHandle(Type eventType) => eventType == typeof(OrderCancelled);
-
-    public void Handle(OrderCancelled @event, EventContext context)
-    {
-        _logger.LogInformation("Order {OrderId} cancelled: {Reason}", @event.OrderId, @event.Reason);
-        
-        // Synchronous processing logic
-        // Note: Avoid long-running operations in sync handlers
-    }
-}
-```
-
-#### Hybrid Event Handler
-```csharp
-public class PaymentProcessedHandler : IHybridEventHandler<PaymentProcessed>
-{
-    private readonly IOrderService _orderService;
-    private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<PaymentProcessedHandler> _logger;
-
-    public PaymentProcessedHandler(
-        IOrderService orderService,
-        IStreamFlowClient streamFlow,
-        ILogger<PaymentProcessedHandler> logger)
-    {
-        _orderService = orderService;
-        _streamFlow = streamFlow;
-        _logger = logger;
-    }
-
-    // IEventHandler implementation
-    public Type[] EventTypes => new[] { typeof(PaymentProcessed) };
-    public string HandlerName => "PaymentProcessedHandler";
-    public int Priority => 1;
-    public bool AllowConcurrentExecution => true;
-    public ExecutionMode PreferredExecutionMode => ExecutionMode.Asynchronous;
-
-    public bool CanHandle(Type eventType) => eventType == typeof(PaymentProcessed);
-
-    public void Handle(PaymentProcessed @event, EventContext context)
-    {
-        // Synchronous implementation (not recommended for this handler)
-        _logger.LogInformation("Payment processed for order {OrderId}", @event.OrderId);
-    }
-
-    public async Task HandleAsync(PaymentProcessed @event, EventContext context, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Processing PaymentProcessed event for order {OrderId}", @event.OrderId);
-
-            // Update order payment status
-            await _orderService.UpdatePaymentStatusAsync(@event.OrderId, @event.TransactionId, cancellationToken);
-
-            // Publish shipment scheduling event
-            var shipmentScheduledEvent = new ShipmentScheduled(@event.OrderId, DateTime.UtcNow.AddDays(2))
-            {
-                CorrelationId = context.CorrelationId,
-                CausationId = context.EventId
-            };
-
-            await _streamFlow.EventBus.PublishIntegrationEventAsync(shipmentScheduledEvent, cancellationToken);
+            // Reserve inventory
+            await _inventoryService.ReserveInventoryAsync(@event.OrderId, @event.Amount);
             
-            _logger.LogInformation("Payment processed successfully for order {OrderId}", @event.OrderId);
+            _logger.LogInformation("Inventory reserved for order {OrderId}", @event.OrderId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing PaymentProcessed event for order {OrderId}", @event.OrderId);
+            _logger.LogError(ex, "Failed to reserve inventory for order {OrderId}", @event.OrderId);
             throw;
         }
     }
 }
 ```
 
-### 3. Event Handler Registration and Discovery
+### 2. Event Handler Registration and Subscription
 
 ```csharp
 // Program.cs
 // Register event handlers with dependency injection
 builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
-builder.Services.AddScoped<IEventHandler<OrderCancelled>, OrderCancelledHandler>();
-builder.Services.AddScoped<IHybridEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
-builder.Services.AddScoped<IAsyncEventHandler<InventoryReserved>, InventoryReservedHandler>();
-builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentScheduledHandler>();
-
-var app = builder.Build();
-
-// Initialize the StreamFlow client
-var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
-await streamFlow.InitializeAsync();
-
-// Create required exchanges for event bus
-await CreateEventBusExchangesAsync(streamFlow);
-
-// Start the event bus (CRITICAL: Event bus must be started explicitly)
-await streamFlow.EventBus.StartAsync();
-
-// Get event handlers from dependency injection
-var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
-var orderCancelledHandler = app.Services.GetRequiredService<IEventHandler<OrderCancelled>>();
-var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
-var inventoryReservedHandler = app.Services.GetRequiredService<IAsyncEventHandler<InventoryReserved>>();
-var shipmentScheduledHandler = app.Services.GetRequiredService<IAsyncEventHandler<ShipmentScheduled>>();
-
-// Subscribe to events
-await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
-await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCancelledHandler);
-await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
-await streamFlow.EventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
-await streamFlow.EventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
-
-Console.WriteLine("Event handlers registered and subscribed successfully");
-
-// Helper method to create required exchanges and queues using fluent API
-static async Task CreateEventBusExchangesAsync(IStreamFlowClient streamFlow)
-{
-    try
-    {
-        // Create domain events exchange using fluent API
-        await streamFlow.ExchangeManager.Exchange("domain-events")
-            .AsTopic()
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .DeclareAsync();
-
-        // Create integration events exchange using fluent API
-        await streamFlow.ExchangeManager.Exchange("integration-events")
-            .AsTopic()
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .DeclareAsync();
-
-        // Example: Create a queue for domain events and bind to exchange
-        await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .BindToExchange("domain-events", "domain.order.ordercreated")
-            .DeclareAsync();
-
-        // Example: Create a queue for integration events and bind to exchange
-        await streamFlow.QueueManager.Queue("integration-events-PaymentProcessed")
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .BindToExchange("integration-events", "payment.processed")
-            .DeclareAsync();
-
-        Console.WriteLine("Event bus exchanges and queues created successfully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Warning: Could not create exchanges or queues: {ex.Message}");
-        // Exchanges or queues might already exist, which is fine
-    }
-}
-
-// Note: You should create a queue and bind it to the exchange for each event type you want to consume. The queue name and routing key should match your event and consumer needs.
-```
-
-### 4. Event Monitoring and Observability
-
-```csharp
-public class EventMonitoringService
-{
-    private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<EventMonitoringService> _logger;
-
-    public EventMonitoringService(IStreamFlowClient streamFlow, ILogger<EventMonitoringService> logger)
-    {
-        _streamFlow = streamFlow;
-        _logger = logger;
-        
-        // Subscribe to event bus events for monitoring
-        _streamFlow.EventBus.EventPublished += OnEventPublished;
-        _streamFlow.EventBus.EventReceived += OnEventReceived;
-        _streamFlow.EventBus.EventProcessingFailed += OnEventProcessingFailed;
-    }
-
-    private void OnEventPublished(object? sender, EventPublishedEventArgs e)
-    {
-        if (e.Success)
-        {
-            _logger.LogInformation("Event {EventType} published successfully to {Exchange} with routing key {RoutingKey}", 
-                e.Event.EventType, e.ExchangeName, e.RoutingKey);
-        }
-        else
-        {
-            _logger.LogError("Failed to publish event {EventType} to {Exchange}: {ErrorMessage}", 
-                e.Event.EventType, e.ExchangeName, e.ErrorMessage);
-        }
-    }
-
-    private void OnEventReceived(object? sender, EventReceivedEventArgs e)
-    {
-        _logger.LogInformation("Event {EventType} received from {Exchange} with routing key {RoutingKey}", 
-            e.Event.EventType, e.ExchangeName, e.RoutingKey);
-    }
-
-    private void OnEventProcessingFailed(object? sender, EventProcessingFailedEventArgs e)
-    {
-        _logger.LogError(e.Exception, "Event {EventType} processing failed. Attempt: {AttemptCount}, WillRetry: {WillRetry}", 
-            e.Event.EventType, e.AttemptCount, e.WillRetry);
-    }
-
-    public void LogEventBusStatistics()
-    {
-        var stats = _streamFlow.EventBus.Statistics;
-        
-        _logger.LogInformation("Event Bus Statistics:");
-        _logger.LogInformation("  Status: {Status}", stats.Status);
-        _logger.LogInformation("  Uptime: {Uptime}", stats.Uptime);
-        _logger.LogInformation("  Events Published: {Published}", stats.TotalEventsPublished);
-        _logger.LogInformation("  Events Received: {Received}", stats.TotalEventsReceived);
-        _logger.LogInformation("  Events Processed: {Processed}", stats.TotalEventsProcessedSuccessfully);
-        _logger.LogInformation("  Events Failed: {Failed}", stats.TotalEventsFailedProcessing);
-        _logger.LogInformation("  Success Rate: {SuccessRate:F2}%", stats.SuccessRate);
-        _logger.LogInformation("  Active Subscriptions: {Subscriptions}", stats.ActiveSubscriptions);
-        _logger.LogInformation("  Currently Processing: {Processing}", stats.CurrentlyProcessingEvents);
-        _logger.LogInformation("  Average Processing Time: {AvgTime:F2}ms", stats.AverageProcessingTimeMs);
-        _logger.LogInformation("  Events Per Second: {EventsPerSec:F2}", stats.EventsPerSecond);
-    }
-
-    public void Dispose()
-    {
-        _streamFlow.EventBus.EventPublished -= OnEventPublished;
-        _streamFlow.EventBus.EventReceived -= OnEventReceived;
-        _streamFlow.EventBus.EventProcessingFailed -= OnEventProcessingFailed;
-    }
-}
-```
-
-### 5. Custom Event Handler with Function
-
-```csharp
-public class CustomEventHandler
-{
-    private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<CustomEventHandler> _logger;
-
-    public CustomEventHandler(IStreamFlowClient streamFlow, ILogger<CustomEventHandler> logger)
-    {
-        _streamFlow = streamFlow;
-        _logger = logger;
-    }
-
-    public async Task SubscribeToCustomEventsAsync()
-    {
-        // Subscribe with custom handler function
-        await _streamFlow.EventBus.SubscribeAsync<OrderCreated>(async (orderCreated, context) =>
-        {
-            try
-            {
-                _logger.LogInformation("Custom handler processing order {OrderId}", orderCreated.OrderId);
-                
-                // Custom business logic
-                await ProcessOrderCreatedCustomAsync(orderCreated, context);
-                
-                return true; // Success
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Custom handler failed for order {OrderId}", orderCreated.OrderId);
-                return false; // Failure - will be retried
-            }
-        });
-    }
-
-    private async Task ProcessOrderCreatedCustomAsync(OrderCreated orderCreated, EventContext context)
-    {
-        // Custom processing logic
-        await Task.Delay(100); // Simulate work
-    }
-}
-```
-
-## Event Store
-
-### 1. Event Store Usage
-
-The event store is automatically initialized with the StreamFlow client and accessed through it:
-
-```csharp
-public class OrderEventStore
-{
-    private readonly IStreamFlowClient _streamFlow;
-    private readonly ILogger<OrderEventStore> _logger;
-
-    public OrderEventStore(IStreamFlowClient streamFlow, ILogger<OrderEventStore> logger)
-    {
-        _streamFlow = streamFlow;
-        _logger = logger;
-    }
-
-    public async Task StoreOrderEventAsync(Guid orderId, IEvent @event)
-    {
-        var streamName = $"order-{orderId}";
-        
-        // Get current version for optimistic concurrency
-        var currentVersion = await _streamFlow.EventStore.GetStreamVersionAsync(streamName);
-        
-        await _streamFlow.EventStore.SaveEventsAsync(streamName, new[] { @event }, currentVersion);
-            
-        _logger.LogInformation("Event {EventType} stored in stream {StreamName}", @event.EventType, streamName);
-    }
-
-    public async Task<IEnumerable<object>> GetOrderEventsAsync(Guid orderId, long fromVersion = 0)
-    {
-        var streamName = $"order-{orderId}";
-        
-        var events = await _streamFlow.EventStore.GetEventsAsync(streamName, fromVersion);
-            
-        return events;
-    }
-
-    public async Task<long> GetOrderVersionAsync(Guid orderId)
-    {
-        var streamName = $"order-{orderId}";
-        
-        var version = await _streamFlow.EventStore.GetStreamVersionAsync(streamName);
-            
-        return version;
-    }
-}
-```
-
-### 2. Event Sourcing with Event Store
-
-```csharp
-public class OrderAggregate
-{
-    private readonly List<IEvent> _uncommittedEvents = new();
-    public Guid Id { get; private set; }
-    public string CustomerName { get; private set; } = string.Empty;
-    public decimal Total { get; private set; }
-    public OrderStatus Status { get; private set; }
-    public long Version { get; private set; }
-
-    public static OrderAggregate Create(Guid id, string customerName, decimal total)
-    {
-        var order = new OrderAggregate();
-        order.Apply(new OrderCreated(id, customerName, total));
-        return order;
-    }
-
-    public void ApplyPayment(string transactionId, decimal amount)
-    {
-        Apply(new PaymentProcessed(Id, transactionId, amount));
-    }
-
-    public void Cancel(string reason)
-    {
-        Apply(new OrderCancelled(Id, reason));
-    }
-
-    private void Apply(IEvent @event)
-    {
-        When(@event);
-        _uncommittedEvents.Add(@event);
-    }
-
-    private void When(IEvent @event)
-    {
-        switch (@event)
-        {
-            case OrderCreated orderCreated:
-                Id = orderCreated.OrderId;
-                CustomerName = orderCreated.CustomerName;
-                Total = orderCreated.Amount;
-                Status = OrderStatus.Created;
-                Version++;
-                break;
-            case PaymentProcessed paymentProcessed:
-                Status = OrderStatus.Paid;
-                Version++;
-                break;
-            case OrderCancelled orderCancelled:
-                Status = OrderStatus.Cancelled;
-                Version++;
-                break;
-        }
-    }
-
-    public IEnumerable<IEvent> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    public void MarkEventsAsCommitted() => _uncommittedEvents.Clear();
-
-    public static OrderAggregate FromEvents(IEnumerable<IEvent> events)
-    {
-        var order = new OrderAggregate();
-        foreach (var @event in events)
-        {
-            order.When(@event);
-        }
-        return order;
-    }
-}
-
-public enum OrderStatus
-{
-    Created,
-    Paid,
-    Cancelled
-}
-```
-
-## Best Practices
-
-### 1. Event Design
-
-- **Use past tense for event names**: `OrderCreated`, `PaymentProcessed`, `ShipmentScheduled`
-- **Keep events immutable**: Use records or readonly properties
-- **Include only necessary data**: Don't include sensitive information
-- **Use strong typing**: Avoid dynamic objects
-- **Consider versioning**: Plan for schema evolution
-
-### 2. Event Handler Design
-
-- **Keep handlers focused**: One handler per event type
-- **Handle errors gracefully**: Implement proper error handling
-- **Use dependency injection**: Inject required services
-- **Log important operations**: Include correlation IDs
-- **Avoid long-running operations**: Use async/await properly
-- **Return boolean for success/failure**: Return `true` for success, `false` for retry
-- **Use cancellation tokens**: Support graceful cancellation
-- **Implement handler properties**: Set `EventTypes`, `HandlerName`, `Priority`, `AllowConcurrentExecution`
-- **Choose appropriate execution mode**: Use async handlers for I/O operations, sync for simple logic
-
-### 3. Event Bus Configuration
-
-- **Use StreamFlow client**: Access event bus through `IStreamFlowClient.EventBus`
-- **Initialize StreamFlow client**: Call `streamFlow.InitializeAsync()` first
-- **Create exchanges**: Ensure required exchanges exist before starting event bus
-- **Start event bus explicitly**: Call `streamFlow.EventBus.StartAsync()` after initialization
-- **Stop event bus gracefully**: Call `streamFlow.EventBus.StopAsync()` before shutdown
-- **Handle connection failures**: Implement retry policies
-- **Monitor event processing**: Use built-in metrics and events
-- **Configure appropriate timeouts**: Set reasonable values
-- **Use persistent delivery**: For critical events
-- **Subscribe to events**: Use `EventPublished`, `EventReceived`, `EventProcessingFailed` events for monitoring
-
-### 4. Event Store Usage
-
-- **Access through StreamFlow client**: Use `streamFlow.EventStore` for all operations
-- **Use meaningful stream names**: Include aggregate ID
-- **Store events atomically**: Use transactions when possible
-- **Handle concurrency**: Implement optimistic concurrency control with expected version
-- **Backup event streams**: Regular backups for disaster recovery
-- **Monitor storage usage**: Track event store growth
-- **Automatic lifecycle**: Event store is managed by StreamFlow client
-
-### 5. Exchange Management
-
-- **Create exchanges before starting**: Ensure exchanges exist before event bus starts
-- **Use durable exchanges**: For production environments
-- **Set appropriate exchange types**: Topic for event routing, Direct for simple routing
-- **Handle exchange creation errors**: Exchanges might already exist
-- **Monitor exchange health**: Check exchange status and performance
-
-## Complete Examples
-
-### 1. Complete Order Processing Flow
-
-```csharp
-// Program.cs
-using FS.StreamFlow.RabbitMQ.DependencyInjection;
-
-var builder = WebApplication.CreateBuilder(args);
-
-// Add services
-builder.Services.AddRabbitMQStreamFlow(options =>
-{
-    options.ClientConfiguration.ClientName = "Order Processing System";
-    options.ConnectionSettings.Host = "localhost";
-    options.ConnectionSettings.Port = 5672;
-    options.ConnectionSettings.Username = "guest";
-    options.ConnectionSettings.Password = "guest";
-    options.ConnectionSettings.VirtualHost = "/";
-});
-
-// Register business services
-builder.Services.AddScoped<IOrderService, OrderService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<IInventoryService, InventoryService>();
-builder.Services.AddScoped<IPaymentService, PaymentService>();
-
-// Register event handlers
-builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
-builder.Services.AddScoped<IEventHandler<OrderCancelled>, OrderCancelledHandler>();
-builder.Services.AddScoped<IHybridEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
-builder.Services.AddScoped<IAsyncEventHandler<InventoryReserved>, InventoryReservedHandler>();
-builder.Services.AddScoped<IAsyncEventHandler<ShipmentScheduled>, ShipmentScheduledHandler>();
-
-// Register monitoring service
-builder.Services.AddSingleton<EventMonitoringService>();
+builder.Services.AddScoped<IAsyncEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
 
 var app = builder.Build();
 
@@ -989,219 +329,120 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Create required exchanges for event bus
-await CreateEventBusExchangesAsync(streamFlow);
-
-// Start the event bus (CRITICAL: Event bus must be started explicitly)
+// Start the event bus
 await streamFlow.EventBus.StartAsync();
 
 // Get event handlers from dependency injection
 var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
-var orderCancelledHandler = app.Services.GetRequiredService<IEventHandler<OrderCancelled>>();
-var paymentProcessedHandler = app.Services.GetRequiredService<IHybridEventHandler<PaymentProcessed>>();
-var inventoryReservedHandler = app.Services.GetRequiredService<IAsyncEventHandler<InventoryReserved>>();
-var shipmentScheduledHandler = app.Services.GetRequiredService<IAsyncEventHandler<ShipmentScheduled>>();
+var paymentProcessedHandler = app.Services.GetRequiredService<IAsyncEventHandler<PaymentProcessed>>();
 
-// Subscribe to events
-await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCreatedHandler);
-await streamFlow.EventBus.SubscribeToDomainEventAsync(orderCancelledHandler);
-await streamFlow.EventBus.SubscribeToIntegrationEventAsync(paymentProcessedHandler);
-await streamFlow.EventBus.SubscribeToIntegrationEventAsync(inventoryReservedHandler);
-await streamFlow.EventBus.SubscribeToIntegrationEventAsync(shipmentScheduledHandler);
+// Subscribe to domain events - automatically creates "domain.order" exchange and queues
+await streamFlow.EventBus.SubscribeToDomainEventAsync("order", orderCreatedHandler);
 
-// Initialize monitoring
-var eventMonitoringService = app.Services.GetRequiredService<EventMonitoringService>();
-eventMonitoringService.LogEventBusStatistics();
+// Subscribe to integration events - uses ExchangeName from event properties
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync("payment-events", paymentProcessedHandler);
 
 Console.WriteLine("Event handlers registered and subscribed successfully");
 
-// Register application shutdown handlers
-var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-lifetime.ApplicationStopping.Register(async () =>
+app.Run();
+```
+
+## Best Practices
+
+### 1. Event Design
+
+- **Use meaningful names**: Events should clearly describe what happened
+- **Include essential data**: Events should contain all necessary information
+- **Keep events immutable**: Once published, events should never change
+- **Use proper versioning**: Include version information for schema evolution
+- **Add correlation IDs**: Enable event tracing across services
+
+### 2. Event Handler Design
+
+- **Keep handlers idempotent**: Handlers should produce the same result when called multiple times
+- **Handle failures gracefully**: Implement proper error handling and retry logic
+- **Use async patterns**: Prefer async handlers for I/O operations
+- **Implement proper logging**: Log important events and errors for debugging
+
+### 3. Event Bus Configuration
+
+- **Use appropriate exchange names**: Service-based naming for integration events
+- **Configure retry policies**: Set up proper retry and dead letter handling
+- **Monitor event flow**: Implement monitoring and alerting for event processing
+- **Use correlation IDs**: Enable end-to-end tracing of event flows
+
+### 4. Infrastructure Management
+
+- **Let EventBus handle infrastructure**: No manual exchange/queue creation needed
+- **Use fanout exchanges**: Simplified event distribution without routing complexity
+- **Monitor queue health**: Keep an eye on queue lengths and processing rates
+- **Plan for scaling**: Design events and handlers with horizontal scaling in mind
+
+## Complete Example
+
+```csharp
+// Program.cs - Complete setup
+using FS.StreamFlow.RabbitMQ.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add FS.StreamFlow with RabbitMQ
+builder.Services.AddStreamFlow(options =>
 {
-    try
+    options.UseRabbitMQ(rabbitMqOptions =>
     {
-        // Log final statistics
-        eventMonitoringService.LogEventBusStatistics();
-        
-        // Stop event bus gracefully
-        await streamFlow.EventBus.StopAsync();
-        
-        // Shutdown StreamFlow client
-        await streamFlow.ShutdownAsync();
-        
-        Console.WriteLine("Event bus and StreamFlow client stopped gracefully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error during shutdown: {ex.Message}");
-    }
+        rabbitMqOptions.ConnectionString = "amqp://localhost:5672";
+        rabbitMqOptions.ClientConfiguration.ClientName = "Order Processing Service";
+        rabbitMqOptions.ProducerSettings.EnableConfirmation = true;
+        rabbitMqOptions.ConsumerSettings.AutoAcknowledge = false;
+        rabbitMqOptions.ErrorHandlingSettings.MaxRetries = 3;
+        rabbitMqOptions.ErrorHandlingSettings.EnableDeadLetterQueue = true;
+    });
 });
 
-// Helper method to create required exchanges and queues using fluent API
-static async Task CreateEventBusExchangesAsync(IStreamFlowClient streamFlow)
-{
-    try
-    {
-        // Create domain events exchange using fluent API
-        await streamFlow.ExchangeManager.Exchange("domain-events")
-            .AsTopic()
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .DeclareAsync();
+// Register services and handlers
+builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<IAsyncEventHandler<OrderCreated>, OrderCreatedHandler>();
+builder.Services.AddScoped<IAsyncEventHandler<PaymentProcessed>, PaymentProcessedHandler>();
 
-        // Create integration events exchange using fluent API
-        await streamFlow.ExchangeManager.Exchange("integration-events")
-            .AsTopic()
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .DeclareAsync();
+var app = builder.Build();
 
-        // Example: Create a queue for domain events and bind to exchange
-        await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .BindToExchange("domain-events", "domain.order.ordercreated")
-            .DeclareAsync();
+// Initialize and start EventBus
+var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
+await streamFlow.InitializeAsync();
+await streamFlow.EventBus.StartAsync();
 
-        // Example: Create a queue for integration events and bind to exchange
-        await streamFlow.QueueManager.Queue("integration-events-PaymentProcessed")
-            .WithDurable(true)
-            .WithAutoDelete(false)
-            .BindToExchange("integration-events", "payment.processed")
-            .DeclareAsync();
+// Subscribe to events - EventBus automatically creates exchanges and queues
+var orderCreatedHandler = app.Services.GetRequiredService<IAsyncEventHandler<OrderCreated>>();
+var paymentProcessedHandler = app.Services.GetRequiredService<IAsyncEventHandler<PaymentProcessed>>();
 
-        Console.WriteLine("Event bus exchanges and queues created successfully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Warning: Could not create exchanges or queues: {ex.Message}");
-        // Exchanges or queues might already exist, which is fine
-    }
-}
+await streamFlow.EventBus.SubscribeToDomainEventAsync("order", orderCreatedHandler);
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync("payment-events", paymentProcessedHandler);
 
-// Note: You should create a queue and bind it to the exchange for each event type you want to consume. The queue name and routing key should match your event and consumer needs.
+Console.WriteLine("Event-driven architecture setup complete!");
 
-await app.RunAsync();
+app.Run();
 ```
 
-### 2. Controller Example
+## Migration from Manual Infrastructure
+
+If you have existing manual exchange creation code, you can safely remove it:
 
 ```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class OrdersController : ControllerBase
-{
-    private readonly IOrderService _orderService;
-    private readonly ILogger<OrdersController> _logger;
+// ❌ OLD - Remove this code
+await streamFlow.ExchangeManager.Exchange("domain-events")
+    .AsTopic()
+    .WithDurable(true)
+    .DeclareAsync();
 
-    public OrdersController(IOrderService orderService, ILogger<OrdersController> logger)
-    {
-        _orderService = orderService;
-        _logger = logger;
-    }
+await streamFlow.QueueManager.Queue("domain-events-OrderCreated")
+    .WithDurable(true)
+    .BindToExchange("domain-events", "domain.order.ordercreated")
+    .DeclareAsync();
 
-    [HttpPost]
-    public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
-    {
-        try
-        {
-            var orderId = await _orderService.CreateOrderAsync(request);
-            
-            _logger.LogInformation("Order created successfully: {OrderId}", orderId);
-            
-            return Ok(new { OrderId = orderId });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create order");
-            return StatusCode(500, "Failed to create order");
-        }
-    }
-
-    [HttpPost("{orderId}/payments")]
-    public async Task<IActionResult> ProcessPayment(Guid orderId, [FromBody] ProcessPaymentRequest request)
-    {
-        try
-        {
-            await _orderService.ProcessPaymentAsync(orderId, request.TransactionId, request.Amount);
-            
-            _logger.LogInformation("Payment processed for order: {OrderId}", orderId);
-            
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to process payment for order {OrderId}", orderId);
-            return StatusCode(500, "Failed to process payment");
-        }
-    }
-}
-
-public record CreateOrderRequest(string CustomerName, decimal Amount);
-public record ProcessPaymentRequest(string TransactionId, decimal Amount);
+// ✅ NEW - Just publish and subscribe, infrastructure is automatic
+await streamFlow.EventBus.PublishDomainEventAsync(orderCreatedEvent);
+await streamFlow.EventBus.SubscribeToDomainEventAsync("order", orderCreatedHandler);
 ```
 
-### 3. Error Handling Example
-
-```csharp
-public class ResilientEventHandler<T> : IAsyncEventHandler<T> where T : class, IEvent
-{
-    private readonly IAsyncEventHandler<T> _innerHandler;
-    private readonly ILogger<ResilientEventHandler<T>> _logger;
-    private readonly IRetryPolicy _retryPolicy;
-
-    public ResilientEventHandler(
-        IAsyncEventHandler<T> innerHandler,
-        ILogger<ResilientEventHandler<T>> logger,
-        IRetryPolicy retryPolicy)
-    {
-        _innerHandler = innerHandler;
-        _logger = logger;
-        _retryPolicy = retryPolicy;
-    }
-
-    // IEventHandler implementation
-    public Type[] EventTypes => _innerHandler.EventTypes;
-    public string HandlerName => $"Resilient_{_innerHandler.HandlerName}";
-    public int Priority => _innerHandler.Priority;
-    public bool AllowConcurrentExecution => _innerHandler.AllowConcurrentExecution;
-
-    public bool CanHandle(Type eventType) => _innerHandler.CanHandle(eventType);
-
-    public async Task HandleAsync(T @event, EventContext context, CancellationToken cancellationToken = default)
-    {
-        var attempt = 0;
-        var maxAttempts = 3;
-
-        while (attempt < maxAttempts)
-        {
-            try
-            {
-                attempt++;
-                _logger.LogInformation("Processing event {EventType} attempt {Attempt}", typeof(T).Name, attempt);
-
-                await _innerHandler.HandleAsync(@event, context, cancellationToken);
-                
-                _logger.LogInformation("Successfully processed event {EventType}", typeof(T).Name);
-                return;
-        }
-        catch (Exception ex)
-        {
-                _logger.LogError(ex, "Error processing event {EventType} attempt {Attempt}", typeof(T).Name, attempt);
-
-                if (attempt >= maxAttempts)
-                {
-                    _logger.LogError("Max retry attempts reached for event {EventType}", typeof(T).Name);
-            throw;
-        }
-
-                var delay = _retryPolicy.GetDelay(attempt);
-                await Task.Delay(delay, cancellationToken);
-    }
-} 
-    }
-}
-```
-
-This comprehensive guide covers all aspects of implementing event-driven architecture with FS.StreamFlow, from basic setup to advanced patterns and best practices, including the complete event handling system with multiple interfaces and monitoring capabilities. 
+The EventBus will handle everything automatically when you publish or subscribe to events!

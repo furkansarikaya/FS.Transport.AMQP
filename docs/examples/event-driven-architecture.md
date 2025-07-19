@@ -69,7 +69,7 @@ public record EmailSent(Guid UserId, string Email, DateTime SentAt) : IIntegrati
     public string? CausationId { get; set; }
     public IDictionary<string, object> Metadata { get; } = new Dictionary<string, object>();
     public string Source => "email-service";
-    public string ExchangeName => "email.sent";
+    public string ExchangeName => "email-events";
     public string? Target { get; set; }
     public string SchemaVersion => "1.0";
     public TimeSpan? TimeToLive { get; set; }
@@ -232,63 +232,27 @@ var app = builder.Build();
 var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 await streamFlow.InitializeAsync();
 
-// Setup infrastructure
-await streamFlow.ExchangeManager.Exchange("domain-events")
-    .AsTopic()
-    .WithDurable(true)
-    .DeclareAsync();
+// ✅ No manual infrastructure setup needed!
+// EventBus automatically creates exchanges and queues when publishing/subscribing
+//
+// 🚀 Automatic Infrastructure:
+// - Domain events: Creates fanout exchanges like "domain.user", "domain.order", etc.
+// - Integration events: Creates fanout exchanges using ExchangeName property
+// - Queues: Auto-created with pattern "{exchangeName}.{eventType}"
+// - Dead letter queues: Can still be configured manually if needed for advanced scenarios
 
-await streamFlow.ExchangeManager.Exchange("integration-events")
-    .AsTopic()
-    .WithDurable(true)
-    .DeclareAsync();
+// Start EventBus and subscribe to events
+await streamFlow.EventBus.StartAsync();
 
-await streamFlow.ExchangeManager.Exchange("dlx")
-    .AsTopic()
-    .WithDurable(true)
-    .DeclareAsync();
+// Subscribe to domain events using EventBus API
+// Domain events are automatically routed to "domain.user" exchange
+var emailService = app.Services.GetRequiredService<EmailService>();
+await streamFlow.EventBus.SubscribeToDomainEventAsync<UserRegistered>("user", emailService);
 
-// Setup queues
-await streamFlow.QueueManager.Queue("user-events")
-    .WithDurable(true)
-    .WithDeadLetterExchange("dlx")
-    .WithDeadLetterRoutingKey("user-events.failed")
-    .BindToExchange("domain-events", "user.*")
-    .DeclareAsync();
-
-await streamFlow.QueueManager.Queue("email-events")
-    .WithDurable(true)
-    .WithDeadLetterExchange("dlx")
-    .WithDeadLetterRoutingKey("email-events.failed")
-    .BindToExchange("integration-events", "email.*")
-    .DeclareAsync();
-
-await streamFlow.QueueManager.Queue("dead-letter-queue")
-    .WithDurable(true)
-    .BindToExchange("dlx", "event-handling.failed")
-    .DeclareAsync();
-
-// Start event consumers
-await streamFlow.Consumer.Queue<UserRegistered>("user-events")
-    .WithConcurrency(3)
-    .WithPrefetchCount(10)
-    .WithErrorHandler(async (exception, context) =>
-    {
-        var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(exception, "Error processing user event {MessageId}", context.MessageId);
-        return exception is TimeoutException || exception is InvalidOperationException;
-    })
-    .ConsumeAsync(async (userRegistered, context) =>
-    {
-        var emailService = app.Services.GetRequiredService<EmailService>();
-        await emailService.HandleAsync(userRegistered, new EventContext
-        {
-            EventId = context.MessageId,
-            CorrelationId = context.CorrelationId,
-            Timestamp = DateTimeOffset.UtcNow
-        });
-        return true;
-    });
+// Subscribe to integration events using EventBus API  
+// Integration events use the ExchangeName property for routing
+var userService = app.Services.GetRequiredService<UserService>();
+await streamFlow.EventBus.SubscribeToIntegrationEventAsync<EmailSent>("email-events", userService);
 
 // Start dead letter processor
 await streamFlow.Consumer.Queue<DeadLetterMessage>("dead-letter-queue")
