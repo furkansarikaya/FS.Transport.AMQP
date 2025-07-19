@@ -139,7 +139,7 @@ public class RabbitMQExchangeManager : IExchangeManager
                     durable: durable,
                     autoDelete: autoDelete,
                     arguments: args,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // Store exchange settings for recovery
                 var exchangeSettings = new ExchangeSettings

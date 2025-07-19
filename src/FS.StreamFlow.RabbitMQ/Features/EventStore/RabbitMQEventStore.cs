@@ -499,7 +499,7 @@ public class RabbitMQEventStore : IEventStore
                     durable: true,
                     autoDelete: false,
                     arguments: null,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // Declare snapshot exchange
                 await rabbitChannel.ExchangeDeclareAsync(
@@ -508,7 +508,7 @@ public class RabbitMQEventStore : IEventStore
                     durable: true,
                     autoDelete: false,
                     arguments: null,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 _logger.LogInformation("Event store infrastructure initialized successfully");
             }

@@ -17,7 +17,7 @@ public class RabbitMQEventBus : IEventBus
     private readonly IProducer _producer;
     private readonly IConsumer _consumer;
     private readonly ILogger<RabbitMQEventBus> _logger;
-    private readonly ConcurrentDictionary<Type, List<IAsyncEventHandler<IEvent>>> _eventHandlers = new();
+    private readonly ConcurrentDictionary<Type, List<IEventHandler>> _eventHandlers = new();
     private readonly ConcurrentDictionary<Type, List<Func<IEvent, EventContext, Task<bool>>>> _eventSubscriptions = new();
     private readonly EventBusStatistics _statistics;
     private readonly object _lockObject = new();
@@ -212,8 +212,7 @@ public class RabbitMQEventBus : IEventBus
     /// <exception cref="ObjectDisposedException">Thrown when the event bus has been disposed</exception>
     public async Task PublishIntegrationEventAsync<T>(T integrationEvent, CancellationToken cancellationToken = default) where T : class, IIntegrationEvent
     {
-        if (integrationEvent == null)
-            throw new ArgumentNullException(nameof(integrationEvent));
+        ArgumentNullException.ThrowIfNull(integrationEvent);
 
         ThrowIfDisposed();
         EnsureRunning();
@@ -308,8 +307,7 @@ public class RabbitMQEventBus : IEventBus
     {
         if (string.IsNullOrWhiteSpace(aggregateType))
             throw new ArgumentException("Aggregate type cannot be null or empty", nameof(aggregateType));
-        if (handler == null)
-            throw new ArgumentNullException(nameof(handler));
+        ArgumentNullException.ThrowIfNull(handler);
 
         ThrowIfDisposed();
         EnsureRunning();
@@ -318,27 +316,15 @@ public class RabbitMQEventBus : IEventBus
         var exchangeName = $"domain.{aggregateType.ToLowerInvariant()}";
         var queueName = $"{exchangeName}.{eventType.Name}";
         
-        _eventHandlers.AddOrUpdate(eventType, 
-            new List<IAsyncEventHandler<IEvent>> { handler as IAsyncEventHandler<IEvent> }, 
-            (key, existing) => { existing.Add(handler as IAsyncEventHandler<IEvent>); return existing; });
-
+        _eventHandlers.AddOrUpdate(eventType,
+            [handler], 
+            (key, existing) => { existing.Add(handler); return existing; });
+        
         _statistics.ActiveSubscriptions++;
         _logger.LogInformation("Subscribed to domain event: {EventType} for aggregate: {AggregateType}", eventType.Name, aggregateType);
         
         // Start consuming from the domain event queue using ConsumeEventAsync (no routing key needed for fanout)
-        await _consumer.ConsumeEventAsync<T>(exchangeName, eventType.Name, async (evt, eventContext) =>
-        {
-            try
-            {
-                await handler.HandleAsync(evt, eventContext, cancellationToken);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error handling domain event {EventType}", eventType.Name);
-                return false;
-            }
-        }, cancellationToken);
+        await _consumer.ConsumeEventAsync<T>(exchangeName, eventType.Name, (evt, eventContext) => Task.FromResult(true), cancellationToken);
     }
 
     /// <summary>
@@ -355,8 +341,7 @@ public class RabbitMQEventBus : IEventBus
     {
         if (string.IsNullOrWhiteSpace(exchangeName))
             throw new ArgumentException("Exchange name cannot be null or empty", nameof(exchangeName));
-        if (handler == null)
-            throw new ArgumentNullException(nameof(handler));
+        ArgumentNullException.ThrowIfNull(handler);
 
         ThrowIfDisposed();
         EnsureRunning();
@@ -364,19 +349,14 @@ public class RabbitMQEventBus : IEventBus
         var eventType = typeof(T);
         var queueName = $"{exchangeName}.{eventType.Name}"; // Create unique queue name
         
-        _eventHandlers.AddOrUpdate(eventType, 
-            new List<IAsyncEventHandler<IEvent>> { handler as IAsyncEventHandler<IEvent> }, 
-            (key, existing) => { existing.Add(handler as IAsyncEventHandler<IEvent>); return existing; });
-
+        _eventHandlers.AddOrUpdate(eventType,
+            [handler], 
+            (key, existing) => { existing.Add(handler); return existing; });
+        
         // Auto-create exchange and queue, then consume (no routing key needed for fanout)
         await _consumer.ConsumeEventAsync<T>(
             exchangeName,
-            eventType.Name,
-            async (evt, eventContext) =>
-            {
-                await handler.HandleAsync(evt, eventContext, cancellationToken);
-                return true;
-            },
+            eventType.Name, (evt, eventContext) => Task.FromResult(true),
             cancellationToken);
 
         _statistics.ActiveSubscriptions++;
@@ -571,19 +551,32 @@ public class RabbitMQEventBus : IEventBus
                 {
                     try
                     {
-                        await handler.HandleAsync(eventMessage, eventContext);
-                        processed = true;
+                        if (await handler.CanHandleAsync(eventMessage))
+                        {
+                            _logger.LogDebug("Handler {HandlerName} can handle event {EventType}",
+                                handler.HandlerName, eventType.Name);
+
+                            await handler.HandleAsync(eventMessage, eventContext);
+                            processed = true;
+
+                            _logger.LogDebug("Handler {HandlerName} processed event successfully",
+                                handler.HandlerName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Handler {HandlerName} cannot handle event {EventType}",
+                                handler.HandlerName, eventType.Name);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Event handler failed for event: {EventId} ({EventType})", 
-                            eventMessage.Id, eventMessage.EventType);
-                        eventContext.ProcessingError = ex;
+                        _logger.LogError(ex, "Handler {HandlerName} failed for event: {EventId} ({EventType})",
+                            handler.HandlerName, eventMessage.Id, eventMessage.EventType);
                         throw;
                     }
                 }
             }
-            
+
             // Try event subscriptions
             if (_eventSubscriptions.TryGetValue(eventType, out var subscriptions))
             {
@@ -591,8 +584,12 @@ public class RabbitMQEventBus : IEventBus
                 {
                     try
                     {
+                        _logger.LogDebug("Event subscription found for event: {EventId} ({EventType})",
+                            eventMessage.Id, eventMessage.EventType);
                         await subscription(eventMessage, eventContext);
                         processed = true;
+                        
+                        _logger.LogDebug("Event subscription processed event successfully");
                     }
                     catch (Exception ex)
                     {

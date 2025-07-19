@@ -8,7 +8,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.RabbitMQ", "s
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{A937B220-A7D4-40A1-80AC-97E1FD114098}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.Examples.RabbitMQ", "samples\FS.StreamFlow.Examples.RabbitMQ\FS.StreamFlow.Examples.RabbitMQ.csproj", "{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.Examples.RabbitMQ.API", "samples\FS.StreamFlow.Examples.RabbitMQ.API\FS.StreamFlow.Examples.RabbitMQ.API.csproj", "{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FS.StreamFlow.Examples.RabbitMQ.Worker", "samples\FS.StreamFlow.Examples.RabbitMQ.Worker\FS.StreamFlow.Examples.RabbitMQ.Worker.csproj", "{E8FB0CC4-8766-4D44-A956-31AAE08451D4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,6 +21,7 @@ Global
 		{5C66FEF9-7B57-4E67-AC1B-23751BDD8AFC} = {4ED1239F-CBB8-4573-AB33-7D565E02F285}
 		{1BF491FC-FECA-4F13-9A57-64865EDEA682} = {4ED1239F-CBB8-4573-AB33-7D565E02F285}
 		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A} = {A937B220-A7D4-40A1-80AC-97E1FD114098}
+		{E8FB0CC4-8766-4D44-A956-31AAE08451D4} = {A937B220-A7D4-40A1-80AC-97E1FD114098}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{5C66FEF9-7B57-4E67-AC1B-23751BDD8AFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -33,5 +36,9 @@ Global
 		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1227F47B-C86F-44CD-8DC3-E1D49D53D67A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E8FB0CC4-8766-4D44-A956-31AAE08451D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8FB0CC4-8766-4D44-A956-31AAE08451D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8FB0CC4-8766-4D44-A956-31AAE08451D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8FB0CC4-8766-4D44-A956-31AAE08451D4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -16,6 +16,18 @@ public interface IAsyncEventHandler<in T> : IEventHandler where T : class, IEven
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the handling operation</returns>
     Task HandleAsync(T @event, EventContext context, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Non-generic async handle implementation
+    /// </summary>
+    Task IEventHandler.HandleAsync(IEvent @event, EventContext context, CancellationToken cancellationToken)
+        => HandleAsync((T)@event, context, cancellationToken);
+
+    /// <summary>
+    /// Non-generic async can handle implementation
+    /// </summary>
+    Task<bool> IEventHandler.CanHandleAsync(IEvent @event)
+        => Task.FromResult(@event is T);
 }
 
 /// <summary>

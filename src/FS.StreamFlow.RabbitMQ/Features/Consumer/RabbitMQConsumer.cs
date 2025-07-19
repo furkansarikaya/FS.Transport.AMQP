@@ -5,8 +5,6 @@ using FS.StreamFlow.Core.Features.Events.Models;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Microsoft.Extensions.Logging;
-using System.Text;
-using System.Text.Json;
 using System.Collections.Concurrent;
 using FS.StreamFlow.RabbitMQ.Features.Connection;
 using Microsoft.Extensions.Options;
@@ -23,6 +21,7 @@ public class RabbitMQConsumer : IConsumer
     private readonly IConnectionManager _connectionManager;
     private readonly ILogger<RabbitMQConsumer> _logger;
     private readonly ConsumerSettings _settings;
+    private readonly ClientConfiguration _clientConfiguration;
     private readonly ConsumerStatistics _statistics;
     private readonly ConcurrentDictionary<string, ConsumerInfo> _activeConsumers;
     private readonly SemaphoreSlim _operationSemaphore;
@@ -42,6 +41,11 @@ public class RabbitMQConsumer : IConsumer
     /// Gets consumer configuration settings
     /// </summary>
     public ConsumerSettings Settings => _settings;
+    
+    /// <summary>
+    /// Gets client configuration settings
+    /// </summary>
+    public ClientConfiguration ClientConfiguration => _clientConfiguration;
 
     /// <summary>
     /// Gets consumer statistics and metrics
@@ -93,16 +97,19 @@ public class RabbitMQConsumer : IConsumer
     /// </summary>
     /// <param name="connectionManager">Connection manager</param>
     /// <param name="settings">Consumer settings</param>
+    /// <param name="clientConfiguration">Client configuration</param>
     /// <param name="logger">Logger</param>
     /// <param name="serializerFactory">Message serializer factory</param>
     public RabbitMQConsumer(
         IConnectionManager connectionManager,
         IOptions<ConsumerSettings> settings,
+        IOptions<ClientConfiguration> clientConfiguration,
         ILogger<RabbitMQConsumer> logger, 
         IMessageSerializerFactory serializerFactory)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _settings = settings.Value ?? throw new ArgumentNullException(nameof(settings));
+        _clientConfiguration = clientConfiguration.Value ?? throw new ArgumentNullException(nameof(clientConfiguration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
 
@@ -309,7 +316,9 @@ public class RabbitMQConsumer : IConsumer
     {
         await ConsumeEventAsync<T>(exchangeName, queueName, async (evt, ctx) =>
         {
+            _logger.LogDebug("ConsumeEventAsync -> Received event {EventType} with correlationId: {CorrelationId}", evt.GetType().Name, evt.CorrelationId);
             await eventHandler.HandleAsync(evt, ctx, cancellationToken);
+            _logger.LogDebug("ConsumeEventAsync -> Processed event {EventType} with correlationId: {CorrelationId}", evt.GetType().Name, evt.CorrelationId);
             return true;
         }, cancellationToken);
     }
@@ -676,9 +685,31 @@ public class RabbitMQConsumer : IConsumer
 
     private async Task<T> DeserializeMessage<T>(byte[] body, CancellationToken cancellationToken) where T : class
     {
-        var serializer = _serializerFactory.CreateSerializer(SerializationFormat.Json);
-        var result = await serializer.DeserializeAsync<T>(body, cancellationToken);
-        return result  ?? throw new InvalidOperationException($"Failed to deserialize message to type {typeof(T).Name}");
+        try
+        {
+            _logger.LogDebug("Deserializing message to type: {TargetType}, Body length: {BodyLength}",
+                typeof(T).FullName, body.Length);
+
+            var bodyAsString = System.Text.Encoding.UTF8.GetString(body);
+            _logger.LogDebug("Message body: {MessageBody}", bodyAsString);
+
+            var serializer = _serializerFactory.CreateSerializer(SerializationFormat.Json, _clientConfiguration.Serialization);
+            var result = await serializer.DeserializeAsync<T>(body, cancellationToken);
+
+            if (result == null)
+            {
+                _logger.LogError("Deserialization returned null for type {TargetType}", typeof(T).FullName);
+                throw new InvalidOperationException($"Failed to deserialize message to type {typeof(T).Name}");
+            }
+
+            _logger.LogDebug("Successfully deserialized to type: {ActualType}", result.GetType().FullName);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize message to type {TargetType}", typeof(T).FullName);
+            throw;
+        }
     }
 
     private void ChangeStatus(ConsumerStatus newStatus)

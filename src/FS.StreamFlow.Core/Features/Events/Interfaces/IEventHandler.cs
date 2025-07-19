@@ -33,6 +33,22 @@ public interface IEventHandler
     /// Whether this handler should run concurrently with other handlers
     /// </summary>
     bool AllowConcurrentExecution { get; }
+    
+    /// <summary>
+    /// Handles the event asynchronously (non-generic)
+    /// </summary>
+    /// <param name="event">Event instance</param>
+    /// <param name="context">Event handling context</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the handling operation</returns>
+    Task HandleAsync(IEvent @event, EventContext context, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether this handler can handle the specified event instance asynchronously
+    /// </summary>
+    /// <param name="event">Event instance to check</param>
+    /// <returns>True if handler can process this event</returns>
+    Task<bool> CanHandleAsync(IEvent @event);
 }
 
 /// <summary>

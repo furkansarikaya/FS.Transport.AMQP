@@ -21,6 +21,7 @@ public class RabbitMQProducer : IProducer
     private readonly IConnectionManager _connectionManager;
     private readonly IMessageSerializerFactory _serializerFactory;
     private readonly ProducerSettings _settings;
+    private readonly ClientConfiguration _clientConfiguration;
     private readonly ILogger<RabbitMQProducer> _logger;
     private readonly SemaphoreSlim _operationLock = new(1, 1);
     private readonly ConcurrentDictionary<ulong, TaskCompletionSource<bool>> _pendingConfirms = new();
@@ -37,6 +38,11 @@ public class RabbitMQProducer : IProducer
     /// Gets the producer settings configuration.
     /// </summary>
     public ProducerSettings Settings => _settings;
+    
+    /// <summary>
+    /// Gets the client configuration settings.
+    /// </summary>
+    public ClientConfiguration ClientConfiguration => _clientConfiguration;
 
     /// <summary>
     /// Gets comprehensive producer statistics including message counts and performance metrics.
@@ -79,16 +85,19 @@ public class RabbitMQProducer : IProducer
     /// <param name="connectionManager">The connection manager for managing RabbitMQ connections.</param>
     /// <param name="serializerFactory">The message serializer factory for creating serializers.</param>
     /// <param name="settings">The producer settings configuration.</param>
+    /// <param name="clientConfiguration">The client configuration settings.</param>
     /// <param name="logger">The logger instance for diagnostic information.</param>
     public RabbitMQProducer(
         IConnectionManager connectionManager,
         IMessageSerializerFactory serializerFactory,
         IOptions<ProducerSettings> settings,
+        IOptions<ClientConfiguration> clientConfiguration,
         ILogger<RabbitMQProducer> logger)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         _serializerFactory = serializerFactory ?? throw new ArgumentNullException(nameof(serializerFactory));
         _settings = settings.Value ?? throw new ArgumentNullException(nameof(settings));
+        _clientConfiguration = clientConfiguration.Value ?? throw new ArgumentNullException(nameof(clientConfiguration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         
         _statistics = new ProducerStatistics
@@ -403,7 +412,6 @@ public class RabbitMQProducer : IProducer
     public async Task<bool> ScheduleAsync<T>(T message, TimeSpan delay, CancellationToken cancellationToken = default) where T : class
     {
         // Implementation using message scheduling with TTL and dead letter queue
-        var serializedMessage = JsonSerializer.SerializeToUtf8Bytes(message);
         var messageWithDelay = new
         {
             OriginalMessage = message,
@@ -513,7 +521,7 @@ public class RabbitMQProducer : IProducer
 
     private async Task<byte[]> SerializeMessageAsync(object message, CancellationToken cancellationToken)
     {
-        var serializer = _serializerFactory.CreateSerializer(SerializationFormat.Json);
+        var serializer = _serializerFactory.CreateSerializer(SerializationFormat.Json, _clientConfiguration.Serialization);
         var result = await serializer.SerializeAsync(message, cancellationToken);
         return result;
     }
@@ -570,14 +578,6 @@ public class RabbitMQProducer : IProducer
             var channel = await _connectionManager.GetChannelAsync(cancellationToken);
             var rabbitChannel = ((RabbitMQChannel)channel).GetNativeChannel();
 
-            // Auto-declare exchange if it doesn't exist (fanout type for events)
-            await rabbitChannel.ExchangeDeclareAsync(
-                exchange: exchange,
-                type: "fanout", // Use fanout exchange for events - no routing key needed
-                durable: true,
-                autoDelete: false,
-                arguments: null);
-
             // Convert Core properties to RabbitMQ properties
             var properties = rabbitChannel.CreateBasicProperties();
             properties.MessageId = basicProperties.MessageId;
@@ -601,7 +601,7 @@ public class RabbitMQProducer : IProducer
                 exchange: exchange,
                 routingKey: routingKey,
                 mandatory: false,
-                body: messageBytes);
+                body: messageBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             _logger.LogDebug("Message published successfully to exchange {Exchange} with routing key {RoutingKey}",
                 exchange, routingKey);

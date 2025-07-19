@@ -1,5 +1,4 @@
 using FS.StreamFlow.Core.Features.Messaging.Interfaces;
-using FS.StreamFlow.Core.Features.Messaging.Models;
 using FS.StreamFlow.RabbitMQ.DependencyInjection;
 using FS.StreamFlow.Examples.RabbitMQ.HosterServices;
 
@@ -19,6 +18,7 @@ builder.Services.AddRabbitMQStreamFlow(options =>
     options.ClientConfiguration.EnableAutoRecovery = true;
     options.ClientConfiguration.EnableHeartbeat = true;
     options.ClientConfiguration.HeartbeatInterval = TimeSpan.FromSeconds(60);
+    options.ClientConfiguration.Serialization.IncludeTypeInformation = false;
     
     // Connection settings
     options.ConnectionSettings.Host = "localhost";
@@ -59,10 +59,12 @@ var streamFlow = app.Services.GetRequiredService<IStreamFlowClient>();
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 
 await streamFlow.InitializeAsync();
+await streamFlow.EventBus.StartAsync();
 lifetime.ApplicationStopping.Register(async void () =>
 {
     try
     {
+        await streamFlow.EventBus.StopAsync();
         await streamFlow.ShutdownAsync();
     }
     catch (Exception e)
